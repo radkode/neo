@@ -10,7 +10,7 @@ describe('CLI', () => {
   });
 
   it('should have the correct name', () => {
-    expect(program.name()).toBe('$CLI_NAME');
+    expect(program.name()).toBe('neo');
   });
 
   it('should have a version', () => {
@@ -19,31 +19,31 @@ describe('CLI', () => {
 
   it('should have verbose option', () => {
     const options = program.options;
-    const verboseOption = options.find(opt => opt.long === '--verbose');
+    const verboseOption = options.find((opt) => opt.long === '--verbose');
     expect(verboseOption).toBeDefined();
   });
 
   it('should have init command', () => {
     const commands = program.commands;
-    const initCommand = commands.find(cmd => cmd.name() === 'init');
+    const initCommand = commands.find((cmd) => cmd.name() === 'init');
     expect(initCommand).toBeDefined();
   });
 
   it('should have build command', () => {
     const commands = program.commands;
-    const buildCommand = commands.find(cmd => cmd.name() === 'build');
+    const buildCommand = commands.find((cmd) => cmd.name() === 'build');
     expect(buildCommand).toBeDefined();
   });
 
   it('should have deploy command', () => {
     const commands = program.commands;
-    const deployCommand = commands.find(cmd => cmd.name() === 'deploy');
+    const deployCommand = commands.find((cmd) => cmd.name() === 'deploy');
     expect(deployCommand).toBeDefined();
   });
 
   it('should have config command', () => {
     const commands = program.commands;
-    const configCommand = commands.find(cmd => cmd.name() === 'config');
+    const configCommand = commands.find((cmd) => cmd.name() === 'config');
     expect(configCommand).toBeDefined();
   });
 });

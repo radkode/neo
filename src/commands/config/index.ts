@@ -16,7 +16,7 @@ export function createConfigCommand(): Command {
 
 function createConfigGetCommand(): Command {
   const command = new Command('get');
-  
+
   command
     .description('Get a configuration value')
     .argument('<key>', 'configuration key')
@@ -30,7 +30,7 @@ function createConfigGetCommand(): Command {
 
 function createConfigSetCommand(): Command {
   const command = new Command('set');
-  
+
   command
     .description('Set a configuration value')
     .argument('<key>', 'configuration key')
@@ -45,15 +45,13 @@ function createConfigSetCommand(): Command {
 
 function createConfigListCommand(): Command {
   const command = new Command('list');
-  
-  command
-    .description('List all configuration values')
-    .action(() => {
-      // Placeholder implementation
-      logger.info('Configuration values:');
-      logger.log(`  ${chalk.cyan('api.key')}: ${chalk.green('****')}`);
-      logger.log(`  ${chalk.cyan('theme')}: ${chalk.green('dark')}`);
-    });
+
+  command.description('List all configuration values').action(() => {
+    // Placeholder implementation
+    logger.info('Configuration values:');
+    logger.log(`  ${chalk.cyan('api.key')}: ${chalk.green('****')}`);
+    logger.log(`  ${chalk.cyan('theme')}: ${chalk.green('dark')}`);
+  });
 
   return command;
 }

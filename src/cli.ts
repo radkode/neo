@@ -24,20 +24,20 @@ export function createCLI(): Command {
     .option('--no-banner', 'hide banner')
     .hook('preAction', (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
-      
+
       // Show banner unless disabled
-      if (opts.banner !== false && !opts.version && !opts.help) {
+      if (opts.banner !== false && !thisCommand.version && !thisCommand.help) {
         showBanner();
       }
-      
+
       // Configure logger
       if (opts.verbose) {
         logger.setVerbose(true);
         logger.debug(`Executing command: ${actionCommand.name()}`);
       }
-      
+
       // Disable colors if requested
-      if (opts.noColor) {
+      if (opts.color === false) {
         chalk.level = 0;
       }
     });
@@ -51,9 +51,9 @@ export function createCLI(): Command {
 // Only run if this is the main module
 if (import.meta.url === `file://${process.argv[1]}`) {
   const program = createCLI();
-  
+
   program.exitOverride();
-  
+
   try {
     program.parse();
   } catch (err: any) {

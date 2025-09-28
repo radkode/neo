@@ -19,21 +19,20 @@ export function createDeployCommand(): Command {
       try {
         logger.debug(`Environment: ${environment}`);
         logger.debug(`Dry run: ${options.dryRun || false}`);
-        
+
         if (!options.skipBuild) {
           spinner.text = 'Building project...';
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        
+
         spinner.text = `Deploying to ${environment}...`;
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
         if (options.dryRun) {
           spinner.info(chalk.yellow('Dry run completed (no actual deployment)'));
         } else {
           spinner.succeed(chalk.green(`Successfully deployed to ${environment}!`));
         }
-
       } catch (error: any) {
         spinner.fail(`Deployment to ${environment} failed`);
         throw error;

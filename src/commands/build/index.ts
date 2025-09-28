@@ -20,16 +20,15 @@ export function createBuildCommand(): Command {
         logger.debug(`Output directory: ${options.output}`);
         logger.debug(`Minify: ${options.minify || false}`);
         logger.debug(`Source maps: ${options.sourceMaps || false}`);
-        
+
         // Simulate build
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
         spinner.succeed(chalk.green('Build completed successfully!'));
-        
+
         if (options.watch) {
           logger.info(chalk.yellow('\n👁  Watching for changes...'));
         }
-
       } catch (error: any) {
         spinner.fail('Build failed');
         throw error;
