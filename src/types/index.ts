@@ -24,3 +24,10 @@ export interface DeployOptions extends BaseOptions {
   skipBuild?: boolean;
   force?: boolean;
 }
+
+export interface GitPushOptions extends BaseOptions {
+  dryRun?: boolean;
+  force?: boolean;
+  setUpstream?: string;
+  tags?: boolean;
+}
