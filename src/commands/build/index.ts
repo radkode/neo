@@ -29,7 +29,7 @@ export function createBuildCommand(): Command {
         if (options.watch) {
           logger.info(chalk.yellow('\n👁  Watching for changes...'));
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         spinner.fail('Build failed');
         throw error;
       }

@@ -56,11 +56,13 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
 
   try {
     program.parse();
-  } catch (err: any) {
-    if (err.code === 'commander.helpDisplayed') {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'commander.helpDisplayed') {
       process.exit(0);
     }
-    logger.error(err.message);
+    
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.error(errorMessage);
     process.exit(1);
   }
 }

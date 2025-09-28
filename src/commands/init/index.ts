@@ -32,7 +32,7 @@ export function createInitCommand(): Command {
           logger.log(`  ${chalk.gray('$')} pnpm install`);
         }
         logger.log(`  ${chalk.gray('$')} pnpm run dev`);
-      } catch (error: any) {
+      } catch (error: unknown) {
         spinner.fail('Failed to initialize project');
         throw error;
       }

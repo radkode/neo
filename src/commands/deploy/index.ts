@@ -33,7 +33,7 @@ export function createDeployCommand(): Command {
         } else {
           spinner.succeed(chalk.green(`Successfully deployed to ${environment}!`));
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         spinner.fail(`Deployment to ${environment} failed`);
         throw error;
       }
