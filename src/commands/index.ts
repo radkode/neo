@@ -1,0 +1,17 @@
+import { Command } from '@commander-js/extra-typings';
+import { createInitCommand } from './init/index.js';
+import { createBuildCommand } from './build/index.js';
+import { createDeployCommand } from './deploy/index.js';
+import { createConfigCommand } from './config/index.js';
+
+export function registerCommands(program: Command): void {
+  program.addCommand(createInitCommand());
+  program.addCommand(createBuildCommand());
+  program.addCommand(createDeployCommand());
+  program.addCommand(createConfigCommand());
+}
+
+export { createInitCommand } from './init/index.js';
+export { createBuildCommand } from './build/index.js';
+export { createDeployCommand } from './deploy/index.js';
+export { createConfigCommand } from './config/index.js';
