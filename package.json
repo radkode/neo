@@ -1,6 +1,6 @@
 {
   "name": "@radkode/neo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "⚡ Lightning-fast TypeScript CLI framework",
   "author": "Jacek Radko",
   "license": "MIT",
@@ -32,16 +32,22 @@
   "homepage": "https://github.com/jacekradko/radkode/neo#readme",
   "scripts": {
     "build": "tsc && tsc-alias",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "changeset:version": "changeset version",
+    "changeset:publish": "pnpm run build && changeset publish",
     "dev": "tsx src/cli.ts",
     "format": "prettier --write \"**/*.ts\"",
     "link-local": "pnpm run build && pnpm link --global",
     "lint": "eslint src --ext .ts",
     "prepublishOnly": "pnpm run build && pnpm run test",
+    "release": "pnpm run build && pnpm run test && changeset publish",
     "start": "node dist/cli.js",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test": "vitest run",
-    "unlink-local": "pnpm unlink --global @radkode/neo"
+    "unlink-local": "pnpm unlink --global @radkode/neo",
+    "version-packages": "changeset version && pnpm install --lockfile-only"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -58,6 +64,8 @@
     "which": "^5.0.0"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.1",
+    "@changesets/cli": "^2.29.7",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^24.5.2",
     "@types/which": "^3.0.4",

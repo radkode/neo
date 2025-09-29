@@ -113,6 +113,51 @@ neo --help
 pnpm run unlink-local
 ```
 
+### Versioning & Releases
+
+This project uses [Changesets](https://github.com/changesets/changesets) for version management and publishing.
+
+#### Creating a Changeset
+
+When you make changes that should be released, create a changeset:
+
+```bash
+# Create a new changeset
+pnpm changeset
+```
+
+This will:
+1. Prompt you to select which packages to version (this project has one)
+2. Ask for the type of change (patch, minor, major)
+3. Request a description of the changes
+4. Generate a changeset file in `.changeset/`
+
+#### Release Workflow
+
+```bash
+# Check current changeset status
+pnpm changeset:status
+
+# Consume changesets and update version
+pnpm version-packages
+
+# Publish to npm (after tests pass)
+pnpm release
+```
+
+#### Change Types
+
+- **patch**: Bug fixes, small improvements (0.1.0 → 0.1.1)
+- **minor**: New features, enhancements (0.1.0 → 0.2.0)  
+- **major**: Breaking changes (0.1.0 → 1.0.0)
+
+#### CI Integration
+
+The changeset workflow integrates with:
+- GitHub releases and changelogs
+- Automated version bumping
+- NPM publishing pipeline
+
 ## License
 
 MIT © Jacek Radko
