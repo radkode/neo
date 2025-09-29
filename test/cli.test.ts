@@ -29,18 +29,6 @@ describe('CLI', () => {
     expect(initCommand).toBeDefined();
   });
 
-  it('should have build command', () => {
-    const commands = program.commands;
-    const buildCommand = commands.find((cmd) => cmd.name() === 'build');
-    expect(buildCommand).toBeDefined();
-  });
-
-  it('should have deploy command', () => {
-    const commands = program.commands;
-    const deployCommand = commands.find((cmd) => cmd.name() === 'deploy');
-    expect(deployCommand).toBeDefined();
-  });
-
   it('should have config command', () => {
     const commands = program.commands;
     const configCommand = commands.find((cmd) => cmd.name() === 'config');

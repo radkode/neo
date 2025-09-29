@@ -43,17 +43,17 @@ export interface ICommand<TOptions = unknown> {
   readonly arguments?: CommandArgument[];
   readonly examples?: string[];
   readonly hidden?: boolean;
-  
+
   /**
    * Execute the command with validated options
    */
   execute(options: TOptions, args?: string[]): Promise<Result<void>>;
-  
+
   /**
    * Validate and transform raw options to the expected type
    */
   validate(options: unknown): options is TOptions;
-  
+
   /**
    * Get help text for the command
    */
@@ -83,22 +83,22 @@ export interface IPlugin {
   readonly author?: string;
   readonly homepage?: string;
   readonly dependencies?: Record<string, string>;
-  
+
   /**
    * Commands provided by the plugin
    */
   readonly commands?: ICommand[];
-  
+
   /**
    * Lifecycle hooks for plugin integration
    */
   readonly hooks?: ILifecycleHooks;
-  
+
   /**
    * Initialize the plugin with context
    */
   initialize(context: IPluginContext): Promise<void>;
-  
+
   /**
    * Clean up plugin resources
    */
@@ -254,17 +254,9 @@ export interface IFileInfo {
  * Process executor for running external commands
  */
 export interface IProcessExecutor {
-  execute(
-    command: string,
-    args?: string[],
-    options?: IProcessOptions
-  ): Promise<IProcessResult>;
-  
-  spawn(
-    command: string,
-    args?: string[],
-    options?: IProcessOptions
-  ): IProcess;
+  execute(command: string, args?: string[], options?: IProcessOptions): Promise<IProcessResult>;
+
+  spawn(command: string, args?: string[], options?: IProcessOptions): IProcess;
 }
 
 /**
@@ -311,7 +303,11 @@ export interface IHttpClient {
   post<T = unknown>(url: string, data?: unknown, options?: IHttpOptions): Promise<IHttpResponse<T>>;
   put<T = unknown>(url: string, data?: unknown, options?: IHttpOptions): Promise<IHttpResponse<T>>;
   delete<T = unknown>(url: string, options?: IHttpOptions): Promise<IHttpResponse<T>>;
-  patch<T = unknown>(url: string, data?: unknown, options?: IHttpOptions): Promise<IHttpResponse<T>>;
+  patch<T = unknown>(
+    url: string,
+    data?: unknown,
+    options?: IHttpOptions
+  ): Promise<IHttpResponse<T>>;
 }
 
 /**
@@ -441,13 +437,13 @@ export interface IContainer {
 /**
  * Injection token type
  */
-export type InjectionToken<T> = symbol | string | { new(...args: unknown[]): T };
+export type InjectionToken<T> = symbol | string | { new (...args: unknown[]): T };
 
 /**
  * Provider type for dependency injection
  */
-export type Provider<T> = 
-  | { useClass: new(...args: unknown[]) => T }
+export type Provider<T> =
+  | { useClass: new (...args: unknown[]) => T }
   | { useValue: T }
   | { useFactory: (...args: unknown[]) => T }
   | { useExisting: InjectionToken<T> };

@@ -78,14 +78,14 @@ export abstract class AppError extends Error implements IError {
    */
   getUserMessage(): string {
     let message = this.message;
-    
+
     if (this.suggestions && this.suggestions.length > 0) {
       message += '\n\nSuggestions:';
-      this.suggestions.forEach(suggestion => {
+      this.suggestions.forEach((suggestion) => {
         message += `\n  • ${suggestion}`;
       });
     }
-    
+
     return message;
   }
 
@@ -198,7 +198,7 @@ export class ConfigurationError extends AppError {
       'Ensure all required configuration values are set',
       'Run "neo config validate" to check your configuration',
     ];
-    
+
     super(message, {
       ...options,
       suggestions: options?.suggestions || defaultSuggestions,
@@ -251,7 +251,7 @@ export class NetworkError extends AppError {
       'Verify the API endpoint is correct',
       'Check if you need to configure a proxy',
     ];
-    
+
     super(message, {
       ...options,
       suggestions: options?.suggestions || defaultSuggestions,
@@ -300,7 +300,7 @@ export class AuthenticationError extends AppError {
       'Run "neo auth login" to authenticate',
       'Verify your API token is still valid',
     ];
-    
+
     super(message, {
       ...options,
       suggestions: options?.suggestions || defaultSuggestions,
@@ -388,17 +388,14 @@ export class RetryStrategy implements ErrorRecoveryStrategy {
 
   canRecover(error: AppError): boolean {
     // Network and filesystem errors are often transient
-    return (
-      error.category === ErrorCategory.NETWORK ||
-      error.category === ErrorCategory.FILESYSTEM
-    );
+    return error.category === ErrorCategory.NETWORK || error.category === ErrorCategory.FILESYSTEM;
   }
 
   async recover(_error: AppError): Promise<void> {
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       const delay = this.backoff ? this.delayMs * attempt : this.delayMs;
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
       // In a real implementation, this would retry the original operation
       // This is a placeholder for demonstration
       console.log(`Retry attempt ${attempt} after ${delay}ms`);
@@ -424,7 +421,7 @@ export class ErrorHandler {
    */
   async handle(error: unknown): Promise<void> {
     const appError = this.normalizeError(error);
-    
+
     // Try recovery strategies
     for (const strategy of this.strategies) {
       if (strategy.canRecover(appError)) {
@@ -437,7 +434,7 @@ export class ErrorHandler {
         }
       }
     }
-    
+
     // No recovery possible, log and exit
     console.error(appError.getDetailedReport());
     process.exit(1);
@@ -450,20 +447,20 @@ export class ErrorHandler {
     if (error instanceof AppError) {
       return error;
     }
-    
+
     if (error instanceof Error) {
-      return new class extends AppError {
+      return new (class extends AppError {
         readonly code = 'UNKNOWN_ERROR';
         readonly severity = ErrorSeverity.HIGH;
         readonly category = ErrorCategory.UNKNOWN;
-      }(error.message, { originalError: error });
+      })(error.message, { originalError: error });
     }
-    
-    return new class extends AppError {
+
+    return new (class extends AppError {
       readonly code = 'UNKNOWN_ERROR';
       readonly severity = ErrorSeverity.CRITICAL;
       readonly category = ErrorCategory.UNKNOWN;
-    }(String(error));
+    })(String(error));
   }
 }
 

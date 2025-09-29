@@ -60,7 +60,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     if (err && typeof err === 'object' && 'code' in err && err.code === 'commander.helpDisplayed') {
       process.exit(0);
     }
-    
+
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error(errorMessage);
     process.exit(1);
