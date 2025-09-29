@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.3.0
+
+### Minor Changes
+
+- [#6](https://github.com/radkode/neo/pull/6) [`873efe5`](https://github.com/radkode/neo/commit/873efe5494413a58c85b2677e428d0e2c00dfb22) Thanks [@jacekradko](https://github.com/jacekradko)! - Implement git push internals
+
 ## 0.2.0
 
 ### Minor Changes
