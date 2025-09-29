@@ -1,71 +1,153 @@
 # @radkode/neo
 
-⚡ Lightning-fast TypeScript CLI framework
+[![npm version](https://img.shields.io/npm/v/@radkode/neo.svg)](https://www.npmjs.com/package/@radkode/neo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![CI](https://github.com/radkode/neo/workflows/CI/badge.svg)](https://github.com/radkode/neo/actions)
+
+⚡ Lightning-fast TypeScript CLI framework with intelligent git operations and configuration management.
+
+## Features
+
+✨ **Smart Git Operations** - Enhanced git commands with safety confirmations  
+⚙️ **Configuration Management** - Simple key-value configuration storage  
+🛡️ **Branch Protection** - Interactive confirmation for main branch pushes  
+🎨 **Beautiful UI** - Colorful output with progress indicators and banners  
+📦 **Semantic Versioning** - Automated releases with changesets  
+🚀 **TypeScript First** - Built with full TypeScript support and type safety  
 
 ## Installation
 
 ```bash
+# Install globally
+npm install -g @radkode/neo
+# or with pnpm
 pnpm add -g @radkode/neo
 ```
 
-Or install as a dev dependency:
+## Quick Start
 
 ```bash
-pnpm add -D @radkode/neo
+# Display help and available commands
+neo --help
+
+# Initialize Neo CLI configuration
+neo init
+
+# Configure a setting
+neo config set editor.default "code"
+
+# Smart git push with main branch protection
+neo git push
+
+# View current configuration
+neo config list
 ```
 
-## Usage
+## Demo
+
+### Smart Git Push Protection
+
+When attempting to push to the main branch, Neo intelligently prompts for confirmation:
 
 ```bash
-# Initialize a new project
-neo init my-project
+$ neo git push
 
-# Build the project
-neo build --watch
+⚡ NEO CLI
+  Radkode's Lightning-Fast CLI Framework
+  
+⚠️  You are about to push directly to the main branch.
+This is generally not recommended as it bypasses code review processes.
+✔ Are you sure you want to continue? » No
 
-# Deploy to production
-neo deploy production
+✅ Push cancelled. Here's how to push your changes safely:
+  1. Create a feature branch: git checkout -b feature/your-feature-name
+  2. Push to your branch: git push -u origin feature/your-feature-name
+  3. Create a pull request to merge into main
 
-# Manage configuration
-neo config set api.key YOUR_KEY
-neo config get api.key
-neo config list
+This protects the main branch from accidental changes.
+```
+
+### Beautiful Configuration Management
+
+```bash
+$ neo config set theme.primary "#00ff88"
+✨ Configuration saved: theme.primary = "#00ff88"
+
+$ neo config list
+📝 Your Configuration:
+
+  🎨 theme.primary     "#00ff88"
+  💻 editor.default   "code"
+  🚀 workflow.auto    true
 ```
 
 ## Commands
 
-### `init [name]`
-Initialize a new project with optional name.
+### `init`
+Install and configure Neo CLI globally.
+
+```bash
+neo init
+```
 
 Options:
-- `-t, --template <type>` - Project template (default: "default")
-- `--skip-install` - Skip dependency installation
-- `--force` - Overwrite existing files
-
-### `build`
-Build the project.
-
-Options:
-- `-w, --watch` - Watch for changes
-- `-m, --minify` - Minify output
-- `--source-maps` - Generate source maps
-- `-o, --output <dir>` - Output directory (default: "dist")
-
-### `deploy [environment]`
-Deploy the project to specified environment.
-
-Options:
-- `--dry-run` - Perform a dry run without deploying
-- `--skip-build` - Skip the build step
-- `--force` - Force deployment without confirmation
+- `--force` - Force reconfiguration if already initialized
+- `--skip-install` - Skip global installation (configuration only)
 
 ### `config`
-Manage configuration values.
+Manage configuration values with simple key-value storage.
+
+```bash
+# Set a configuration value
+neo config set api.key "your-api-key"
+
+# Get a configuration value
+neo config get api.key
+
+# List all configuration values
+neo config list
+```
 
 Subcommands:
 - `config get <key>` - Get a configuration value
 - `config set <key> <value>` - Set a configuration value
 - `config list` - List all configuration values
+
+### `git`
+Enhanced git operations with safety features.
+
+#### `git push`
+Smart git push with main branch protection.
+
+```bash
+# Regular push (prompts for confirmation on main branch)
+neo git push
+
+# Force push (use with caution)
+neo git push --force
+
+# Dry run to see what would be pushed
+neo git push --dry-run
+
+# Push and set upstream branch
+neo git push --set-upstream origin feature-branch
+
+# Push with tags
+neo git push --tags
+```
+
+Options:
+- `-f, --force` - Force push (overwrites remote)
+- `-u, --set-upstream <branch>` - Set upstream branch
+- `--dry-run` - Show what would be pushed without actually pushing
+- `--tags` - Push tags along with commits
+
+**Safety Features:**
+- ⚠️ Interactive confirmation when pushing to main branch
+- 📝 Helpful guidance for safer alternatives
+- ✅ Graceful cancellation (exits with success code)
+- 🎯 Encourages best practices while allowing flexibility
 
 ## Global Options
 
@@ -81,8 +163,8 @@ Subcommands:
 ### Setup
 
 ```bash
-git clone https://github.com/jacekradko/radkode/neo.git
-cd radkode/neo
+git clone https://github.com/radkode/neo.git
+cd neo
 pnpm install
 ```
 
