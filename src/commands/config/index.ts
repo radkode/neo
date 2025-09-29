@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
-import { logger } from '../../utils/logger.js';
+import { logger } from '@/utils/logger.js';
 
 export function createConfigCommand(): Command {
   const command = new Command('config');

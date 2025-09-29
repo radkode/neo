@@ -3,7 +3,7 @@
  * These interfaces define the contracts for the entire application
  */
 
-import { Result } from '../errors/index.js';
+import { Result } from '@/core/errors/index.js';
 import type { Readable, Writable } from 'node:stream';
 
 // Ensure Node.js types are available

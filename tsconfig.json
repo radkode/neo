@@ -6,7 +6,7 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
-    
+
     /* Strict Type-Checking Options */
     "strict": true,
     "noImplicitAny": true,
@@ -18,13 +18,13 @@
     "alwaysStrict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
-    
+
     /* Additional Type Safety */
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    
+
     /* Module Resolution Options */
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -32,7 +32,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
-    
+
     /* Emit Options */
     "declaration": true,
     "declarationMap": true,
@@ -41,36 +41,31 @@
     "removeComments": true,
     "importHelpers": true,
     "downlevelIteration": true,
-    
+
     /* Code Quality */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
-    
+
     /* Path Aliases */
     "baseUrl": ".",
     "paths": {
-      "@core/*": ["src/core/*"],
-      "@application/*": ["src/application/*"],
-      "@infrastructure/*": ["src/infrastructure/*"],
-      "@presentation/*": ["src/presentation/*"],
-      "@commands/*": ["src/commands/*"],
-      "@utils/*": ["src/utils/*"],
-      "@types/*": ["src/types/*"],
-      "@config/*": ["src/config/*"],
-      "@test/*": ["test/*"]
+      "@/core/*": ["src/core/*"],
+      "@/application/*": ["src/application/*"],
+      "@/infrastructure/*": ["src/infrastructure/*"],
+      "@/presentation/*": ["src/presentation/*"],
+      "@/commands/*": ["src/commands/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/types/*": ["src/types/*"],
+      "@/config/*": ["src/config/*"],
+      "@/test/*": ["test/*"],
+      "@/cli": ["src/cli.js"],
+      "@/index": ["src/index.js"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.spec.ts",
-    "**/*.test.ts",
-    "coverage",
-    "**/*.d.ts"
-  ],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts", "coverage", "**/*.d.ts"],
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"

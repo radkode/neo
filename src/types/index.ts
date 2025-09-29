@@ -6,9 +6,8 @@ export interface BaseOptions {
 }
 
 export interface InitOptions extends BaseOptions {
-  template: string;
-  skipInstall?: boolean;
   force?: boolean;
+  skipInstall?: boolean;
 }
 
 export interface GitPushOptions extends BaseOptions {

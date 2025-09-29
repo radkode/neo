@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { createPushCommand } from './push/index.js';
+import { createPushCommand } from '@/commands/git/push/index.js';
 
 export function createGitCommand(): Command {
   const command = new Command('git');

@@ -2,8 +2,8 @@ import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
 import ora from 'ora';
 import { execa } from 'execa';
-import { logger } from '../../../utils/logger.js';
-import { GitPushOptions } from '../../../types/index.js';
+import { logger } from '@/utils/logger.js';
+import { GitPushOptions } from '@/types/index.js';
 
 export function createPushCommand(): Command {
   const command = new Command('push');
