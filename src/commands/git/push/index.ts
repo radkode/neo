@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
 import ora from 'ora';
 import { execa } from 'execa';
+import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { GitPushOptions } from '@/types/index.js';
 
@@ -22,21 +23,38 @@ export function createPushCommand(): Command {
 
         logger.debug(`Current branch: ${branchName}`);
 
-        // Prevent direct pushes to main branch
+        // Confirm direct pushes to main branch
         if (branchName === 'main') {
-          logger.error(chalk.red.bold('❌ Direct pushes to main branch are not allowed!'));
-          logger.log(chalk.yellow('\nTo push your changes safely:'));
+          logger.log(chalk.yellow.bold('⚠️  You are about to push directly to the main branch.'));
           logger.log(
-            chalk.gray('  1. Create a feature branch:') +
-              chalk.cyan(` git checkout -b feature/your-feature-name`)
+            chalk.gray('This is generally not recommended as it bypasses code review processes.')
           );
-          logger.log(
-            chalk.gray('  2. Push to your branch:') +
-              chalk.cyan(` git push -u origin feature/your-feature-name`)
-          );
-          logger.log(chalk.gray('  3. Create a pull request to merge into main'));
-          logger.log(chalk.gray('\nThis protects the main branch from accidental changes.'));
-          process.exit(1);
+
+          const { confirmPush } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'confirmPush',
+              message: 'Are you sure you want to continue?',
+              default: false,
+            },
+          ]);
+
+          if (!confirmPush) {
+            logger.log(chalk.green("\n✅ Push cancelled. Here's how to push your changes safely:"));
+            logger.log(
+              chalk.gray('  1. Create a feature branch:') +
+                chalk.cyan(` git checkout -b feature/your-feature-name`)
+            );
+            logger.log(
+              chalk.gray('  2. Push to your branch:') +
+                chalk.cyan(` git push -u origin feature/your-feature-name`)
+            );
+            logger.log(chalk.gray('  3. Create a pull request to merge into main'));
+            logger.log(chalk.gray('\nThis protects the main branch from accidental changes.'));
+            process.exit(0);
+          }
+
+          logger.log(chalk.blue('\n→ Proceeding with push to main branch...'));
         }
 
         const spinner = ora('Pushing to remote...').start();
