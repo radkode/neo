@@ -24,12 +24,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jacekradko/radkode/neo.git"
+    "url": "git+https://github.com/radkode/neo.git"
   },
   "bugs": {
-    "url": "https://github.com/jacekradko/radkode/neo/issues"
+    "url": "https://github.com/radkode/neo/issues"
   },
-  "homepage": "https://github.com/jacekradko/radkode/neo#readme",
+  "homepage": "https://github.com/radkode/neo#readme",
   "scripts": {
     "build": "tsc && tsc-alias",
     "changeset": "changeset",
