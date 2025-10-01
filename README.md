@@ -1,20 +1,36 @@
-# @radkode/neo
+```
+  ███╗   ██╗███████╗ ██████╗     ██████╗██╗     ██╗
+  ████╗  ██║██╔════╝██╔═══██╗   ██╔════╝██║     ██║
+  ██╔██╗ ██║█████╗  ██║   ██║   ██║     ██║     ██║
+  ██║╚██╗██║██╔══╝  ██║   ██║   ██║     ██║     ██║
+  ██║ ╚████║███████╗╚██████╔╝   ╚██████╗███████╗██║
+  ╚═╝  ╚═══╝╚══════╝ ╚═════╝     ╚═════╝╚══════╝╚═╝
+```
+
+<div align="center">
+
+### ⚡ Lightning-fast TypeScript CLI framework
 
 [![npm version](https://img.shields.io/npm/v/@radkode/neo.svg)](https://www.npmjs.com/package/@radkode/neo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![CI](https://github.com/radkode/neo/workflows/CI/badge.svg)](https://github.com/radkode/neo/actions)
 
-⚡ Lightning-fast TypeScript CLI framework with intelligent git operations and configuration management.
+Intelligent git operations • Configuration management • Self-updating
+
+</div>
+
+---
 
 ## Features
 
 ✨ **Smart Git Operations** - Enhanced git commands with safety confirmations  
 ⚙️ **Configuration Management** - Simple key-value configuration storage  
 🛡️ **Branch Protection** - Interactive confirmation for main branch pushes  
+🔄 **Self-Updating** - Built-in update command with smart package manager detection  
 🎨 **Beautiful UI** - Colorful output with progress indicators and banners  
 📦 **Semantic Versioning** - Automated releases with changesets  
-🚀 **TypeScript First** - Built with full TypeScript support and type safety  
+🚀 **TypeScript First** - Built with full TypeScript support and type safety
 
 ## Installation
 
@@ -33,6 +49,9 @@ neo --help
 
 # Initialize Neo CLI configuration
 neo init
+
+# Check for updates
+neo update --check-only
 
 # Configure a setting
 neo config set editor.default "code"
@@ -148,6 +167,31 @@ Options:
 - 📝 Helpful guidance for safer alternatives
 - ✅ Graceful cancellation (exits with success code)
 - 🎯 Encourages best practices while allowing flexibility
+
+### `update`
+Update Neo CLI to the latest version from npm.
+
+```bash
+# Update to the latest version (with confirmation)
+neo update
+
+# Check for updates without installing
+neo update --check-only
+
+# Force update/reinstall even if on latest version
+neo update --force
+```
+
+Options:
+- `--check-only` - Only check for updates without installing
+- `--force` - Force update even if already on latest version
+
+**Features:**
+- 🔍 Automatic version checking against npm registry
+- 📦 Smart package manager detection (npm, pnpm, yarn)
+- ✨ Interactive confirmation before updating
+- 🎯 Helpful error messages for permission issues
+- ⚡ Progress indicators with real-time status
 
 ## Global Options
 
