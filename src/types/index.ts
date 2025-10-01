@@ -17,6 +17,11 @@ export interface GitPushOptions extends BaseOptions {
   tags?: boolean;
 }
 
+export interface GitPullOptions extends BaseOptions {
+  rebase?: boolean;
+  noRebase?: boolean;
+}
+
 export interface UpdateOptions extends BaseOptions {
   checkOnly?: boolean;
   force?: boolean;
