@@ -7,6 +7,41 @@ on:
     branches: [main]
 
 jobs:
+  changeset-check:
+    name: Changeset Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for changesets
+        run: |
+          if pnpm changeset status --since=origin/main; then
+            echo "✅ Changeset found"
+          else
+            echo "❌ No changeset found. Please add a changeset using 'pnpm changeset'"
+            echo "For changes that don't require a version bump (docs, tests, etc.), create an empty changeset with:"
+            echo "  pnpm changeset --empty"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
 
