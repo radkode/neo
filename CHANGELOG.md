@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.4.0
+
+### Minor Changes
+
+- [#13](https://github.com/radkode/neo/pull/13) [`c8c4fa3`](https://github.com/radkode/neo/commit/c8c4fa3aec4339b5fa519de0b425986ba12965a3) Thanks [@jacekradko](https://github.com/jacekradko)! - Adding Update and Git Pull commands
+
 ## 0.3.0
 
 ### Minor Changes
