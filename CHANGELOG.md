@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.5.0
+
+### Minor Changes
+
+- [#15](https://github.com/radkode/neo/pull/15) [`b562b0e`](https://github.com/radkode/neo/commit/b562b0e9bec35e4330dba6e666ab257e3f66f613) Thanks [@jacekradko](https://github.com/jacekradko)! - Added alias command to set up local dev environment
+
 ## 0.4.0
 
 ### Minor Changes
