@@ -115,6 +115,7 @@ export function createInitCommand(): Command {
             aliases: {
               n: true,
             },
+            banner: 'full',
             theme: 'auto',
           },
           shell: {

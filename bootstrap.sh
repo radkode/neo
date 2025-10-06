@@ -9,7 +9,7 @@
 CLI_NAME="neo"                    # Your chosen CLI name
 NPM_ORG="@radkode"               # Your npm organization
 FULL_PACKAGE_NAME="@radkode/neo" # Full package name
-DESCRIPTION="⚡ Lightning-fast TypeScript CLI framework"
+DESCRIPTION="Modern CLI toolkit with intelligent git workflows and configuration management"
 AUTHOR="Jacek Radko"
 GITHUB_USER="jacekradko"
 GITHUB_REPO="radkode/neo"

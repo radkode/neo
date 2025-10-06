@@ -3,7 +3,11 @@ import { constants } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { logger } from '@/utils/logger.js';
+import type { BannerType } from '@/utils/banner.js';
 
+/**
+ * Neo CLI configuration structure
+ */
 export interface NeoConfig {
   user: {
     name?: string;
@@ -13,6 +17,13 @@ export interface NeoConfig {
     aliases: {
       n: boolean;
     };
+    /**
+     * Banner display mode
+     * - 'full': Display the complete ASCII art banner (default)
+     * - 'compact': Display a minimal, single-line banner
+     * - 'none': Do not display any banner
+     */
+    banner: BannerType;
     theme: 'dark' | 'light' | 'auto';
     editor?: string;
   };
@@ -34,6 +45,7 @@ const DEFAULT_CONFIG: NeoConfig = {
     aliases: {
       n: true,
     },
+    banner: 'full',
     theme: 'auto',
   },
   shell: {

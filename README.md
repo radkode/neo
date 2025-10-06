@@ -9,7 +9,7 @@
 
 <div align="center">
 
-### ⚡ Lightning-fast TypeScript CLI framework
+### Modern CLI toolkit with intelligent git workflows and configuration management
 
 [![npm version](https://img.shields.io/npm/v/@radkode/neo.svg)](https://www.npmjs.com/package/@radkode/neo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -74,7 +74,7 @@ $ neo git push
 
 ⚡ NEO CLI
   Radkode's Lightning-Fast CLI Framework
-  
+
 ⚠️  You are about to push directly to the main branch.
 This is generally not recommended as it bypasses code review processes.
 ✔ Are you sure you want to continue? » No
@@ -104,6 +104,7 @@ $ neo config list
 ## Commands
 
 ### `init`
+
 Install and configure Neo CLI globally.
 
 ```bash
@@ -111,10 +112,12 @@ neo init
 ```
 
 Options:
+
 - `--force` - Force reconfiguration if already initialized
 - `--skip-install` - Skip global installation (configuration only)
 
 ### `config`
+
 Manage configuration values with simple key-value storage.
 
 ```bash
@@ -129,14 +132,17 @@ neo config list
 ```
 
 Subcommands:
+
 - `config get <key>` - Get a configuration value
 - `config set <key> <value>` - Set a configuration value
 - `config list` - List all configuration values
 
 ### `git`
+
 Enhanced git operations with safety features.
 
 #### `git push`
+
 Smart git push with main branch protection.
 
 ```bash
@@ -157,18 +163,21 @@ neo git push --tags
 ```
 
 Options:
+
 - `-f, --force` - Force push (overwrites remote)
 - `-u, --set-upstream <branch>` - Set upstream branch
 - `--dry-run` - Show what would be pushed without actually pushing
 - `--tags` - Push tags along with commits
 
 **Safety Features:**
+
 - ⚠️ Interactive confirmation when pushing to main branch
 - 📝 Helpful guidance for safer alternatives
 - ✅ Graceful cancellation (exits with success code)
 - 🎯 Encourages best practices while allowing flexibility
 
 ### `update`
+
 Update Neo CLI to the latest version from npm.
 
 ```bash
@@ -183,10 +192,12 @@ neo update --force
 ```
 
 Options:
+
 - `--check-only` - Only check for updates without installing
 - `--force` - Force update even if already on latest version
 
 **Features:**
+
 - 🔍 Automatic version checking against npm registry
 - 📦 Smart package manager detection (npm, pnpm, yarn)
 - ✨ Interactive confirmation before updating
@@ -253,6 +264,7 @@ pnpm changeset
 ```
 
 This will:
+
 1. Prompt you to select which packages to version (this project has one)
 2. Ask for the type of change (patch, minor, major)
 3. Request a description of the changes
@@ -274,12 +286,13 @@ pnpm release
 #### Change Types
 
 - **patch**: Bug fixes, small improvements (0.1.0 → 0.1.1)
-- **minor**: New features, enhancements (0.1.0 → 0.2.0)  
+- **minor**: New features, enhancements (0.1.0 → 0.2.0)
 - **major**: Breaking changes (0.1.0 → 1.0.0)
 
 #### CI Integration
 
 The changeset workflow integrates with:
+
 - GitHub releases and changelogs
 - Automated version bumping
 - NPM publishing pipeline

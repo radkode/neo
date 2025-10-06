@@ -1,7 +1,7 @@
 {
   "name": "@radkode/neo",
   "version": "0.5.0",
-  "description": "⚡ Lightning-fast TypeScript CLI framework",
+  "description": "Modern CLI toolkit with intelligent git workflows and configuration management",
   "author": "Jacek Radko",
   "license": "MIT",
   "type": "module",

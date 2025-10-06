@@ -1,8 +1,10 @@
 import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
-import { showBanner } from '@/utils/banner.js';
+import { displayBanner } from '@/utils/banner.js';
+import type { BannerType } from '@/utils/banner.js';
 import { logger } from '@/utils/logger.js';
 import { registerCommands } from '@/commands/index.js';
+import { configManager } from '@/utils/config.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -22,13 +24,17 @@ export function createCLI(): Command {
     .option('-c, --config <path>', 'path to config file')
     .option('--no-color', 'disable colored output')
     .option('--no-banner', 'hide banner')
-    .hook('preAction', (thisCommand, actionCommand) => {
+    .hook('preAction', async (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
       const commandName = actionCommand.name();
 
-      // Don't show banner for version, help, or when explicitly disabled
-      const skipBanner =
-        opts.banner === false ||
+      // Determine banner display logic
+      // Priority order:
+      // 1. --no-banner flag (highest priority)
+      // 2. Help/version commands (always skip)
+      // 3. Config file preference
+
+      const isHelpOrVersion =
         commandName === 'version' ||
         commandName === 'help' ||
         process.argv.includes('--version') ||
@@ -36,9 +42,28 @@ export function createCLI(): Command {
         process.argv.includes('--help') ||
         process.argv.includes('-h');
 
-      if (!skipBanner) {
-        showBanner();
+      // Skip banner for help/version commands
+      if (isHelpOrVersion) {
+        return;
       }
+
+      // Check for --no-banner flag
+      if (opts.banner === false) {
+        return;
+      }
+
+      // Read banner preference from config
+      let bannerType: BannerType = 'full'; // Default fallback
+      try {
+        const config = await configManager.read();
+        bannerType = config.preferences.banner;
+      } catch (error) {
+        // If config read fails, use default 'full' banner
+        logger.debug(`Failed to read banner config, using default: ${error}`);
+      }
+
+      // Display banner based on configuration
+      displayBanner(bannerType);
 
       // Configure logger
       if (opts.verbose) {
