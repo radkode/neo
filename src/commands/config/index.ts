@@ -1,6 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import chalk from 'chalk';
-import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
 import type { NeoConfig } from '@/utils/config.js';
 
@@ -33,18 +32,18 @@ function createConfigGetCommand(): Command {
         const value = getNestedValue(config, key);
 
         if (value === undefined) {
-          logger.error(`Configuration key not found: ${chalk.cyan(key)}`);
+          ui.error(`Configuration key not found: ${key}`);
           process.exit(1);
         }
 
         if (typeof value === 'object' && value !== null) {
-          logger.info(`${chalk.cyan(key)}:`);
+          ui.info(`${key}:`);
           console.log(JSON.stringify(value, null, 2));
         } else {
-          logger.info(`${chalk.cyan(key)}: ${chalk.green(String(value))}`);
+          ui.keyValue([[key, String(value)]]);
         }
       } catch (error) {
-        logger.error(`Failed to read configuration: ${error}`);
+        ui.error(`Failed to read configuration: ${error}`);
         process.exit(1);
       }
     });
@@ -69,8 +68,8 @@ function createConfigSetCommand(): Command {
         if (key === 'preferences.banner') {
           const validBannerValues = ['full', 'compact', 'none'];
           if (!validBannerValues.includes(value)) {
-            logger.error(
-              `Invalid banner value: ${chalk.red(value)}. Must be one of: ${validBannerValues.map((v) => chalk.cyan(v)).join(', ')}`
+            ui.error(
+              `Invalid banner value: ${value}. Must be one of: ${validBannerValues.join(', ')}`
             );
             process.exit(1);
           }
@@ -79,8 +78,8 @@ function createConfigSetCommand(): Command {
         if (key === 'preferences.theme') {
           const validThemeValues = ['dark', 'light', 'auto'];
           if (!validThemeValues.includes(value)) {
-            logger.error(
-              `Invalid theme value: ${chalk.red(value)}. Must be one of: ${validThemeValues.map((v) => chalk.cyan(v)).join(', ')}`
+            ui.error(
+              `Invalid theme value: ${value}. Must be one of: ${validThemeValues.join(', ')}`
             );
             process.exit(1);
           }
@@ -89,9 +88,7 @@ function createConfigSetCommand(): Command {
         if (key === 'shell.type') {
           const validShellTypes = ['zsh', 'bash', 'fish'];
           if (!validShellTypes.includes(value)) {
-            logger.error(
-              `Invalid shell type: ${chalk.red(value)}. Must be one of: ${validShellTypes.map((v) => chalk.cyan(v)).join(', ')}`
-            );
+            ui.error(`Invalid shell type: ${value}. Must be one of: ${validShellTypes.join(', ')}`);
             process.exit(1);
           }
         }
@@ -100,9 +97,9 @@ function createConfigSetCommand(): Command {
         const updated = setNestedValue(config, key, parseValue(value));
         await configManager.write(updated);
 
-        logger.success(`Configuration updated: ${chalk.cyan(key)} = ${chalk.green(value)}`);
+        ui.success(`Configuration updated: ${key} = ${value}`);
       } catch (error) {
-        logger.error(`Failed to set configuration: ${error}`);
+        ui.error(`Failed to set configuration: ${error}`);
         process.exit(1);
       }
     });
@@ -169,65 +166,58 @@ function createConfigListCommand(): Command {
     try {
       const config = await configManager.read();
 
-      logger.info('Current Neo CLI Configuration:\n');
+      ui.info('Current Neo CLI Configuration');
+      console.log('');
 
       if (config.user.name || config.user.email) {
-        logger.log(chalk.bold('User:'));
-        if (config.user.name) {
-          logger.log(`  ${chalk.cyan('user.name')}: ${chalk.green(config.user.name)}`);
-        }
-        if (config.user.email) {
-          logger.log(`  ${chalk.cyan('user.email')}: ${chalk.green(config.user.email)}`);
-        }
-        console.log();
+        ui.section('User');
+        const userPairs: Array<[string, string]> = [];
+        if (config.user.name) userPairs.push(['user.name', config.user.name]);
+        if (config.user.email) userPairs.push(['user.email', config.user.email]);
+        ui.keyValue(userPairs);
+        console.log('');
       }
 
-      logger.log(chalk.bold('Preferences:'));
-      logger.log(
-        `  ${chalk.cyan('preferences.banner')}: ${chalk.green(config.preferences.banner)}`
-      );
-      logger.log(`  ${chalk.cyan('preferences.theme')}: ${chalk.green(config.preferences.theme)}`);
+      ui.section('Preferences');
+      const prefPairs: Array<[string, string]> = [
+        ['banner', config.preferences.banner],
+        ['theme', config.preferences.theme],
+      ];
       if (config.preferences.editor) {
-        logger.log(
-          `  ${chalk.cyan('preferences.editor')}: ${chalk.green(config.preferences.editor)}`
-        );
+        prefPairs.push(['editor', config.preferences.editor]);
       }
-      logger.log(
-        `  ${chalk.cyan('preferences.aliases.n')}: ${chalk.green(config.preferences.aliases.n ? 'enabled' : 'disabled')}`
-      );
-      console.log();
+      prefPairs.push(['aliases.n', config.preferences.aliases.n ? 'enabled' : 'disabled']);
+      ui.keyValue(prefPairs);
+      console.log('');
 
-      logger.log(chalk.bold('Shell:'));
-      logger.log(`  ${chalk.cyan('shell.type')}: ${chalk.green(config.shell.type)}`);
-      logger.log(`  ${chalk.cyan('shell.rcFile')}: ${chalk.green(config.shell.rcFile)}`);
-      console.log();
+      ui.section('Shell');
+      ui.keyValue([
+        ['type', config.shell.type],
+        ['rcFile', config.shell.rcFile],
+      ]);
+      console.log('');
 
-      logger.log(chalk.bold('Installation:'));
-      logger.log(
-        `  ${chalk.cyan('installation.version')}: ${chalk.green(config.installation.version)}`
-      );
-      logger.log(
-        `  ${chalk.cyan('installation.installedAt')}: ${chalk.green(config.installation.installedAt)}`
-      );
+      ui.section('Installation');
+      const installPairs: Array<[string, string]> = [
+        ['version', config.installation.version],
+        ['installedAt', config.installation.installedAt],
+      ];
       if (config.installation.globalPath) {
-        logger.log(
-          `  ${chalk.cyan('installation.globalPath')}: ${chalk.green(config.installation.globalPath)}`
-        );
+        installPairs.push(['globalPath', config.installation.globalPath]);
       }
       if (config.installation.completionsPath) {
-        logger.log(
-          `  ${chalk.cyan('installation.completionsPath')}: ${chalk.green(config.installation.completionsPath)}`
-        );
+        installPairs.push(['completionsPath', config.installation.completionsPath]);
       }
+      ui.keyValue(installPairs);
+      console.log('');
 
-      console.log(`\n${chalk.dim(`Config file: ${configManager.getConfigFile()}`)}`);
-      console.log(
-        chalk.dim(
-          `\nUse these full keys with 'neo config get <key>' or 'neo config set <key> <value>'`
-        )
+      ui.divider();
+      ui.muted(`Config file: ${configManager.getConfigFile()}`);
+      ui.muted(
+        `\nUse these full keys with 'neo config get <key>' or 'neo config set <key> <value>'`
       );
     } catch (error) {
-      logger.error(`Failed to read configuration: ${error}`);
+      ui.error(`Failed to read configuration: ${error}`);
       process.exit(1);
     }
   });

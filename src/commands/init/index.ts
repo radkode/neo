@@ -1,8 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
-import chalk from 'chalk';
-import ora from 'ora';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 import { InitOptions } from '@/types/index.js';
 import { configManager, type NeoConfig } from '@/utils/config.js';
 import { GlobalInstaller } from '@/utils/installer.js';
@@ -18,7 +17,8 @@ export function createInitCommand(): Command {
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
     .action(async (options: InitOptions) => {
-      const spinner = ora('Checking current setup...').start();
+      const spinner = ui.spinner('Checking current setup');
+      spinner.start();
 
       try {
         const installer = new GlobalInstaller();
@@ -31,8 +31,8 @@ export function createInitCommand(): Command {
 
         if (isInitialized && !options.force) {
           const config = await configManager.read();
-          logger.info(`Neo CLI is already initialized (v${config.installation.version})`);
-          logger.info(`Config location: ${chalk.cyan(configManager.getConfigFile())}`);
+          ui.info(`Neo CLI is already initialized (v${config.installation.version})`);
+          ui.info(`Config location: ${configManager.getConfigFile()}`);
 
           const { action } = await inquirer.prompt([
             {
@@ -48,29 +48,30 @@ export function createInitCommand(): Command {
           ]);
 
           if (action === 'cancel') {
-            logger.info('Initialization cancelled.');
+            ui.info('Initialization cancelled');
             return;
           }
 
           if (action === 'reset') {
             const backup = await configManager.backup();
             if (backup) {
-              logger.info(`Configuration backed up to: ${chalk.gray(backup)}`);
+              ui.info(`Configuration backed up to: ${backup}`);
             }
             const shellBackup = await shell.backup();
             if (shellBackup) {
-              logger.info(`Shell configuration backed up to: ${chalk.gray(shellBackup)}`);
+              ui.info(`Shell configuration backed up to: ${shellBackup}`);
             }
           }
         }
 
         if (!options.skipInstall) {
-          const installSpinner = ora('Installing Neo CLI globally...').start();
+          const installSpinner = ui.spinner('Installing Neo CLI globally');
+          installSpinner.start();
 
           if (!installStatus.pnpmInstalled) {
             installSpinner.fail('pnpm is not installed');
-            logger.error('Please install pnpm first: https://pnpm.io/installation');
-            logger.info('Then run this command again.');
+            ui.error('Please install pnpm first: https://pnpm.io/installation');
+            ui.info('Then run this command again');
             return;
           }
 
@@ -82,7 +83,7 @@ export function createInitCommand(): Command {
 
             if (!updateResult.success) {
               installSpinner.fail('Failed to update Neo CLI');
-              logger.error(updateResult.error || 'Unknown error occurred');
+              ui.error(updateResult.error || 'Unknown error occurred');
               return;
             }
 
@@ -92,7 +93,7 @@ export function createInitCommand(): Command {
 
             if (!installResult.success) {
               installSpinner.fail('Failed to install Neo CLI globally');
-              logger.error(installResult.error || 'Unknown error occurred');
+              ui.error(installResult.error || 'Unknown error occurred');
               return;
             }
 
@@ -101,13 +102,12 @@ export function createInitCommand(): Command {
 
           const commandWorking = await installer.verifyGlobalCommand();
           if (!commandWorking) {
-            logger.warn(
-              'Neo command may not be accessible. You might need to restart your terminal.'
-            );
+            ui.warn('Neo command may not be accessible. You might need to restart your terminal');
           }
         }
 
-        const configSpinner = ora('Setting up configuration...').start();
+        const configSpinner = ui.spinner('Setting up configuration');
+        configSpinner.start();
 
         const newConfig: NeoConfig = {
           user: {},
@@ -133,36 +133,40 @@ export function createInitCommand(): Command {
         await configManager.write(newConfig);
         configSpinner.succeed('Configuration saved');
 
-        const completionSpinner = ora('Creating completion files...').start();
+        const completionSpinner = ui.spinner('Creating completion files');
+        completionSpinner.start();
 
         await CompletionGenerator.createCompletionFiles(newConfig.installation.completionsPath!);
 
         completionSpinner.succeed('Completion files created');
 
-        const shellSpinner = ora('Setting up shell integration...').start();
+        const shellSpinner = ui.spinner('Setting up shell integration');
+        shellSpinner.start();
 
         await shell.applyConfig(newConfig);
 
         shellSpinner.succeed('Shell integration configured');
 
-        logger.success('\n🎉 Neo CLI has been successfully initialized!');
-        logger.info('\nWhat was configured:');
-        logger.log(`  ✓ Global installation: ${chalk.cyan('neo')} command available`);
-        logger.log(`  ✓ Configuration: ${chalk.cyan(configManager.getConfigFile())}`);
-        logger.log(`  ✓ Shell alias: ${chalk.cyan('n')} → ${chalk.cyan('neo')}`);
-        logger.log(`  ✓ Shell completions: enabled`);
+        ui.success('Neo CLI has been successfully initialized!');
+        console.log('');
+        ui.info('What was configured:');
+        ui.list([
+          'Global installation: neo command available',
+          `Configuration: ${configManager.getConfigFile()}`,
+          'Shell alias: n → neo',
+          'Shell completions: enabled',
+        ]);
 
-        logger.info('\nNext steps:');
-        logger.log(
-          `  ${chalk.gray('1.')} Restart your terminal or run: ${chalk.cyan('source ~/.zshrc')}`
-        );
-        logger.log(
-          `  ${chalk.gray('2.')} Try: ${chalk.cyan('neo --help')} or ${chalk.cyan('n --help')}`
-        );
-        logger.log(`  ${chalk.gray('3.')} Configure settings: ${chalk.cyan('neo config')}`);
+        console.log('');
+        ui.info('Next steps:');
+        ui.list([
+          'Restart your terminal or run: source ~/.zshrc',
+          'Try: neo --help or n --help',
+          'Configure settings: neo config',
+        ]);
       } catch (error: unknown) {
         spinner.fail('Initialization failed');
-        logger.error(`Error: ${error}`);
+        ui.error(`Error: ${error}`);
         throw error;
       }
     });

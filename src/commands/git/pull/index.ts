@@ -1,8 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
-import chalk from 'chalk';
-import ora from 'ora';
 import { execa } from 'execa';
 import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 import { GitPullOptions } from '@/types/index.js';
 
 /**
@@ -21,7 +20,7 @@ export function createPullCommand(): Command {
     .option('--rebase', 'force rebase strategy')
     .option('--no-rebase', 'prevent automatic rebase fallback')
     .action(async (options: GitPullOptions) => {
-      const spinner = ora('Pulling from remote...');
+      const spinner = ui.spinner('Pulling from remote');
 
       try {
         // Get current branch name
@@ -34,13 +33,11 @@ export function createPullCommand(): Command {
         try {
           await execa('git', ['rev-parse', '--abbrev-ref', '@{u}']);
         } catch {
-          logger.error(chalk.red('❌ No upstream branch configured!'));
-          logger.log(chalk.yellow('Set an upstream branch first:'));
-          logger.log(
-            chalk.cyan(`  git branch --set-upstream-to=origin/${branchName} ${branchName}`)
-          );
-          logger.log(chalk.gray('Or push with upstream:'));
-          logger.log(chalk.cyan(`  neo git push -u ${branchName}`));
+          ui.error('No upstream branch configured!');
+          ui.warn('Set an upstream branch first:');
+          ui.muted(`  git branch --set-upstream-to=origin/${branchName} ${branchName}`);
+          ui.muted('Or push with upstream:');
+          ui.muted(`  neo git push -u ${branchName}`);
           process.exit(1);
         }
 
@@ -56,10 +53,10 @@ export function createPullCommand(): Command {
             encoding: 'utf8',
           });
 
-          spinner.succeed(chalk.green('✅ Successfully pulled with rebase!'));
+          spinner.succeed('Successfully pulled with rebase!');
 
           if (stdout.trim()) {
-            logger.log(chalk.gray(stdout));
+            ui.muted(stdout);
           }
 
           return;
@@ -74,10 +71,10 @@ export function createPullCommand(): Command {
             encoding: 'utf8',
           });
 
-          spinner.succeed(chalk.green('✅ Successfully pulled from remote!'));
+          spinner.succeed('Successfully pulled from remote!');
 
           if (stdout.trim()) {
-            logger.log(chalk.gray(stdout));
+            ui.muted(stdout);
           }
         } catch (error: unknown) {
           // Check if it's a non-fast-forward error
@@ -97,11 +94,11 @@ export function createPullCommand(): Command {
               encoding: 'utf8',
             });
 
-            spinner.succeed(chalk.green('✅ Successfully pulled with rebase!'));
-            logger.log(chalk.yellow('ℹ️  Used rebase strategy due to divergent branches'));
+            spinner.succeed('Successfully pulled with rebase!');
+            ui.info('Used rebase strategy due to divergent branches');
 
             if (stdout.trim()) {
-              logger.log(chalk.gray(stdout));
+              ui.muted(stdout);
             }
           } else {
             throw error; // Re-throw if not a fast-forward issue
@@ -114,37 +111,39 @@ export function createPullCommand(): Command {
           const errorMessage = error.message;
 
           if (errorMessage.includes('not a git repository')) {
-            logger.error(chalk.red('❌ Not a git repository!'));
-            logger.log(chalk.yellow('Make sure you are in a git repository directory.'));
+            ui.error('Not a git repository!');
+            ui.warn('Make sure you are in a git repository directory');
             process.exit(1);
           }
 
           if (errorMessage.includes('conflict')) {
-            logger.error(chalk.red('❌ Merge conflicts detected!'));
-            logger.log(chalk.yellow('Resolve conflicts manually, then:'));
-            logger.log(chalk.cyan('  1. Fix conflicts in your editor'));
-            logger.log(chalk.cyan('  2. Stage resolved files: git add <files>'));
-            logger.log(chalk.cyan('  3. Continue rebase: git rebase --continue'));
-            logger.log(chalk.gray('Or abort the rebase:'));
-            logger.log(chalk.cyan('  git rebase --abort'));
+            ui.error('Merge conflicts detected!');
+            ui.warn('Resolve conflicts manually, then:');
+            ui.list([
+              'Fix conflicts in your editor',
+              'Stage resolved files: git add <files>',
+              'Continue rebase: git rebase --continue',
+            ]);
+            ui.muted('Or abort the rebase:');
+            ui.muted('  git rebase --abort');
             process.exit(1);
           }
 
           if (errorMessage.includes('authentication') || errorMessage.includes('permission')) {
-            logger.error(chalk.red('❌ Authentication failed!'));
-            logger.log(chalk.yellow('Check your git credentials or SSH keys.'));
+            ui.error('Authentication failed!');
+            ui.warn('Check your git credentials or SSH keys');
             process.exit(1);
           }
 
           if (errorMessage.includes('Could not resolve host')) {
-            logger.error(chalk.red('❌ Network error!'));
-            logger.log(chalk.yellow('Check your internet connection.'));
+            ui.error('Network error!');
+            ui.warn('Check your internet connection');
             process.exit(1);
           }
         }
 
-        logger.error(chalk.red('❌ Failed to pull from remote'));
-        logger.error(chalk.gray(error instanceof Error ? error.message : String(error)));
+        ui.error('Failed to pull from remote');
+        ui.muted(error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });

@@ -1,12 +1,11 @@
 import { Command } from '@commander-js/extra-typings';
-import chalk from 'chalk';
-import ora from 'ora';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 import type { UpdateOptions, NpmPackageInfo, PackageManager } from '@/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,7 +19,7 @@ function getCurrentVersion(): string {
     const packageJson = JSON.parse(readFileSync(join(__dirname, '../../../package.json'), 'utf-8'));
     return packageJson.version;
   } catch (error: unknown) {
-    logger.error('Failed to read current version');
+    ui.error('Failed to read current version');
     throw error;
   }
 }
@@ -37,7 +36,7 @@ async function getLatestVersion(): Promise<string> {
     const data = (await response.json()) as NpmPackageInfo;
     return data['dist-tags'].latest;
   } catch (error: unknown) {
-    logger.error('Failed to fetch latest version from npm registry');
+    ui.error('Failed to fetch latest version from npm registry');
     throw error;
   }
 }
@@ -121,14 +120,15 @@ export function createUpdateCommand(): Command {
         logger.debug(`Current version: ${currentVersion}`);
 
         // Show checking spinner
-        const spinner = ora('Checking for updates...').start();
+        const spinner = ui.spinner('Checking for updates');
+        spinner.start();
 
         let latestVersion: string;
         try {
           latestVersion = await getLatestVersion();
         } catch {
-          spinner.fail(chalk.red('Failed to check for updates'));
-          logger.error('Could not connect to npm registry. Please check your internet connection.');
+          spinner.fail('Failed to check for updates');
+          ui.error('Could not connect to npm registry. Please check your internet connection');
           process.exit(1);
         }
 
@@ -137,19 +137,17 @@ export function createUpdateCommand(): Command {
         const comparison = compareVersions(latestVersion, currentVersion);
 
         if (comparison === 0) {
-          spinner.succeed(chalk.green('You are already on the latest version!'));
-          logger.log(`\n${chalk.cyan('Current version:')} ${chalk.bold(currentVersion)}`);
+          spinner.succeed('You are already on the latest version!');
+          ui.info(`Current version: ${currentVersion}`);
 
           if (!options.force) {
             return;
           }
 
-          logger.log(chalk.yellow('\n--force flag detected, proceeding with reinstall...'));
+          ui.warn('--force flag detected, proceeding with reinstall');
         } else if (comparison < 0) {
           spinner.warn(
-            chalk.yellow(
-              `You are on a newer version (${currentVersion}) than the latest stable (${latestVersion})`
-            )
+            `You are on a newer version (${currentVersion}) than the latest stable (${latestVersion})`
           );
 
           if (!options.force && !options.checkOnly) {
@@ -163,24 +161,24 @@ export function createUpdateCommand(): Command {
             ]);
 
             if (!shouldDowngrade) {
-              logger.log(chalk.gray('\nUpdate cancelled'));
+              ui.muted('Update cancelled');
               return;
             }
           } else if (!options.force) {
             return;
           }
         } else {
-          spinner.succeed(chalk.green('Update available!'));
-          logger.log(`\n${chalk.cyan('Current version:')} ${chalk.bold(currentVersion)}`);
-          logger.log(`${chalk.cyan('Latest version:')}  ${chalk.bold.green(latestVersion)}`);
+          spinner.succeed('Update available!');
+          ui.keyValue([
+            ['Current version', currentVersion],
+            ['Latest version', latestVersion],
+          ]);
         }
 
         // If check-only mode, stop here
         if (options.checkOnly) {
           if (comparison > 0) {
-            logger.log(
-              chalk.gray(`\nRun ${chalk.cyan('neo update')} to install the latest version.`)
-            );
+            ui.muted('Run neo update to install the latest version');
           }
           return;
         }
@@ -197,51 +195,46 @@ export function createUpdateCommand(): Command {
           ]);
 
           if (!confirm) {
-            logger.log(chalk.gray('\nUpdate cancelled'));
+            ui.muted('Update cancelled');
             return;
           }
         }
 
         // Detect package manager
-        const updateSpinner = ora('Detecting package manager...').start();
+        const updateSpinner = ui.spinner('Detecting package manager');
+        updateSpinner.start();
         const packageManager = await detectPackageManager();
-        updateSpinner.text = `Updating via ${chalk.cyan(packageManager)}...`;
+        updateSpinner.text = `Updating via ${packageManager}...`;
 
         logger.debug(`Using package manager: ${packageManager}`);
 
         // Execute update
         try {
           await executeUpdate(packageManager, options.force || false);
-          updateSpinner.succeed(chalk.green(`Successfully updated to version ${latestVersion}!`));
+          updateSpinner.succeed(`Successfully updated to version ${latestVersion}!`);
 
-          logger.log(
-            chalk.gray(`\n✨ Run ${chalk.cyan('neo --version')} to verify the installation.`)
-          );
+          ui.muted('Run neo --version to verify the installation');
         } catch (error: unknown) {
-          updateSpinner.fail(chalk.red('Update failed'));
+          updateSpinner.fail('Update failed');
 
           const errorMessage = error instanceof Error ? error.message : String(error);
 
           if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
-            logger.error('Permission denied. Try running with sudo:');
-            logger.log(
-              chalk.cyan(
-                `  sudo ${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`
-              )
+            ui.error('Permission denied. Try running with sudo:');
+            ui.muted(
+              `  sudo ${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`
             );
           } else {
-            logger.error(`Update failed: ${errorMessage}`);
-            logger.log(
-              chalk.gray(
-                `\nTry updating manually: ${chalk.cyan(`${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`)}`
-              )
+            ui.error(`Update failed: ${errorMessage}`);
+            ui.muted(
+              `Try updating manually: ${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`
             );
           }
           process.exit(1);
         }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`Unexpected error: ${errorMessage}`);
+        ui.error(`Unexpected error: ${errorMessage}`);
         process.exit(1);
       }
     });

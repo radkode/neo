@@ -1,9 +1,8 @@
 import { Command } from '@commander-js/extra-typings';
-import chalk from 'chalk';
-import ora from 'ora';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 import { GitPushOptions } from '@/types/index.js';
 
 export function createPushCommand(): Command {
@@ -17,7 +16,7 @@ export function createPushCommand(): Command {
     .option('--tags', 'push tags along with commits')
     .action(async (options: GitPushOptions) => {
       let branchName: string = '';
-      const spinner = ora('Pushing to remote...');
+      const spinner = ui.spinner('Pushing to remote');
 
       try {
         const { stdout: currentBranch } = await execa('git', ['branch', '--show-current']);
@@ -26,10 +25,8 @@ export function createPushCommand(): Command {
         logger.debug(`Current branch: ${branchName}`);
 
         if (branchName === 'main') {
-          logger.log(chalk.yellow.bold('⚠️  You are about to push directly to the main branch.'));
-          logger.log(
-            chalk.gray('This is generally not recommended as it bypasses code review processes.')
-          );
+          ui.warn('You are about to push directly to main branch');
+          ui.muted('This is generally not recommended as it bypasses code review processes');
 
           const { confirmPush } = await inquirer.prompt([
             {
@@ -41,21 +38,17 @@ export function createPushCommand(): Command {
           ]);
 
           if (!confirmPush) {
-            logger.log(chalk.green("\n✅ Push cancelled. Here's how to push your changes safely:"));
-            logger.log(
-              chalk.gray('  1. Create a feature branch:') +
-                chalk.cyan(` git checkout -b feature/your-feature-name`)
-            );
-            logger.log(
-              chalk.gray('  2. Push to your branch:') +
-                chalk.cyan(` git push -u origin feature/your-feature-name`)
-            );
-            logger.log(chalk.gray('  3. Create a pull request to merge into main'));
-            logger.log(chalk.gray('\nThis protects the main branch from accidental changes.'));
+            ui.success("Push cancelled. Here's how to push your changes safely:");
+            ui.list([
+              'Create a feature branch: git checkout -b feature/your-feature-name',
+              'Push to your branch: git push -u origin feature/your-feature-name',
+              'Create a pull request to merge into main',
+            ]);
+            ui.muted('This protects the main branch from accidental changes');
             process.exit(0);
           }
 
-          logger.log(chalk.blue('\n→ Proceeding with push to main branch...'));
+          ui.step('Proceeding with push to main branch');
         }
 
         spinner.start();
@@ -67,8 +60,8 @@ export function createPushCommand(): Command {
 
         if (options.dryRun) {
           spinner.stop();
-          logger.info(chalk.yellow('Dry run mode - no changes will be pushed'));
-          logger.info(`Would push from branch: ${chalk.cyan(branchName)}`);
+          ui.warn('Dry run mode - no changes will be pushed');
+          ui.info(`Would push from branch: ${branchName}`);
 
           // Show what would be pushed
           try {
@@ -78,18 +71,13 @@ export function createPushCommand(): Command {
               `origin/${branchName}..HEAD`,
             ]);
             if (commits.trim()) {
-              logger.info('Would push the following commits:');
-              commits
-                .trim()
-                .split('\n')
-                .forEach((commit) => {
-                  logger.log(`  • ${commit}`);
-                });
+              ui.info('Would push the following commits:');
+              ui.list(commits.trim().split('\n'));
             } else {
-              logger.info('No new commits to push');
+              ui.info('No new commits to push');
             }
           } catch {
-            logger.info('Would push current branch (unable to determine commit differences)');
+            ui.info('Would push current branch (unable to determine commit differences)');
           }
           return;
         }
@@ -117,53 +105,51 @@ export function createPushCommand(): Command {
           encoding: 'utf8',
         });
 
-        spinner.succeed(chalk.green('Successfully pushed to remote!'));
+        spinner.succeed('Successfully pushed to remote!');
 
         if (pushResult.stdout) {
-          logger.log(chalk.gray(pushResult.stdout));
+          ui.muted(pushResult.stdout);
         }
 
         if (options.setUpstream) {
-          logger.info(`Set upstream branch: ${chalk.cyan(options.setUpstream)}`);
+          ui.info(`Set upstream branch: ${options.setUpstream}`);
         }
       } catch (error: unknown) {
         spinner.stop();
 
         if (error instanceof Error) {
           if (error.message?.includes('not a git repository')) {
-            logger.error(chalk.red('❌ Not a git repository!'));
-            logger.log(chalk.yellow('Make sure you are in a git repository directory.'));
+            ui.error('Not a git repository!');
+            ui.warn('Make sure you are in a git repository directory');
             process.exit(1);
           }
 
           if (error.message?.includes('no upstream branch')) {
-            logger.error(chalk.red('❌ No upstream branch configured!'));
-            logger.log(chalk.yellow('Use --set-upstream to set the upstream branch:'));
-            logger.log(chalk.cyan(`  git push -u origin ${branchName || 'your-branch'}`));
+            ui.error('No upstream branch configured!');
+            ui.warn('Use --set-upstream to set the upstream branch:');
+            ui.muted(`  git push -u origin ${branchName || 'your-branch'}`);
             process.exit(1);
           }
 
           if (error.message?.includes('rejected')) {
-            logger.error(chalk.red('❌ Push was rejected!'));
-            logger.log(
-              chalk.yellow('The remote branch has changes that conflict with your local branch.')
-            );
-            logger.log(chalk.gray('Try pulling the latest changes first:'));
-            logger.log(chalk.cyan(`  git pull origin ${branchName || 'your-branch'}`));
-            logger.log(chalk.gray('Or use --force to overwrite (use with caution):'));
-            logger.log(chalk.cyan('  git push --force'));
+            ui.error('Push was rejected!');
+            ui.warn('The remote branch has changes that conflict with your local branch');
+            ui.muted('Try pulling the latest changes first:');
+            ui.muted(`  git pull origin ${branchName || 'your-branch'}`);
+            ui.muted('Or use --force to overwrite (use with caution):');
+            ui.muted('  git push --force');
             process.exit(1);
           }
 
           if (error.message?.includes('authentication')) {
-            logger.error(chalk.red('❌ Authentication failed!'));
-            logger.log(chalk.yellow('Check your git credentials or SSH keys.'));
+            ui.error('Authentication failed!');
+            ui.warn('Check your git credentials or SSH keys');
             process.exit(1);
           }
         }
 
-        logger.error(chalk.red('❌ Failed to push to remote'));
-        logger.error(chalk.gray(error instanceof Error ? error.message : String(error)));
+        ui.error('Failed to push to remote');
+        ui.muted(error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });

@@ -1,8 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
-import chalk from 'chalk';
 import { ZshIntegration } from '@/utils/shell.js';
-import { logger } from '@/utils/logger.js';
+import { ui } from '@/utils/ui.js';
 
 interface SetupOptions {
   force?: boolean;
@@ -73,10 +72,10 @@ export function createSetupCommand(): Command {
         const conflicts = findConflictingAliases(rcContent, ALIASES);
 
         if (conflicts.length > 0 && !options.force) {
-          logger.warn('The following aliases already exist and will be overwritten:');
+          ui.warn('The following aliases already exist and will be overwritten:');
           for (const c of conflicts) {
-            logger.log(
-              `  ${chalk.cyan(c.alias)}: currently ${chalk.yellow(c.current)} -> new ${chalk.green(ALIASES[c.alias as keyof AliasDefinition])}`
+            ui.log(
+              `  ${c.alias}: currently ${c.current} -> new ${ALIASES[c.alias as keyof AliasDefinition]}`
             );
           }
 
@@ -92,7 +91,7 @@ export function createSetupCommand(): Command {
           ]);
 
           if (!confirm) {
-            logger.info('Aborted. No changes were made.');
+            ui.info('Aborted. No changes were made');
             return;
           }
         }
@@ -100,9 +99,9 @@ export function createSetupCommand(): Command {
         // Backup .zshrc (timestamped)
         const backupPath = await shell.backup();
         if (backupPath) {
-          logger.info(`Backed up ${chalk.cyan(rcFile)} to ${chalk.cyan(backupPath)}`);
+          ui.info(`Backed up ${rcFile} to ${backupPath}`);
         } else {
-          logger.warn('No existing ~/.zshrc found to back up, proceeding to create/update it.');
+          ui.warn('No existing ~/.zshrc found to back up, proceeding to create/update it');
         }
 
         // Apply aliases using ZshIntegration (this uses markers and updates cleanly)
@@ -110,16 +109,14 @@ export function createSetupCommand(): Command {
           await shell.addAlias(alias, value);
         }
 
-        logger.success('Aliases configured successfully.');
-        logger.log('Added/updated aliases:');
-        for (const [alias, value] of Object.entries(ALIASES)) {
-          logger.log(`  ${chalk.cyan(alias)}=${chalk.green(`"${value}"`)}`);
-        }
+        ui.success('Aliases configured successfully');
+        ui.info('Added/updated aliases:');
+        ui.list(Object.entries(ALIASES).map(([alias, value]) => `${alias}="${value}"`));
 
-        logger.info('Restart your shell or run: source ~/.zshrc');
+        ui.info('Restart your shell or run: source ~/.zshrc');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`Failed to setup aliases: ${message}`);
+        ui.error(`Failed to setup aliases: ${message}`);
         process.exitCode = 1;
       }
     });
