@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.6.1
+
+### Patch Changes
+
+- [#22](https://github.com/radkode/neo/pull/22) [`1dda7c7`](https://github.com/radkode/neo/commit/1dda7c784614e7b629b482acdc6206e45ff4c494) Thanks [@jacekradko](https://github.com/jacekradko)! - Better handling of missing branches in git pull
+
 ## 0.6.0
 
 ### Minor Changes
