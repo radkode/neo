@@ -21,11 +21,12 @@ export function createPullCommand(): Command {
     .option('--no-rebase', 'prevent automatic rebase fallback')
     .action(async (options: GitPullOptions) => {
       const spinner = ui.spinner('Pulling from remote');
+      let branchName = '';
 
       try {
         // Get current branch name
         const { stdout: currentBranch } = await execa('git', ['branch', '--show-current']);
-        const branchName = currentBranch.trim();
+        branchName = currentBranch.trim();
 
         logger.debug(`Current branch: ${branchName}`);
 
@@ -113,6 +114,25 @@ export function createPullCommand(): Command {
           if (errorMessage.includes('not a git repository')) {
             ui.error('Not a git repository!');
             ui.warn('Make sure you are in a git repository directory');
+            process.exit(1);
+          }
+
+          // Handle deleted remote branch
+          if (
+            errorMessage.includes('no such ref was fetched') ||
+            errorMessage.includes('but no such ref was fetched')
+          ) {
+            ui.error('Remote branch no longer exists!');
+            ui.warn(
+              `Your local branch "${branchName}" is tracking a remote branch that has been deleted`
+            );
+            console.log('');
+            ui.info('To fix this, you can:');
+            ui.list([
+              `Switch to a different branch: git checkout main`,
+              `Set a new upstream: git branch --set-upstream-to=origin/${branchName}`,
+              `Delete this local branch if no longer needed: git branch -d ${branchName}`,
+            ]);
             process.exit(1);
           }
 
