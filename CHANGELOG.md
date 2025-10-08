@@ -1,5 +1,15 @@
 # @radkode/neo
 
+## 0.6.0
+
+### Minor Changes
+
+- [#17](https://github.com/radkode/neo/pull/17) [`9192cc5`](https://github.com/radkode/neo/commit/9192cc518ee13628621be50d8938394aedf6338c) Thanks [@jacekradko](https://github.com/jacekradko)! - Update config command and add slim banner
+
+- [#20](https://github.com/radkode/neo/pull/20) [`55aa05d`](https://github.com/radkode/neo/commit/55aa05dd21658f5362e531aa9ec7ac8f9482b220) Thanks [@jacekradko](https://github.com/jacekradko)! - Improve banner look and feel
+
+- [#21](https://github.com/radkode/neo/pull/21) [`69a402f`](https://github.com/radkode/neo/commit/69a402fd4177a1246b9da94ce1f3d0dce4c635b6) Thanks [@jacekradko](https://github.com/jacekradko)! - Streamline the CLI UI output
+
 ## 0.5.0
 
 ### Minor Changes
