@@ -8,17 +8,18 @@ export type BannerType = 'full' | 'compact' | 'none';
 /**
  * Displays the full ASCII art banner for Neo CLI
  *
- * This banner features large ASCII art with the Neo CLI branding.
+ * This banner features large ASCII art with the Neo CLI branding
+ * with a beautiful horizontal blue to purple gradient.
  * Use this for a prominent, eye-catching display.
  */
 export function showBanner(): void {
   const banner = `
-${chalk.bold.hex('#00BFFF')('  ███╗   ██╗███████╗ ██████╗     ██████╗██╗     ██╗')}
-${chalk.bold.hex('#00BFFF')('  ████╗  ██║██╔════╝██╔═══██╗   ██╔════╝██║     ██║')}
-${chalk.bold.hex('#00BFFF')('  ██╔██╗ ██║█████╗  ██║   ██║   ██║     ██║     ██║')}
-${chalk.bold.hex('#00BFFF')('  ██║╚██╗██║██╔══╝  ██║   ██║   ██║     ██║     ██║')}
-${chalk.bold.hex('#00BFFF')('  ██║ ╚████║███████╗╚██████╔╝   ╚██████╗███████╗██║')}
-${chalk.bold.hex('#00BFFF')('  ╚═╝  ╚═══╝╚══════╝ ╚═════╝     ╚═════╝╚══════╝╚═╝')}
+${chalk.bold.hex('#0066FF')('  ███╗   ██╗')}${chalk.bold.hex('#3D7FFF')('███████╗ ')}${chalk.bold.hex('#6B7FFF')('██████╗ ')}${chalk.bold.hex('#997FFF')('    ██████╗')}${chalk.bold.hex('#C65FFF')('██╗     ')}${chalk.bold.hex('#F33FFF')('██╗')}
+${chalk.bold.hex('#0066FF')('  ████╗  ██║')}${chalk.bold.hex('#3D7FFF')('██╔════╝')}${chalk.bold.hex('#6B7FFF')('██╔═══██╗')}${chalk.bold.hex('#997FFF')('   ██╔════╝')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██╔██╗ ██║')}${chalk.bold.hex('#3D7FFF')('█████╗  ')}${chalk.bold.hex('#6B7FFF')('██║   ██║')}${chalk.bold.hex('#997FFF')('   ██║     ')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██║╚██╗██║')}${chalk.bold.hex('#3D7FFF')('██╔══╝  ')}${chalk.bold.hex('#6B7FFF')('██║   ██║')}${chalk.bold.hex('#997FFF')('   ██║     ')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██║ ╚████║')}${chalk.bold.hex('#3D7FFF')('███████╗')}${chalk.bold.hex('#6B7FFF')('╚██████╔╝')}${chalk.bold.hex('#997FFF')('   ╚██████╗')}${chalk.bold.hex('#C65FFF')('███████╗')}${chalk.bold.hex('#F33FFF')('██║')}
+${chalk.bold.hex('#0066FF')('  ╚═╝  ╚═══╝')}${chalk.bold.hex('#3D7FFF')('╚══════╝')}${chalk.bold.hex('#6B7FFF')(' ╚═════╝ ')}${chalk.bold.hex('#997FFF')('    ╚═════╝')}${chalk.bold.hex('#C65FFF')('╚══════╝')}${chalk.bold.hex('#F33FFF')('╚═╝')}
 `;
   console.log(banner);
 }
