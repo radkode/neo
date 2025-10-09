@@ -1,6 +1,8 @@
 import { Command } from '@commander-js/extra-typings';
 import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
+import { validateArgument, validateConfigValue, isValidationError } from '@/utils/validation.js';
+import { configKeySchema } from '@/types/schemas.js';
 import type { NeoConfig } from '@/utils/config.js';
 
 export function createConfigCommand(): Command {
@@ -26,7 +28,17 @@ function createConfigGetCommand(): Command {
   command
     .description('Get a configuration value')
     .argument('<key>', 'configuration key (supports dot notation, e.g., preferences.banner)')
-    .action(async (key: string) => {
+    .action(async (rawKey: string) => {
+      // Validate key
+      let key: string;
+      try {
+        key = validateArgument(configKeySchema, rawKey, 'configuration key');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       try {
         const config = await configManager.read();
         const value = getNestedValue(config, key);
@@ -63,38 +75,31 @@ function createConfigSetCommand(): Command {
     .description('Set a configuration value')
     .argument('<key>', 'configuration key (supports dot notation, e.g., preferences.banner)')
     .argument('<value>', 'configuration value')
-    .action(async (key: string, value: string) => {
+    .action(async (rawKey: string, rawValue: string) => {
+      // Validate key
+      let key: string;
       try {
-        if (key === 'preferences.banner') {
-          const validBannerValues = ['full', 'compact', 'none'];
-          if (!validBannerValues.includes(value)) {
-            ui.error(
-              `Invalid banner value: ${value}. Must be one of: ${validBannerValues.join(', ')}`
-            );
-            process.exit(1);
-          }
+        key = validateArgument(configKeySchema, rawKey, 'configuration key');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
         }
-
-        if (key === 'preferences.theme') {
-          const validThemeValues = ['dark', 'light', 'auto'];
-          if (!validThemeValues.includes(value)) {
-            ui.error(
-              `Invalid theme value: ${value}. Must be one of: ${validThemeValues.join(', ')}`
-            );
-            process.exit(1);
-          }
+        throw error;
+      }
+      // Validate and parse value
+      let value: string | number | boolean;
+      try {
+        value = await validateConfigValue(key, rawValue);
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
         }
+        throw error;
+      }
 
-        if (key === 'shell.type') {
-          const validShellTypes = ['zsh', 'bash', 'fish'];
-          if (!validShellTypes.includes(value)) {
-            ui.error(`Invalid shell type: ${value}. Must be one of: ${validShellTypes.join(', ')}`);
-            process.exit(1);
-          }
-        }
-
+      try {
         const config = await configManager.read();
-        const updated = setNestedValue(config, key, parseValue(value));
+        const updated = setNestedValue(config, key, value);
         await configManager.write(updated);
 
         ui.success(`Configuration updated: ${key} = ${value}`);
@@ -141,19 +146,6 @@ function setNestedValue(obj: NeoConfig, path: string, value: unknown): NeoConfig
   const lastKey = keys[keys.length - 1]!;
   current[lastKey] = value;
   return result;
-}
-
-/**
- * Helper function to parse string values into appropriate types
- */
-function parseValue(value: string): string | number | boolean {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-
-  const num = Number(value);
-  if (!isNaN(num) && value !== '') return num;
-
-  return value;
 }
 
 /**

@@ -10,6 +10,7 @@ This file contains project-specific guidelines and best practices for developing
 - [Testing](#testing)
 - [Git Workflow](#git-workflow)
 - [Package Management](#package-management)
+- [Input Validation](#input-validation)
 - [Error Handling](#error-handling)
 
 ---
@@ -446,6 +447,220 @@ pnpm format           # Format code
 
 ---
 
+## Input Validation
+
+### **CRITICAL: Always Validate Command Arguments and Options**
+
+Neo CLI uses **Zod** for runtime validation of all command inputs. This ensures type safety, provides better error messages, and prevents invalid data from reaching command logic.
+
+### Import Validation Utilities
+
+```typescript
+import { validate, validateArgument, isValidationError } from '@/utils/validation.js';
+import { yourCommandOptionsSchema } from '@/types/schemas.js';
+import type { YourCommandOptions } from '@/types/schemas.js';
+```
+
+### Schema Definitions
+
+All schemas are defined in `src/types/schemas.ts`. When adding a new command or modifying options:
+
+1. **Define the schema** using Zod
+2. **Export the schema** for validation
+3. **Export the TypeScript type** using `z.infer`
+
+**Example:**
+```typescript
+// src/types/schemas.ts
+import { z } from 'zod';
+
+/**
+ * My command options schema
+ */
+export const myCommandOptionsSchema = baseOptionsSchema.extend({
+  force: z.boolean().optional(),
+  output: z.string().min(1, 'Output path cannot be empty').optional(),
+  timeout: z.number().min(0, 'Timeout must be positive').optional(),
+});
+
+/**
+ * Type export for use in commands
+ */
+export type MyCommandOptions = z.infer<typeof myCommandOptionsSchema>;
+```
+
+### Validating Command Options
+
+Always validate options at the start of your command action:
+
+```typescript
+// ✅ Correct pattern
+export function createMyCommand(): Command {
+  const command = new Command('my-command');
+
+  command
+    .description('My command description')
+    .option('--force', 'force the operation')
+    .option('--output <path>', 'output file path')
+    .action(async (options: unknown) => {
+      // Validate options first
+      let validatedOptions: MyCommandOptions;
+      try {
+        validatedOptions = validate(myCommandOptionsSchema, options, 'my-command options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
+
+      // Now use validatedOptions (fully typed and validated)
+      if (validatedOptions.force) {
+        ui.warn('Force mode enabled');
+      }
+      
+      // ... rest of command logic
+    });
+
+  return command;
+}
+```
+
+### Validating Arguments
+
+For single arguments (like config keys), use `validateArgument`:
+
+```typescript
+// Example from config command
+command
+  .argument('<key>', 'configuration key')
+  .action(async (rawKey: string) => {
+    // Validate the argument
+    let key: string;
+    try {
+      key = validateArgument(configKeySchema, rawKey, 'configuration key');
+    } catch (error) {
+      if (isValidationError(error)) {
+        process.exit(1);
+      }
+      throw error;
+    }
+
+    // Use validated key
+    const value = await getConfigValue(key);
+  });
+```
+
+### Common Schema Patterns
+
+**String validation:**
+```typescript
+z.string()
+  .min(1, 'Value cannot be empty')
+  .max(255, 'Value is too long')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid format')
+```
+
+**Number validation:**
+```typescript
+z.number()
+  .min(0, 'Must be positive')
+  .max(100, 'Must be less than 100')
+  .int('Must be an integer')
+```
+
+**Enum validation:**
+```typescript
+z.enum(['option1', 'option2', 'option3'], {
+  message: 'Must be one of: option1, option2, option3',
+})
+```
+
+**Optional fields:**
+```typescript
+z.string().optional()  // Can be undefined
+z.string().default('default-value')  // Has a default value
+```
+
+**Array validation:**
+```typescript
+z.array(z.string()).min(1, 'At least one item required')
+```
+
+### Error Messages
+
+The validation system automatically:
+
+1. **Displays formatted errors** using the UI system
+2. **Shows all validation errors** at once
+3. **Provides field-specific messages**
+
+**Example error output:**
+```
+✖ Invalid git push options
+
+✖ setUpstream: Invalid branch name format
+✖ tags: Expected boolean, received string
+```
+
+### Best Practices
+
+1. **Always validate at command entry points** - Don't pass raw options deeper into your code
+2. **Use descriptive error messages** - Help users understand what's wrong
+3. **Validate early, fail fast** - Don't let invalid data reach business logic
+4. **Export both schema and type** - Keep them together in `schemas.ts`
+5. **Reuse base schemas** - Extend `baseOptionsSchema` for consistent global options
+6. **Test your schemas** - Add tests in `test/types/schemas.test.ts`
+
+### Testing Validation
+
+**Test valid inputs:**
+```typescript
+import { myCommandOptionsSchema } from '../../src/types/schemas.js';
+
+it('should validate valid options', () => {
+  const valid = { force: true, output: '/path/to/file' };
+  expect(myCommandOptionsSchema.safeParse(valid).success).toBe(true);
+});
+```
+
+**Test invalid inputs:**
+```typescript
+it('should reject invalid options', () => {
+  const invalid = { force: 'yes', output: '' };
+  expect(myCommandOptionsSchema.safeParse(invalid).success).toBe(false);
+});
+```
+
+**Test error messages:**
+```typescript
+it('should provide helpful error message', () => {
+  const invalid = { output: '' };
+  const result = myCommandOptionsSchema.safeParse(invalid);
+  expect(result.success).toBe(false);
+  if (!result.success) {
+    expect(result.error.issues[0]?.message).toContain('cannot be empty');
+  }
+});
+```
+
+### Migration Checklist
+
+When adding validation to an existing command:
+
+- [ ] Define schema in `src/types/schemas.ts`
+- [ ] Export schema and inferred type
+- [ ] Import validation utilities in command file
+- [ ] Change action parameter from typed to `unknown`
+- [ ] Add validation block at start of action
+- [ ] Replace all `options` references with `validatedOptions`
+- [ ] Handle `ValidationError` appropriately
+- [ ] Add tests for schema in `test/types/schemas.test.ts`
+- [ ] Verify type checking passes: `pnpm tsc --noEmit`
+- [ ] Verify tests pass: `pnpm test`
+
+---
+
 ## Error Handling
 
 ### User-Facing Errors
@@ -536,14 +751,15 @@ pnpm outdated
 ## Summary: Most Important Rules
 
 1. ✅ **ALWAYS use `ui` for console output** - Never use `console.log`, `chalk`, or `ora` directly
-2. ✅ **Use pnpm** - Never use npm or yarn
-3. ✅ **Write tests** - Test all new features and bug fixes
-4. ✅ **Type everything** - Use explicit TypeScript types
-5. ✅ **Handle errors gracefully** - Use ui.error() with helpful messages
-6. ✅ **Follow the file structure** - Keep code organized
-7. ✅ **Document your code** - Use JSDoc for all public APIs
+2. ✅ **ALWAYS validate command inputs** - Use Zod schemas for all command arguments and options
+3. ✅ **Use pnpm** - Never use npm or yarn
+4. ✅ **Write tests** - Test all new features and bug fixes including validation schemas
+5. ✅ **Type everything** - Use explicit TypeScript types and Zod schemas
+6. ✅ **Handle errors gracefully** - Use ui.error() with helpful messages
+7. ✅ **Follow the file structure** - Keep code organized
+8. ✅ **Document your code** - Use JSDoc for all public APIs
 
 ---
 
-**Last Updated:** 2025-01-08
-**Version:** 1.0.0
+**Last Updated:** 2025-01-09
+**Version:** 1.1.0

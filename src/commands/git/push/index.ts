@@ -3,7 +3,9 @@ import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { GitPushOptions } from '@/types/index.js';
+import { validate, isValidationError } from '@/utils/validation.js';
+import { gitPushOptionsSchema } from '@/types/schemas.js';
+import type { GitPushOptions } from '@/types/schemas.js';
 
 export function createPushCommand(): Command {
   const command = new Command('push');
@@ -14,7 +16,17 @@ export function createPushCommand(): Command {
     .option('-u, --set-upstream <branch>', 'set upstream branch')
     .option('--dry-run', 'show what would be pushed without actually pushing')
     .option('--tags', 'push tags along with commits')
-    .action(async (options: GitPushOptions) => {
+    .action(async (options: unknown) => {
+      // Validate options
+      let validatedOptions: GitPushOptions;
+      try {
+        validatedOptions = validate(gitPushOptionsSchema, options, 'git push options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       let branchName: string = '';
       const spinner = ui.spinner('Pushing to remote');
 
@@ -53,12 +65,12 @@ export function createPushCommand(): Command {
 
         spinner.start();
 
-        logger.debug(`Force push: ${options.force || false}`);
-        logger.debug(`Set upstream: ${options.setUpstream || 'none'}`);
-        logger.debug(`Dry run: ${options.dryRun || false}`);
-        logger.debug(`Push tags: ${options.tags || false}`);
+        logger.debug(`Force push: ${validatedOptions.force || false}`);
+        logger.debug(`Set upstream: ${validatedOptions.setUpstream || 'none'}`);
+        logger.debug(`Dry run: ${validatedOptions.dryRun || false}`);
+        logger.debug(`Push tags: ${validatedOptions.tags || false}`);
 
-        if (options.dryRun) {
+        if (validatedOptions.dryRun) {
           spinner.stop();
           ui.warn('Dry run mode - no changes will be pushed');
           ui.info(`Would push from branch: ${branchName}`);
@@ -84,16 +96,16 @@ export function createPushCommand(): Command {
 
         const pushArgs = ['push'];
 
-        if (options.force) {
+        if (validatedOptions.force) {
           pushArgs.push('--force');
         }
 
-        if (options.tags) {
+        if (validatedOptions.tags) {
           pushArgs.push('--tags');
         }
 
-        if (options.setUpstream) {
-          pushArgs.push('-u', 'origin', options.setUpstream);
+        if (validatedOptions.setUpstream) {
+          pushArgs.push('-u', 'origin', validatedOptions.setUpstream);
         } else {
           pushArgs.push('origin', branchName);
         }
@@ -111,8 +123,8 @@ export function createPushCommand(): Command {
           ui.muted(pushResult.stdout);
         }
 
-        if (options.setUpstream) {
-          ui.info(`Set upstream branch: ${options.setUpstream}`);
+        if (validatedOptions.setUpstream) {
+          ui.info(`Set upstream branch: ${validatedOptions.setUpstream}`);
         }
       } catch (error: unknown) {
         spinner.stop();

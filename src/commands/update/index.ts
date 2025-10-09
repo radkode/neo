@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import type { UpdateOptions, NpmPackageInfo, PackageManager } from '@/types/index.js';
+import { validate, isValidationError } from '@/utils/validation.js';
+import { updateOptionsSchema } from '@/types/schemas.js';
+import type { UpdateOptions } from '@/types/schemas.js';
+import type { NpmPackageInfo, PackageManager } from '@/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -114,7 +117,17 @@ export function createUpdateCommand(): Command {
     .description('Update Neo CLI to the latest version')
     .option('--check-only', 'only check for updates without installing')
     .option('--force', 'force update even if already on latest version')
-    .action(async (options: UpdateOptions) => {
+    .action(async (options: unknown) => {
+      // Validate options
+      let validatedOptions: UpdateOptions;
+      try {
+        validatedOptions = validate(updateOptionsSchema, options, 'update options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       try {
         const currentVersion = getCurrentVersion();
         logger.debug(`Current version: ${currentVersion}`);
@@ -140,7 +153,7 @@ export function createUpdateCommand(): Command {
           spinner.succeed('You are already on the latest version!');
           ui.info(`Current version: ${currentVersion}`);
 
-          if (!options.force) {
+          if (!validatedOptions.force) {
             return;
           }
 
@@ -150,7 +163,7 @@ export function createUpdateCommand(): Command {
             `You are on a newer version (${currentVersion}) than the latest stable (${latestVersion})`
           );
 
-          if (!options.force && !options.checkOnly) {
+          if (!validatedOptions.force && !validatedOptions.checkOnly) {
             const { shouldDowngrade } = await inquirer.prompt([
               {
                 type: 'confirm',
@@ -164,7 +177,7 @@ export function createUpdateCommand(): Command {
               ui.muted('Update cancelled');
               return;
             }
-          } else if (!options.force) {
+          } else if (!validatedOptions.force) {
             return;
           }
         } else {
@@ -176,7 +189,7 @@ export function createUpdateCommand(): Command {
         }
 
         // If check-only mode, stop here
-        if (options.checkOnly) {
+        if (validatedOptions.checkOnly) {
           if (comparison > 0) {
             ui.muted('Run neo update to install the latest version');
           }
@@ -184,7 +197,7 @@ export function createUpdateCommand(): Command {
         }
 
         // Ask for confirmation unless force flag is set
-        if (!options.force && comparison !== 0) {
+        if (!validatedOptions.force && comparison !== 0) {
           const { confirm } = await inquirer.prompt([
             {
               type: 'confirm',
@@ -210,7 +223,7 @@ export function createUpdateCommand(): Command {
 
         // Execute update
         try {
-          await executeUpdate(packageManager, options.force || false);
+          await executeUpdate(packageManager, validatedOptions.force || false);
           updateSpinner.succeed(`Successfully updated to version ${latestVersion}!`);
 
           ui.muted('Run neo --version to verify the installation');

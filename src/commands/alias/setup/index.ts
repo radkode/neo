@@ -2,10 +2,9 @@ import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
 import { ZshIntegration } from '@/utils/shell.js';
 import { ui } from '@/utils/ui.js';
-
-interface SetupOptions {
-  force?: boolean;
-}
+import { validate, isValidationError } from '@/utils/validation.js';
+import { aliasSetupOptionsSchema } from '@/types/schemas.js';
+import type { AliasSetupOptions } from '@/types/schemas.js';
 
 interface AliasDefinition {
   readonly [alias: string]: string;
@@ -53,7 +52,17 @@ export function createSetupCommand(): Command {
   command
     .description('Setup ZSH aliases for Neo CLI (gp, gpu). Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
-    .action(async (options: SetupOptions): Promise<void> => {
+    .action(async (options: unknown): Promise<void> => {
+      // Validate options
+      let validatedOptions: AliasSetupOptions;
+      try {
+        validatedOptions = validate(aliasSetupOptionsSchema, options, 'alias setup options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       const shell = new ZshIntegration();
 
       try {
@@ -71,7 +80,7 @@ export function createSetupCommand(): Command {
 
         const conflicts = findConflictingAliases(rcContent, ALIASES);
 
-        if (conflicts.length > 0 && !options.force) {
+        if (conflicts.length > 0 && !validatedOptions.force) {
           ui.warn('The following aliases already exist and will be overwritten:');
           for (const c of conflicts) {
             ui.log(

@@ -2,7 +2,9 @@ import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { InitOptions } from '@/types/index.js';
+import { validate, isValidationError } from '@/utils/validation.js';
+import { initOptionsSchema } from '@/types/schemas.js';
+import type { InitOptions } from '@/types/schemas.js';
 import { configManager, type NeoConfig } from '@/utils/config.js';
 import { GlobalInstaller } from '@/utils/installer.js';
 import { ZshIntegration } from '@/utils/shell.js';
@@ -16,7 +18,17 @@ export function createInitCommand(): Command {
     .description('Install and configure Neo CLI globally')
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
-    .action(async (options: InitOptions) => {
+    .action(async (options: unknown) => {
+      // Validate options
+      let validatedOptions: InitOptions;
+      try {
+        validatedOptions = validate(initOptionsSchema, options, 'init options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       const spinner = ui.spinner('Checking current setup');
       spinner.start();
 
@@ -29,7 +41,7 @@ export function createInitCommand(): Command {
 
         spinner.stop();
 
-        if (isInitialized && !options.force) {
+        if (isInitialized && !validatedOptions.force) {
           const config = await configManager.read();
           ui.info(`Neo CLI is already initialized (v${config.installation.version})`);
           ui.info(`Config location: ${configManager.getConfigFile()}`);
@@ -64,7 +76,7 @@ export function createInitCommand(): Command {
           }
         }
 
-        if (!options.skipInstall) {
+        if (!validatedOptions.skipInstall) {
           const installSpinner = ui.spinner('Installing Neo CLI globally');
           installSpinner.start();
 

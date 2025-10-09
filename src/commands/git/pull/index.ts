@@ -2,7 +2,9 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { GitPullOptions } from '@/types/index.js';
+import { validate, isValidationError } from '@/utils/validation.js';
+import { gitPullOptionsSchema } from '@/types/schemas.js';
+import type { GitPullOptions } from '@/types/schemas.js';
 
 /**
  * Create the git pull command
@@ -19,7 +21,17 @@ export function createPullCommand(): Command {
     .description('Pull changes from remote repository with automatic rebase fallback')
     .option('--rebase', 'force rebase strategy')
     .option('--no-rebase', 'prevent automatic rebase fallback')
-    .action(async (options: GitPullOptions) => {
+    .action(async (options: unknown) => {
+      // Validate options
+      let validatedOptions: GitPullOptions;
+      try {
+        validatedOptions = validate(gitPullOptionsSchema, options, 'git pull options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
       const spinner = ui.spinner('Pulling from remote');
       let branchName = '';
 
@@ -45,7 +57,7 @@ export function createPullCommand(): Command {
         spinner.start();
 
         // If user explicitly requested rebase, use it directly
-        if (options.rebase) {
+        if (validatedOptions.rebase) {
           logger.debug('Using rebase strategy (user specified)');
           spinner.text = 'Pulling with rebase...';
 
@@ -85,7 +97,7 @@ export function createPullCommand(): Command {
             (errorMessage.includes('non-fast-forward') ||
               errorMessage.includes('divergent branches') ||
               errorMessage.includes('cannot fast-forward')) &&
-            !options.noRebase
+            !validatedOptions.noRebase
           ) {
             logger.debug('Normal pull failed, attempting rebase...');
             spinner.text = 'Cannot fast-forward, retrying with rebase...';
