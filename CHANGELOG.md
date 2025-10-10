@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 0.7.0
+
+### Minor Changes
+
+- [#26](https://github.com/radkode/neo/pull/26) [`e3bda6d`](https://github.com/radkode/neo/commit/e3bda6d494fd3f07d16a6af1edeb405d5f15912e) Thanks [@jacekradko](https://github.com/jacekradko)! - Enhancing the git pull command to handle common scenarios
+
+- [#24](https://github.com/radkode/neo/pull/24) [`adc6564`](https://github.com/radkode/neo/commit/adc656444b6ba767e21fa4186818f241b64b0212) Thanks [@jacekradko](https://github.com/jacekradko)! - Added zod validation for command inputs
+
 ## 0.6.1
 
 ### Patch Changes
