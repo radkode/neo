@@ -1,9 +1,10 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
+import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
-import { gitPullOptionsSchema } from '@/types/schemas.js';
+import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
 import type { GitPullOptions } from '@/types/schemas.js';
 
 /**
@@ -134,18 +135,8 @@ export function createPullCommand(): Command {
             errorMessage.includes('no such ref was fetched') ||
             errorMessage.includes('but no such ref was fetched')
           ) {
-            ui.error('Remote branch no longer exists!');
-            ui.warn(
-              `Your local branch "${branchName}" is tracking a remote branch that has been deleted`
-            );
-            console.log('');
-            ui.info('To fix this, you can:');
-            ui.list([
-              `Switch to a different branch: git checkout main`,
-              `Set a new upstream: git branch --set-upstream-to=origin/${branchName}`,
-              `Delete this local branch if no longer needed: git branch -d ${branchName}`,
-            ]);
-            process.exit(1);
+            await handleDeletedRemoteBranch(branchName);
+            return;
           }
 
           if (errorMessage.includes('conflict')) {
@@ -181,4 +172,181 @@ export function createPullCommand(): Command {
     });
 
   return command;
+}
+
+/**
+ * Handle deleted remote branch scenario with interactive prompt
+ * @param branchName - The current branch name
+ */
+async function handleDeletedRemoteBranch(branchName: string): Promise<void> {
+  ui.error('Remote branch no longer exists!');
+  ui.warn(`Your local branch "${branchName}" is tracking a remote branch that has been deleted`);
+  console.log('');
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: 'How would you like to resolve this?',
+      default: 'switch_main_delete',
+      choices: [
+        {
+          name: 'Switch to main and delete this branch (recommended)',
+          value: 'switch_main_delete',
+        },
+        {
+          name: 'Switch to main and keep this branch',
+          value: 'switch_main_keep',
+        },
+        {
+          name: `Set a new upstream for "${branchName}"`,
+          value: 'set_upstream',
+        },
+        {
+          name: 'Cancel (no changes)',
+          value: 'cancel',
+        },
+      ],
+    },
+  ]);
+
+  const validatedAction = deletedBranchActionSchema.parse(action);
+
+  switch (validatedAction) {
+    case 'switch_main_delete':
+      await switchToMainAndDelete(branchName);
+      break;
+    case 'switch_main_keep':
+      await switchToMain(branchName);
+      break;
+    case 'set_upstream':
+      await setNewUpstream(branchName);
+      break;
+    case 'cancel':
+      ui.muted('Operation cancelled. No changes were made.');
+      process.exit(0);
+  }
+}
+
+/**
+ * Switch to main branch and delete the current branch
+ * @param branchName - The branch to delete
+ */
+async function switchToMainAndDelete(branchName: string): Promise<void> {
+  try {
+    // First check if main branch exists
+    const mainBranch = await findDefaultBranch();
+
+    // Switch to main/master
+    await execa('git', ['checkout', mainBranch]);
+    ui.success(`Switched to ${mainBranch} branch`);
+
+    // Try to delete the branch
+    try {
+      await execa('git', ['branch', '-d', branchName]);
+      ui.success(`Deleted branch "${branchName}"`);
+    } catch (error) {
+      // If regular delete fails, branch might have unmerged changes
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('not fully merged')) {
+        ui.warn(`Branch "${branchName}" has unmerged changes`);
+
+        const { forceDelete } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'forceDelete',
+            message: 'Force delete anyway? (This will lose any uncommitted changes)',
+            default: false,
+          },
+        ]);
+
+        if (forceDelete) {
+          await execa('git', ['branch', '-D', branchName]);
+          ui.success(`Force deleted branch "${branchName}"`);
+          ui.warn('Any uncommitted changes in that branch have been lost');
+        } else {
+          ui.info(`Branch "${branchName}" was preserved`);
+          ui.muted(`You can delete it later with: git branch -D ${branchName}`);
+        }
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    ui.error('Failed to switch branches or delete branch');
+    ui.muted(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+/**
+ * Switch to main branch but keep the current branch
+ * @param branchName - The current branch name
+ */
+async function switchToMain(branchName: string): Promise<void> {
+  try {
+    // First check if main branch exists
+    const mainBranch = await findDefaultBranch();
+
+    // Switch to main/master
+    await execa('git', ['checkout', mainBranch]);
+    ui.success(`Switched to ${mainBranch} branch`);
+    ui.info(`Branch "${branchName}" was preserved`);
+    ui.muted(`You can switch back with: git checkout ${branchName}`);
+  } catch (error) {
+    ui.error('Failed to switch to main branch');
+    ui.muted(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+/**
+ * Set a new upstream for the current branch
+ * @param branchName - The current branch name
+ */
+async function setNewUpstream(branchName: string): Promise<void> {
+  try {
+    await execa('git', ['branch', '--set-upstream-to', `origin/${branchName}`, branchName]);
+    ui.success(`Set upstream for "${branchName}" to origin/${branchName}`);
+    ui.info('You can now try pulling again');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('does not exist')) {
+      ui.error(`Remote branch origin/${branchName} does not exist`);
+      ui.warn('You may need to push your branch first:');
+      ui.muted(`  git push -u origin ${branchName}`);
+    } else {
+      ui.error('Failed to set upstream branch');
+      ui.muted(errorMessage);
+    }
+    process.exit(1);
+  }
+}
+
+/**
+ * Find the default branch (main, master, or other)
+ * @returns The name of the default branch
+ */
+async function findDefaultBranch(): Promise<string> {
+  try {
+    // Try main first
+    await execa('git', ['show-ref', '--verify', '--quiet', 'refs/heads/main']);
+    return 'main';
+  } catch {
+    try {
+      // Try master
+      await execa('git', ['show-ref', '--verify', '--quiet', 'refs/heads/master']);
+      return 'master';
+    } catch {
+      // Get the default branch from remote
+      try {
+        const { stdout } = await execa('git', ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+        return stdout.replace('refs/remotes/origin/', '').trim();
+      } catch {
+        // Fallback to main
+        ui.warn('Could not determine default branch, using "main"');
+        return 'main';
+      }
+    }
+  }
 }

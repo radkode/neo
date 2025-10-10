@@ -41,6 +41,16 @@ export const gitPullOptionsSchema = baseOptionsSchema.extend({
 });
 
 /**
+ * Valid actions when remote branch is deleted in git pull
+ */
+export const deletedBranchActionSchema = z.enum(
+  ['switch_main_delete', 'switch_main_keep', 'set_upstream', 'cancel'],
+  {
+    message: 'Must be one of: switch_main_delete, switch_main_keep, set_upstream, cancel',
+  }
+);
+
+/**
  * Update command options schema
  */
 export const updateOptionsSchema = baseOptionsSchema.extend({
@@ -111,3 +121,4 @@ export type BannerValue = z.infer<typeof bannerValueSchema>;
 export type ThemeValue = z.infer<typeof themeValueSchema>;
 export type ShellType = z.infer<typeof shellTypeSchema>;
 export type AliasSetupOptions = z.infer<typeof aliasSetupOptionsSchema>;
+export type DeletedBranchAction = z.infer<typeof deletedBranchActionSchema>;
