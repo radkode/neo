@@ -41,6 +41,14 @@ export const gitPullOptionsSchema = baseOptionsSchema.extend({
 });
 
 /**
+ * Git branch command options schema
+ */
+export const gitBranchOptionsSchema = baseOptionsSchema.extend({
+  dryRun: z.boolean().optional(),
+  force: z.boolean().optional(),
+});
+
+/**
  * Valid actions when remote branch is deleted in git pull
  */
 export const deletedBranchActionSchema = z.enum(
@@ -114,6 +122,7 @@ export type BaseOptions = z.infer<typeof baseOptionsSchema>;
 export type InitOptions = z.infer<typeof initOptionsSchema>;
 export type GitPushOptions = z.infer<typeof gitPushOptionsSchema>;
 export type GitPullOptions = z.infer<typeof gitPullOptionsSchema>;
+export type GitBranchOptions = z.infer<typeof gitBranchOptionsSchema>;
 export type UpdateOptions = z.infer<typeof updateOptionsSchema>;
 export type ConfigKey = z.infer<typeof configKeySchema>;
 export type ConfigValue = z.infer<typeof configValueSchema>;
