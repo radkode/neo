@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.8.0
+
+### Minor Changes
+
+- [#27](https://github.com/radkode/neo/pull/27) [`3695a9d`](https://github.com/radkode/neo/commit/3695a9d8e26d3c782eed4ed5e90c3f2f879cf34c) Thanks [@jacekradko](https://github.com/jacekradko)! - Added git branch command
+
 ## 0.7.0
 
 ### Minor Changes
