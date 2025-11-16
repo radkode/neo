@@ -30,25 +30,28 @@ import { ui } from '@/utils/ui.js';
 ### Core Output Methods
 
 **Status Messages:**
+
 ```typescript
-ui.success('Operation completed successfully');  // ✓ with green
-ui.error('Operation failed');                   // ✖ with red
-ui.warn('Be careful with this action');         // ⚠ with amber
-ui.info('Here is some information');            // ℹ with blue
+ui.success('Operation completed successfully'); // ✓ with green
+ui.error('Operation failed'); // ✖ with red
+ui.warn('Be careful with this action'); // ⚠ with amber
+ui.info('Here is some information'); // ℹ with blue
 ```
 
 **Context Messages:**
+
 ```typescript
-ui.step('Proceeding with installation');        // → with purple
-ui.muted('Secondary information');              // Gray, no icon
+ui.step('Proceeding with installation'); // → with purple
+ui.muted('Secondary information'); // Gray, no icon
 ui.highlight('Important: Read this carefully'); // ◆ with pink
-ui.link('Documentation', 'https://url.com');    // Underlined blue
-ui.log('Plain text without styling');           // No styling
+ui.link('Documentation', 'https://url.com'); // Underlined blue
+ui.log('Plain text without styling'); // No styling
 ```
 
 ### Structured Output
 
 **Sections with Headers:**
+
 ```typescript
 ui.section('Configuration');
 // Output:
@@ -57,6 +60,7 @@ ui.section('Configuration');
 ```
 
 **Lists:**
+
 ```typescript
 ui.list([
   'Global installation: neo command available',
@@ -70,6 +74,7 @@ ui.list([
 ```
 
 **Key-Value Pairs:**
+
 ```typescript
 ui.keyValue([
   ['user.name', 'John Doe'],
@@ -83,6 +88,7 @@ ui.keyValue([
 ```
 
 **Tables:**
+
 ```typescript
 ui.table({
   headers: ['Package', 'Current', 'Latest'],
@@ -101,14 +107,16 @@ ui.table({
 ```
 
 **Code Blocks:**
+
 ```typescript
-ui.code('const x = 42;\nconst y = 24;', { 
+ui.code('const x = 42;\nconst y = 24;', {
   lineNumbers: true,
-  startLine: 1 
+  startLine: 1,
 });
 ```
 
 **Dividers:**
+
 ```typescript
 ui.divider();
 // Output: ────────────────────────────────────────
@@ -130,16 +138,18 @@ const spinner = ora('Loading data').start();
 ```
 
 **Spinner methods:**
+
 ```typescript
-spinner.succeed('Success message');  // ✓ green
-spinner.fail('Error message');       // ✖ red
-spinner.warn('Warning message');     // ⚠ amber
-spinner.info('Info message');        // ℹ blue
+spinner.succeed('Success message'); // ✓ green
+spinner.fail('Error message'); // ✖ red
+spinner.warn('Warning message'); // ⚠ amber
+spinner.info('Info message'); // ℹ blue
 ```
 
 ### Color Palette Reference
 
 The UI system uses a consistent color palette:
+
 - **Blue** `#0066FF` - Info, links, highlights
 - **Purple** `#997FFF` - Steps, progress
 - **Pink** `#F33FFF` - Highlights, accents
@@ -151,6 +161,7 @@ The UI system uses a consistent color palette:
 ### Icons Reference
 
 All icons are consistent unicode symbols:
+
 - `✓` Success (U+2713)
 - `✖` Error (U+2716)
 - `⚠` Warning (U+26A0)
@@ -162,6 +173,7 @@ All icons are consistent unicode symbols:
 ### Migration Examples
 
 **Before (Inconsistent):**
+
 ```typescript
 import chalk from 'chalk';
 import ora from 'ora';
@@ -173,6 +185,7 @@ spinner.succeed(chalk.green('Done!'));
 ```
 
 **After (Consistent):**
+
 ```typescript
 import { ui } from '@/utils/ui.js';
 
@@ -194,6 +207,7 @@ spinner.succeed('Done!');
 - Enable all strict mode checks in `tsconfig.json`
 
 **Example:**
+
 ```typescript
 // ✅ Correct
 function processData(input: string): ProcessedData {
@@ -214,6 +228,7 @@ function processData(input: any) {
 - Document all types with JSDoc comments
 
 **Example:**
+
 ```typescript
 /**
  * Configuration options for the update command
@@ -233,12 +248,13 @@ interface UpdateOptions {
 - Prefer explicit null checks over truthy/falsy checks
 
 **Example:**
+
 ```typescript
 // ✅ Correct
 const name = user?.profile?.name ?? 'Unknown';
 
 // ❌ Wrong
-const name = user && user.profile && user.profile.name || 'Unknown';
+const name = (user && user.profile && user.profile.name) || 'Unknown';
 ```
 
 ---
@@ -269,12 +285,14 @@ src/
 ### Import Organization
 
 Order imports as follows:
+
 1. Node.js built-ins
 2. External dependencies
 3. Internal utilities (using `@/` path alias)
 4. Types
 
 **Example:**
+
 ```typescript
 import { readFile } from 'fs/promises';
 import { Command } from '@commander-js/extra-typings';
@@ -291,6 +309,7 @@ import type { InitOptions } from '@/types/index.js';
 - Document all public APIs with JSDoc
 
 **Example:**
+
 ```typescript
 /**
  * Create the git push command
@@ -378,6 +397,7 @@ footer (optional)
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -387,6 +407,7 @@ footer (optional)
 - `chore`: Build process or auxiliary tool changes
 
 **Examples:**
+
 ```
 feat(ui): add table rendering support
 fix(git): handle authentication errors properly
@@ -470,6 +491,7 @@ All schemas are defined in `src/types/schemas.ts`. When adding a new command or 
 3. **Export the TypeScript type** using `z.infer`
 
 **Example:**
+
 ```typescript
 // src/types/schemas.ts
 import { z } from 'zod';
@@ -518,7 +540,7 @@ export function createMyCommand(): Command {
       if (validatedOptions.force) {
         ui.warn('Force mode enabled');
       }
-      
+
       // ... rest of command logic
     });
 
@@ -532,59 +554,59 @@ For single arguments (like config keys), use `validateArgument`:
 
 ```typescript
 // Example from config command
-command
-  .argument('<key>', 'configuration key')
-  .action(async (rawKey: string) => {
-    // Validate the argument
-    let key: string;
-    try {
-      key = validateArgument(configKeySchema, rawKey, 'configuration key');
-    } catch (error) {
-      if (isValidationError(error)) {
-        process.exit(1);
-      }
-      throw error;
+command.argument('<key>', 'configuration key').action(async (rawKey: string) => {
+  // Validate the argument
+  let key: string;
+  try {
+    key = validateArgument(configKeySchema, rawKey, 'configuration key');
+  } catch (error) {
+    if (isValidationError(error)) {
+      process.exit(1);
     }
+    throw error;
+  }
 
-    // Use validated key
-    const value = await getConfigValue(key);
-  });
+  // Use validated key
+  const value = await getConfigValue(key);
+});
 ```
 
 ### Common Schema Patterns
 
 **String validation:**
+
 ```typescript
 z.string()
   .min(1, 'Value cannot be empty')
   .max(255, 'Value is too long')
-  .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid format')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid format');
 ```
 
 **Number validation:**
+
 ```typescript
-z.number()
-  .min(0, 'Must be positive')
-  .max(100, 'Must be less than 100')
-  .int('Must be an integer')
+z.number().min(0, 'Must be positive').max(100, 'Must be less than 100').int('Must be an integer');
 ```
 
 **Enum validation:**
+
 ```typescript
 z.enum(['option1', 'option2', 'option3'], {
   message: 'Must be one of: option1, option2, option3',
-})
+});
 ```
 
 **Optional fields:**
+
 ```typescript
-z.string().optional()  // Can be undefined
-z.string().default('default-value')  // Has a default value
+z.string().optional(); // Can be undefined
+z.string().default('default-value'); // Has a default value
 ```
 
 **Array validation:**
+
 ```typescript
-z.array(z.string()).min(1, 'At least one item required')
+z.array(z.string()).min(1, 'At least one item required');
 ```
 
 ### Error Messages
@@ -596,6 +618,7 @@ The validation system automatically:
 3. **Provides field-specific messages**
 
 **Example error output:**
+
 ```
 ✖ Invalid git push options
 
@@ -615,6 +638,7 @@ The validation system automatically:
 ### Testing Validation
 
 **Test valid inputs:**
+
 ```typescript
 import { myCommandOptionsSchema } from '../../src/types/schemas.js';
 
@@ -625,6 +649,7 @@ it('should validate valid options', () => {
 ```
 
 **Test invalid inputs:**
+
 ```typescript
 it('should reject invalid options', () => {
   const invalid = { force: 'yes', output: '' };
@@ -633,6 +658,7 @@ it('should reject invalid options', () => {
 ```
 
 **Test error messages:**
+
 ```typescript
 it('should provide helpful error message', () => {
   const invalid = { output: '' };
@@ -678,7 +704,7 @@ try {
       process.exit(1);
     }
   }
-  
+
   ui.error('An unexpected error occurred');
   ui.muted(error instanceof Error ? error.message : String(error));
   process.exit(1);
@@ -692,6 +718,7 @@ try {
 3. **Be consistent** - Use the same format everywhere
 
 **Example:**
+
 ```typescript
 // ✅ Good
 ui.error('Git repository not found');
@@ -707,6 +734,48 @@ console.error('Error: not a git repo');
 - `0` - Success
 - `1` - General error
 - Exit gracefully with appropriate messages
+
+---
+
+## Asynchronous I/O (No Sync APIs)
+
+### CRITICAL: Prefer async APIs over sync
+
+- Always use non-blocking async APIs in Node.js.
+- Use `fs/promises` instead of `fs` for filesystem access.
+- Avoid all `*Sync` calls (`readFileSync`, `writeFileSync`, `existsSync`, `mkdirSync`, `rmSync`, etc.).
+- Avoid `execSync` / `spawnSync` for process execution; prefer async libraries like `execa`.
+
+### JSON imports
+
+- When reading from `package.json`, import it directly with a JSON import assertion:
+
+```typescript
+import pkg from '../package.json' assert { type: 'json' };
+```
+
+This is supported by our configuration (`type: module`, `resolveJsonModule: true`).
+
+### Patterns
+
+- Directory creation: call `await mkdir(path, { recursive: true })` without prior existence checks.
+- Existence checks: use `await access(path, constants.F_OK)` wrapped in try/catch, or design logic to not require the check.
+- Initialization that needs async work: use async factory functions (e.g., `await ContextDB.create(...)`) instead of doing work in constructors.
+
+### Migration example
+
+```typescript
+// Before (sync)
+import { readFileSync, existsSync, mkdirSync } from 'fs';
+const content = readFileSync(file, 'utf-8');
+if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+// After (async)
+import { readFile, mkdir } from 'fs/promises';
+import { constants } from 'fs';
+const content = await readFile(file, 'utf-8');
+await mkdir(dir, { recursive: true });
+```
 
 ---
 
@@ -752,14 +821,15 @@ pnpm outdated
 
 1. ✅ **ALWAYS use `ui` for console output** - Never use `console.log`, `chalk`, or `ora` directly
 2. ✅ **ALWAYS validate command inputs** - Use Zod schemas for all command arguments and options
-3. ✅ **Use pnpm** - Never use npm or yarn
-4. ✅ **Write tests** - Test all new features and bug fixes including validation schemas
-5. ✅ **Type everything** - Use explicit TypeScript types and Zod schemas
-6. ✅ **Handle errors gracefully** - Use ui.error() with helpful messages
-7. ✅ **Follow the file structure** - Keep code organized
-8. ✅ **Document your code** - Use JSDoc for all public APIs
+3. ✅ **Prefer async I/O APIs** - Use `fs/promises` and avoid all `*Sync` Node APIs
+4. ✅ **Use pnpm** - Never use npm or yarn
+5. ✅ **Write tests** - Test all new features and bug fixes including validation schemas
+6. ✅ **Type everything** - Use explicit TypeScript types and Zod schemas
+7. ✅ **Handle errors gracefully** - Use ui.error() with helpful messages
+8. ✅ **Follow the file structure** - Keep code organized
+9. ✅ **Document your code** - Use JSDoc for all public APIs
 
 ---
 
-**Last Updated:** 2025-01-09
-**Version:** 1.1.0
+**Last Updated:** 2025-10-22
+**Version:** 1.2.0

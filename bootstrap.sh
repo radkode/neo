@@ -335,13 +335,7 @@ import chalk from 'chalk';
 import { showBanner } from './utils/banner.js';
 import { logger } from './utils/logger.js';
 import { registerCommands } from './commands/index.js';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
+import packageJson from '../package.json' assert { type: 'json' };
 
 export function createCLI(): Command {
   const program = new Command();

@@ -35,3 +35,4 @@ coverage/
 
 # Config
 # Note: .changeset/config.json should be tracked for changesets to work
+.neo/agent/

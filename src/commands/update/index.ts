@@ -1,9 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import packageJson from '../../../package.json' assert { type: 'json' };
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
@@ -11,15 +9,11 @@ import { updateOptionsSchema } from '@/types/schemas.js';
 import type { UpdateOptions } from '@/types/schemas.js';
 import type { NpmPackageInfo, PackageManager } from '@/types/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /**
  * Get the current version from package.json
  */
 function getCurrentVersion(): string {
   try {
-    const packageJson = JSON.parse(readFileSync(join(__dirname, '../../../package.json'), 'utf-8'));
     return packageJson.version;
   } catch (error: unknown) {
     ui.error('Failed to read current version');

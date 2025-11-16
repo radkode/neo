@@ -4,6 +4,7 @@ import { createConfigCommand } from '@/commands/config/index.js';
 import { createGitCommand } from '@/commands/git/index.js';
 import { createUpdateCommand } from '@/commands/update/index.js';
 import { createAliasCommand } from '@/commands/alias/index.js';
+import { createAgentCommand } from '@/commands/agent/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -11,6 +12,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createGitCommand());
   program.addCommand(createAliasCommand());
   program.addCommand(createUpdateCommand());
+  program.addCommand(createAgentCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -18,3 +20,4 @@ export { createConfigCommand } from '@/commands/config/index.js';
 export { createGitCommand } from '@/commands/git/index.js';
 export { createAliasCommand } from '@/commands/alias/index.js';
 export { createUpdateCommand } from '@/commands/update/index.js';
+export { createAgentCommand } from '@/commands/agent/index.js';

@@ -11,6 +11,7 @@ export default defineConfig({
       '@/commands': resolve(__dirname, './src/commands'),
       '@/utils': resolve(__dirname, './src/utils'),
       '@/types': resolve(__dirname, './src/types'),
+      '@/storage': resolve(__dirname, './src/storage'),
       '@/config': resolve(__dirname, './src/config'),
       '@/test': resolve(__dirname, './test'),
       '@/cli': resolve(__dirname, './src/cli.js'),

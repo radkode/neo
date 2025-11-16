@@ -3,11 +3,13 @@
 ## 📊 Current State Analysis
 
 ### Project Overview
+
 **Neo CLI** is a TypeScript-based CLI framework designed to be lightning-fast and extensible. The project is currently in version 0.1.0 and follows a modular command structure using Commander.js.
 
 ### Current Architecture
 
 #### 🏗️ Directory Structure
+
 ```
 neo/
 ├── bin/                    # Entry point wrapper
@@ -31,6 +33,7 @@ neo/
 ```
 
 #### 💪 Strengths
+
 1. **Clean Command Structure**: Well-organized command modules with clear separation
 2. **TypeScript Support**: Full TypeScript implementation with type safety
 3. **Modern Tooling**: Uses pnpm, Vitest, ESLint, and latest Node.js features
@@ -107,9 +110,7 @@ interface Command<TOptions = unknown> {
   validate(options: unknown): options is TOptions;
 }
 
-type Result<T> = 
-  | { success: true; data: T }
-  | { success: false; error: AppError };
+type Result<T> = { success: true; data: T } | { success: false; error: AppError };
 
 abstract class AppError extends Error {
   abstract readonly code: string;
@@ -157,6 +158,7 @@ class InitCommand implements Command {
 ## 📋 Implementation Roadmap
 
 ### Phase 1: Foundation (Week 1-2)
+
 - [x] Analyze current architecture
 - [ ] Enhance TypeScript configuration
 - [ ] Implement core domain models
@@ -164,6 +166,7 @@ class InitCommand implements Command {
 - [ ] Set up dependency injection container
 
 ### Phase 2: Restructuring (Week 3-4)
+
 - [ ] Implement layered architecture
 - [ ] Refactor existing commands to new structure
 - [ ] Create command abstraction layer
@@ -171,6 +174,7 @@ class InitCommand implements Command {
 - [ ] Add configuration management system
 
 ### Phase 3: Extensibility (Week 5-6)
+
 - [ ] Build plugin architecture
 - [ ] Create plugin API and documentation
 - [ ] Implement command registry
@@ -178,6 +182,7 @@ class InitCommand implements Command {
 - [ ] Create plugin examples
 
 ### Phase 4: Testing & Quality (Week 7-8)
+
 - [ ] Implement comprehensive unit tests
 - [ ] Add integration tests
 - [ ] Create E2E test suite
@@ -185,6 +190,7 @@ class InitCommand implements Command {
 - [ ] Configure coverage thresholds
 
 ### Phase 5: Performance & UX (Week 9-10)
+
 - [ ] Implement lazy loading
 - [ ] Add command caching
 - [ ] Optimize startup time
@@ -192,6 +198,7 @@ class InitCommand implements Command {
 - [ ] Add auto-completion support
 
 ### Phase 6: Documentation & Polish (Week 11-12)
+
 - [ ] Generate API documentation
 - [ ] Write user guides
 - [ ] Create plugin development guide
@@ -201,22 +208,25 @@ class InitCommand implements Command {
 ## 🎯 Key Architectural Decisions
 
 ### ADR-001: Adopt Clean Architecture
+
 **Status**: Proposed  
 **Context**: Current architecture lacks clear separation of concerns  
 **Decision**: Implement clean architecture with distinct layers  
-**Consequences**: Better testability, maintainability, and flexibility  
+**Consequences**: Better testability, maintainability, and flexibility
 
 ### ADR-002: Plugin-Based Extensibility
+
 **Status**: Proposed  
 **Context**: Need for third-party extensions without modifying core  
 **Decision**: Implement plugin architecture with versioned API  
-**Consequences**: Ecosystem growth potential, complexity increase  
+**Consequences**: Ecosystem growth potential, complexity increase
 
 ### ADR-003: Dependency Injection
+
 **Status**: Proposed  
 **Context**: High coupling between components  
 **Decision**: Use DI container for dependency management  
-**Consequences**: Better testability, initial learning curve  
+**Consequences**: Better testability, initial learning curve
 
 ## 📈 Success Metrics
 

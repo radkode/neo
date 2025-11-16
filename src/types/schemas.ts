@@ -116,6 +116,54 @@ export const aliasSetupOptionsSchema = baseOptionsSchema.extend({
 });
 
 /**
+ * Agent init command options schema
+ */
+export const agentInitOptionsSchema = baseOptionsSchema.extend({
+  project: z.string().min(1, 'Project name cannot be empty').optional(),
+  force: z.boolean().optional(),
+});
+
+/**
+ * Agent context add command options schema
+ */
+export const agentContextAddOptionsSchema = baseOptionsSchema.extend({
+  tag: z.array(z.string().min(1, 'Tag cannot be empty')).optional(),
+  priority: z
+    .enum(['low', 'medium', 'high', 'critical'], {
+      message: 'Priority must be one of: low, medium, high, critical',
+    })
+    .optional(),
+});
+
+/**
+ * Agent context list command options schema
+ */
+export const agentContextListOptionsSchema = baseOptionsSchema.extend({
+  tag: z.string().min(1, 'Tag cannot be empty').optional(),
+  priority: z
+    .enum(['low', 'medium', 'high', 'critical'], {
+      message: 'Priority must be one of: low, medium, high, critical',
+    })
+    .optional(),
+});
+
+/**
+ * Agent context remove command argument schema
+ */
+export const contextIdSchema = z
+  .string()
+  .min(1, 'Context ID cannot be empty')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid context ID format');
+
+/**
+ * Agent context content schema
+ */
+export const contextContentSchema = z
+  .string()
+  .min(1, 'Context content cannot be empty')
+  .max(5000, 'Context content too long (max 5000 characters)');
+
+/**
  * Type exports for use in commands
  */
 export type BaseOptions = z.infer<typeof baseOptionsSchema>;
@@ -131,3 +179,8 @@ export type ThemeValue = z.infer<typeof themeValueSchema>;
 export type ShellType = z.infer<typeof shellTypeSchema>;
 export type AliasSetupOptions = z.infer<typeof aliasSetupOptionsSchema>;
 export type DeletedBranchAction = z.infer<typeof deletedBranchActionSchema>;
+export type AgentInitOptions = z.infer<typeof agentInitOptionsSchema>;
+export type AgentContextAddOptions = z.infer<typeof agentContextAddOptionsSchema>;
+export type AgentContextListOptions = z.infer<typeof agentContextListOptionsSchema>;
+export type ContextId = z.infer<typeof contextIdSchema>;
+export type ContextContent = z.infer<typeof contextContentSchema>;

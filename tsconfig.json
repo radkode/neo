@@ -58,6 +58,7 @@
       "@/commands/*": ["src/commands/*"],
       "@/utils/*": ["src/utils/*"],
       "@/types/*": ["src/types/*"],
+      "@/storage/*": ["src/storage/*"],
       "@/config/*": ["src/config/*"],
       "@/test/*": ["test/*"],
       "@/cli": ["src/cli.js"],
