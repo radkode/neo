@@ -4,6 +4,10 @@ import {
   initOptionsSchema,
   gitPushOptionsSchema,
   gitPullOptionsSchema,
+  gitCommitOptionsSchema,
+  commitTypeSchema,
+  commitScopeSchema,
+  commitMessageSchema,
   updateOptionsSchema,
   configKeySchema,
   bannerValueSchema,
@@ -223,6 +227,194 @@ describe('schemas', () => {
         verbose: true,
       };
       expect(aliasSetupOptionsSchema.safeParse(valid).success).toBe(true);
+    });
+  });
+
+  describe('commitTypeSchema', () => {
+    it('should validate all conventional commit types', () => {
+      const validTypes = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'];
+
+      for (const type of validTypes) {
+        const result = commitTypeSchema.safeParse(type);
+        expect(result.success).toBe(true);
+        expect(result.data).toBe(type);
+      }
+    });
+
+    it('should reject invalid commit types', () => {
+      const invalidTypes = ['feature', 'bugfix', 'update', 'build', 'ci', 'perf', 'random'];
+
+      for (const type of invalidTypes) {
+        const result = commitTypeSchema.safeParse(type);
+        expect(result.success).toBe(false);
+      }
+    });
+
+    it('should provide helpful error message', () => {
+      const result = commitTypeSchema.safeParse('invalid');
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('feat, fix, docs');
+      }
+    });
+  });
+
+  describe('commitScopeSchema', () => {
+    it('should validate valid scopes', () => {
+      const validScopes = ['auth', 'api', 'ui', 'db', 'user-service', 'payment-flow', 'test123'];
+
+      for (const scope of validScopes) {
+        const result = commitScopeSchema.safeParse(scope);
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should reject uppercase scopes', () => {
+      const invalidScopes = ['Auth', 'API', 'UserService', 'PAYMENT'];
+
+      for (const scope of invalidScopes) {
+        const result = commitScopeSchema.safeParse(scope);
+        expect(result.success).toBe(false);
+      }
+    });
+
+    it('should reject scopes with special characters', () => {
+      const invalidScopes = ['user_service', 'test@123', 'scope!', 'test#tag', 'test scope'];
+
+      for (const scope of invalidScopes) {
+        const result = commitScopeSchema.safeParse(scope);
+        expect(result.success).toBe(false);
+      }
+    });
+
+    it('should reject scopes starting with numbers', () => {
+      const result = commitScopeSchema.safeParse('123test');
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject empty scopes', () => {
+      const result = commitScopeSchema.safeParse('');
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept undefined (optional)', () => {
+      const result = commitScopeSchema.safeParse(undefined);
+      expect(result.success).toBe(true);
+      expect(result.data).toBeUndefined();
+    });
+
+    it('should provide helpful error message', () => {
+      const result = commitScopeSchema.safeParse('Invalid_Scope');
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('lowercase');
+      }
+    });
+  });
+
+  describe('commitMessageSchema', () => {
+    it('should validate valid messages', () => {
+      const validMessages = [
+        'Add new feature',
+        'Fix critical bug',
+        'Update documentation',
+        'a'.repeat(100), // Max length
+      ];
+
+      for (const message of validMessages) {
+        const result = commitMessageSchema.safeParse(message);
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should reject empty messages', () => {
+      const result = commitMessageSchema.safeParse('');
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('cannot be empty');
+      }
+    });
+
+    it('should reject messages over 100 characters', () => {
+      const tooLong = 'a'.repeat(101);
+      const result = commitMessageSchema.safeParse(tooLong);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain('too long');
+      }
+    });
+
+    it('should accept exactly 100 characters', () => {
+      const maxLength = 'a'.repeat(100);
+      const result = commitMessageSchema.safeParse(maxLength);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('gitCommitOptionsSchema', () => {
+    it('should validate complete commit options', () => {
+      const valid = {
+        type: 'feat',
+        scope: 'auth',
+        message: 'Add login functionality',
+        body: 'This adds OAuth2 support',
+        breaking: true,
+        all: false,
+      };
+      const result = gitCommitOptionsSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(valid);
+    });
+
+    it('should validate minimal commit options (all optional)', () => {
+      const result = gitCommitOptionsSchema.safeParse({});
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate with only type', () => {
+      const valid = { type: 'fix' };
+      const result = gitCommitOptionsSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate with type and message', () => {
+      const valid = { type: 'feat', message: 'Add feature' };
+      const result = gitCommitOptionsSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid type', () => {
+      const invalid = { type: 'invalid' };
+      const result = gitCommitOptionsSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid scope format', () => {
+      const invalid = { scope: 'Invalid_Scope' };
+      const result = gitCommitOptionsSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject message over length limit', () => {
+      const invalid = { message: 'a'.repeat(101) };
+      const result = gitCommitOptionsSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid boolean values', () => {
+      expect(gitCommitOptionsSchema.safeParse({ breaking: 'yes' }).success).toBe(false);
+      expect(gitCommitOptionsSchema.safeParse({ all: 1 }).success).toBe(false);
+    });
+
+    it('should inherit base options', () => {
+      const valid = {
+        type: 'fix',
+        message: 'Fix bug',
+        verbose: true,
+        config: '/path/to/config',
+      };
+      const result = gitCommitOptionsSchema.safeParse(valid);
+      expect(result.success).toBe(true);
     });
   });
 });

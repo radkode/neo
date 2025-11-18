@@ -49,6 +49,47 @@ export const gitBranchOptionsSchema = baseOptionsSchema.extend({
 });
 
 /**
+ * Valid conventional commit types
+ */
+export const commitTypeSchema = z.enum(
+  ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'],
+  {
+    message: 'Type must be one of: feat, fix, docs, style, refactor, test, chore',
+  }
+);
+
+/**
+ * Commit scope schema
+ * Must be lowercase with hyphens allowed
+ */
+export const commitScopeSchema = z
+  .string()
+  .min(1, 'Scope cannot be empty')
+  .regex(/^[a-z][a-z0-9-]*$/, 'Scope must be lowercase and alphanumeric with hyphens')
+  .optional();
+
+/**
+ * Commit message description schema
+ * Subject line should be concise
+ */
+export const commitMessageSchema = z
+  .string()
+  .min(1, 'Commit message cannot be empty')
+  .max(100, 'Commit message too long (max 100 characters)');
+
+/**
+ * Git commit command options schema
+ */
+export const gitCommitOptionsSchema = baseOptionsSchema.extend({
+  type: commitTypeSchema.optional(),
+  scope: commitScopeSchema,
+  message: commitMessageSchema.optional(),
+  body: z.string().optional(),
+  breaking: z.boolean().optional(),
+  all: z.boolean().optional(),
+});
+
+/**
  * Valid actions when remote branch is deleted in git pull
  */
 export const deletedBranchActionSchema = z.enum(
@@ -171,6 +212,8 @@ export type InitOptions = z.infer<typeof initOptionsSchema>;
 export type GitPushOptions = z.infer<typeof gitPushOptionsSchema>;
 export type GitPullOptions = z.infer<typeof gitPullOptionsSchema>;
 export type GitBranchOptions = z.infer<typeof gitBranchOptionsSchema>;
+export type GitCommitOptions = z.infer<typeof gitCommitOptionsSchema>;
+export type CommitType = z.infer<typeof commitTypeSchema>;
 export type UpdateOptions = z.infer<typeof updateOptionsSchema>;
 export type ConfigKey = z.infer<typeof configKeySchema>;
 export type ConfigValue = z.infer<typeof configValueSchema>;
