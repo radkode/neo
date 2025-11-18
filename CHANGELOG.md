@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.9.1
+
+### Patch Changes
+
+- [#33](https://github.com/radkode/neo/pull/33) [`c6f1970`](https://github.com/radkode/neo/commit/c6f1970ad2931684e4008ef2275820c3dcfb75f7) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix Node.js v22 compatibility by updating JSON import syntax from `assert` to `with`
+
 ## 0.9.0
 
 ### Minor Changes
