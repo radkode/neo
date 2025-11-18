@@ -5,7 +5,7 @@ import type { BannerType } from '@/utils/banner.js';
 import { logger } from '@/utils/logger.js';
 import { registerCommands } from '@/commands/index.js';
 import { configManager } from '@/utils/config.js';
-import packageJson from '../package.json' assert { type: 'json' };
+import packageJson from '../package.json' with { type: 'json' };
 
 export function createCLI(): Command {
   const program = new Command();

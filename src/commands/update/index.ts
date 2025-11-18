@@ -1,7 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
-import packageJson from '../../../package.json' assert { type: 'json' };
+import packageJson from '../../../package.json' with { type: 'json' };
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
