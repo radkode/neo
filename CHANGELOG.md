@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 0.9.0
+
+### Minor Changes
+
+- [#29](https://github.com/radkode/neo/pull/29) [`59146b3`](https://github.com/radkode/neo/commit/59146b326085752b37727020c9abba307d4b2f8e) Thanks [@jacekradko](https://github.com/jacekradko)! - Adding agent command
+
+- [#32](https://github.com/radkode/neo/pull/32) [`2554cf7`](https://github.com/radkode/neo/commit/2554cf7c78d9273f388f60073cc5a70cd04c0d4e) Thanks [@jacekradko](https://github.com/jacekradko)! - Added git commit command
+
 ## 0.8.0
 
 ### Minor Changes
