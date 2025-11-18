@@ -1,5 +1,14 @@
 # @radkode/neo
 
+## 0.9.2
+
+### Patch Changes
+
+- [#35](https://github.com/radkode/neo/pull/35) [`f63fabf`](https://github.com/radkode/neo/commit/f63fabf4106157818b615114ed4085d88e9199ea) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix Node.js v22 compatibility:
+  - Update JSON import syntax from `assert` to `with`
+  - Replace `sqlite3` with `better-sqlite3` for better native binary support and reliability
+  - `better-sqlite3` provides prebuilt binaries for all major platforms and Node.js versions
+
 ## 0.9.1
 
 ### Patch Changes
