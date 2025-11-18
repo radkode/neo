@@ -1,8 +1,7 @@
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import { dirname } from 'path';
 import { mkdir } from 'fs/promises';
-import { promisify } from 'util';
 import type {
   ContextItem,
   RawContextItem,
@@ -15,20 +14,11 @@ import type {
  * Database class for managing agent contexts
  */
 export class ContextDB {
-  private db: sqlite3.Database;
+  private db: Database.Database;
   private ready: Promise<void>;
-  private run: (sql: string, ...params: unknown[]) => Promise<void>;
-  private get: <T = unknown>(sql: string, ...params: unknown[]) => Promise<T | undefined>;
-  private all: <T = unknown>(sql: string, ...params: unknown[]) => Promise<T[]>;
 
   constructor(dbPath: string) {
-    this.db = new sqlite3.Database(dbPath);
-
-    // Promisify database methods
-    this.run = promisify(this.db.run.bind(this.db));
-    this.get = promisify(this.db.get.bind(this.db));
-    this.all = promisify(this.db.all.bind(this.db));
-
+    this.db = new Database(dbPath);
     this.ready = this.initialize();
   }
 
@@ -52,7 +42,7 @@ export class ContextDB {
    */
   private async initialize(): Promise<void> {
     // Create contexts table
-    await this.run(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS contexts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -64,8 +54,8 @@ export class ContextDB {
     `);
 
     // Create indexes for better query performance
-    await this.run(`CREATE INDEX IF NOT EXISTS idx_contexts_priority ON contexts(priority)`);
-    await this.run(`CREATE INDEX IF NOT EXISTS idx_contexts_created_at ON contexts(created_at)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_contexts_priority ON contexts(priority)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_contexts_created_at ON contexts(created_at)`);
   }
 
   /**
@@ -79,18 +69,12 @@ export class ContextDB {
     const tags = JSON.stringify(options.tags || []);
     const priority = options.priority || 'medium';
 
-    await this.run(
-      `
+    const stmt = this.db.prepare(`
       INSERT INTO contexts (id, content, tags, priority, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `,
-      id,
-      options.content,
-      tags,
-      priority,
-      now,
-      now
-    );
+    `);
+
+    stmt.run(id, options.content, tags, priority, now, now);
 
     return {
       id,
@@ -126,7 +110,8 @@ export class ContextDB {
 
     query += ' ORDER BY priority DESC, created_at DESC';
 
-    const rows = await this.all<RawContextItem>(query, ...params);
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as RawContextItem[];
     return rows.map(this.transformRawContext);
   }
 
@@ -136,7 +121,8 @@ export class ContextDB {
   async getContext(id: string): Promise<ContextItem | null> {
     await this.ensureReady();
 
-    const row = await this.get<RawContextItem>('SELECT * FROM contexts WHERE id = ?', id);
+    const stmt = this.db.prepare('SELECT * FROM contexts WHERE id = ?');
+    const row = stmt.get(id) as RawContextItem | undefined;
     return row ? this.transformRawContext(row) : null;
   }
 
@@ -146,15 +132,9 @@ export class ContextDB {
   async removeContext(id: string): Promise<boolean> {
     await this.ensureReady();
 
-    return new Promise((resolve, reject) => {
-      this.db.run('DELETE FROM contexts WHERE id = ?', [id], function (err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.changes > 0);
-        }
-      });
-    });
+    const stmt = this.db.prepare('DELETE FROM contexts WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
   }
 
   /**
@@ -176,18 +156,13 @@ export class ContextDB {
     const tags = JSON.stringify(updates.tags ?? existing.tags);
     const priority = updates.priority ?? existing.priority;
 
-    await this.run(
-      `
+    const stmt = this.db.prepare(`
       UPDATE contexts 
       SET content = ?, tags = ?, priority = ?, updated_at = ?
       WHERE id = ?
-    `,
-      content,
-      tags,
-      priority,
-      now,
-      id
-    );
+    `);
+
+    stmt.run(content, tags, priority, now, id);
 
     return {
       id,
@@ -209,14 +184,16 @@ export class ContextDB {
   }> {
     await this.ensureReady();
 
-    const totalResult = await this.get<{ count: number }>('SELECT COUNT(*) as count FROM contexts');
+    const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM contexts');
+    const totalResult = totalStmt.get() as { count: number } | undefined;
     const total = totalResult?.count || 0;
 
-    const priorityRows = await this.all<{ priority: ContextPriority; count: number }>(`
+    const priorityStmt = this.db.prepare(`
       SELECT priority, COUNT(*) as count 
       FROM contexts 
       GROUP BY priority
     `);
+    const priorityRows = priorityStmt.all() as { priority: ContextPriority; count: number }[];
 
     const byPriority: Record<ContextPriority, number> = {
       low: 0,
@@ -230,7 +207,8 @@ export class ContextDB {
     });
 
     // Count unique tags
-    const tagRows = await this.all<{ tags: string }>('SELECT tags FROM contexts');
+    const tagStmt = this.db.prepare('SELECT tags FROM contexts');
+    const tagRows = tagStmt.all() as { tags: string }[];
     const allTags = new Set<string>();
 
     tagRows.forEach((row) => {
@@ -253,15 +231,7 @@ export class ContextDB {
    * Close the database connection
    */
   async close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
+    this.db.close();
   }
 
   /**
