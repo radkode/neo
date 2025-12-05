@@ -29,6 +29,7 @@ export function createPushCommand(): Command {
       }
       let branchName: string = '';
       const spinner = ui.spinner('Pushing to remote');
+      let pushArgs: string[] = [];
 
       try {
         const { stdout: currentBranch } = await execa('git', ['branch', '--show-current']);
@@ -94,7 +95,7 @@ export function createPushCommand(): Command {
           return;
         }
 
-        const pushArgs = ['push'];
+        pushArgs = ['push'];
 
         if (validatedOptions.force) {
           pushArgs.push('--force');
@@ -130,6 +131,10 @@ export function createPushCommand(): Command {
         spinner.stop();
 
         if (error instanceof Error) {
+          const stderr = (error as { stderr?: string }).stderr ?? '';
+          const shortMessage = (error as { shortMessage?: string }).shortMessage ?? '';
+          const combinedMessage = `${error.message} ${stderr} ${shortMessage}`.toLowerCase();
+
           if (error.message?.includes('not a git repository')) {
             ui.error('Not a git repository!');
             ui.warn('Make sure you are in a git repository directory');
@@ -143,13 +148,102 @@ export function createPushCommand(): Command {
             process.exit(1);
           }
 
-          if (error.message?.includes('rejected')) {
-            ui.error('Push was rejected!');
-            ui.warn('The remote branch has changes that conflict with your local branch');
-            ui.muted('Try pulling the latest changes first:');
-            ui.muted(`  git pull origin ${branchName || 'your-branch'}`);
-            ui.muted('Or use --force to overwrite (use with caution):');
-            ui.muted('  git push --force');
+          if (
+            combinedMessage.includes('non-fast-forward') ||
+            combinedMessage.includes('fetch first') ||
+            combinedMessage.includes('behind') ||
+            combinedMessage.includes('remote contains') ||
+            combinedMessage.includes('tip of your current branch is behind its remote counterpart')
+          ) {
+            ui.error('Push was rejected because the remote has new commits.');
+            ui.warn('Choose how to resolve the divergence:');
+
+            const { resolution } = await inquirer.prompt([
+              {
+                choices: [
+                  {
+                    name: 'Pull with rebase and retry push',
+                    value: 'pull-rebase',
+                  },
+                  {
+                    name: 'Force push (overwrite remote)',
+                    value: 'force',
+                  },
+                  {
+                    name: 'Cancel for now',
+                    value: 'cancel',
+                  },
+                ],
+                default: 'pull-rebase',
+                message: 'Select a resolution strategy',
+                name: 'resolution',
+                type: 'list',
+              },
+            ]);
+
+            if (resolution === 'pull-rebase') {
+              const rebaseSpinner = ui.spinner('Pulling latest changes with rebase');
+              try {
+                rebaseSpinner.start();
+                await execa('git', ['pull', '--rebase', 'origin', branchName || 'HEAD']);
+                rebaseSpinner.succeed('Rebased onto remote changes');
+
+                const retrySpinner = ui.spinner('Retrying push after rebase');
+                retrySpinner.start();
+                const retryResult = await execa('git', pushArgs, {
+                  encoding: 'utf8',
+                  stdio: 'pipe',
+                });
+                retrySpinner.succeed('Successfully pushed after rebase');
+
+                if (retryResult.stdout) {
+                  ui.muted(retryResult.stdout);
+                }
+
+                if (validatedOptions.setUpstream) {
+                  ui.info(`Set upstream branch: ${validatedOptions.setUpstream}`);
+                }
+
+                process.exit(0);
+              } catch (rebaseError) {
+                rebaseSpinner.stop();
+                ui.error('Rebase failed. Resolve conflicts then push again.');
+                ui.muted(rebaseError instanceof Error ? rebaseError.message : String(rebaseError));
+                process.exit(1);
+              }
+            }
+
+            if (resolution === 'force') {
+              const forceSpinner = ui.spinner('Force pushing (overwriting remote)');
+              const forceArgs = pushArgs.includes('--force')
+                ? pushArgs
+                : ['push', '--force', ...pushArgs.slice(1)];
+              try {
+                forceSpinner.start();
+                const forceResult = await execa('git', forceArgs, {
+                  encoding: 'utf8',
+                  stdio: 'pipe',
+                });
+                forceSpinner.succeed('Force push completed');
+
+                if (forceResult.stdout) {
+                  ui.muted(forceResult.stdout);
+                }
+
+                if (validatedOptions.setUpstream) {
+                  ui.info(`Set upstream branch: ${validatedOptions.setUpstream}`);
+                }
+
+                process.exit(0);
+              } catch (forceError) {
+                forceSpinner.stop();
+                ui.error('Force push failed.');
+                ui.muted(forceError instanceof Error ? forceError.message : String(forceError));
+                process.exit(1);
+              }
+            }
+
+            ui.info('Push cancelled. No changes were pushed.');
             process.exit(1);
           }
 

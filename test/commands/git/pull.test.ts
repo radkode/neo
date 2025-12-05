@@ -1,15 +1,68 @@
+import { execa } from 'execa';
+import inquirer from 'inquirer';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const spinnerMock = {
+  start: vi.fn(),
+  stop: vi.fn(),
+  succeed: vi.fn(),
+  text: '',
+};
+
+vi.mock('execa', () => {
+  const execa = vi.fn();
+  return { execa };
+});
+
+vi.mock('inquirer', () => {
+  const prompt = vi.fn();
+  return {
+    default: { prompt },
+    prompt,
+  };
+});
+
+vi.mock('@/utils/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+vi.mock('@/utils/ui.js', () => ({
+  ui: {
+    error: vi.fn(),
+    info: vi.fn(),
+    list: vi.fn(),
+    muted: vi.fn(),
+    spinner: vi.fn(() => ({ ...spinnerMock })),
+    step: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 describe('git pull command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  const execaMock = vi.mocked(execa);
+  const promptMock = vi.mocked(inquirer.prompt);
+  let exitMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.clearAllMocks();
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    exitMock = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    spinnerMock.start.mockClear();
+    spinnerMock.stop.mockClear();
+    spinnerMock.succeed.mockClear();
+    spinnerMock.text = '';
   });
 
   afterEach(() => {
     consoleLogSpy.mockRestore();
+    exitMock.mockRestore();
     vi.resetAllMocks();
   });
 
@@ -38,6 +91,60 @@ describe('git pull command', () => {
 
       // Test invalid value
       expect(() => deletedBranchActionSchema.parse('invalid')).toThrow();
+    });
+  });
+
+  describe('divergence handling', () => {
+    it('rebases when pull cannot fast-forward and user selects rebase', async () => {
+      const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch name
+      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      const divergenceError = new Error('Not possible to fast-forward');
+      (divergenceError as { shortMessage?: string }).shortMessage = 'not possible to fast-forward';
+      execaMock.mockRejectedValueOnce(divergenceError); // initial pull
+      execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // rebase pull
+
+      promptMock.mockResolvedValueOnce({ strategy: 'rebase' });
+
+      const command = createPullCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(promptMock).toHaveBeenCalled();
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['pull', '--rebase'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
+      expect(exitMock).not.toHaveBeenCalled();
+    });
+
+    it('merges when pull cannot fast-forward and user selects merge', async () => {
+      const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch name
+      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      const divergenceError = new Error('Not possible to fast-forward');
+      execaMock.mockRejectedValueOnce(divergenceError); // initial pull
+      execaMock.mockResolvedValueOnce({ stdout: '' }); // fetch
+      execaMock.mockResolvedValueOnce({ stdout: 'merged' }); // merge
+
+      promptMock.mockResolvedValueOnce({ strategy: 'merge' });
+
+      const command = createPullCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(promptMock).toHaveBeenCalled();
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['fetch', 'origin', 'feature/diverge'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['merge', '--no-ff', 'origin/feature/diverge'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
     });
   });
 });

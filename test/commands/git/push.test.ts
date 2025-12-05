@@ -1,0 +1,127 @@
+import { execa } from 'execa';
+import inquirer from 'inquirer';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const spinnerMock = {
+  start: vi.fn(),
+  stop: vi.fn(),
+  succeed: vi.fn(),
+  text: '',
+};
+
+vi.mock('execa', () => {
+  const execa = vi.fn();
+  return { execa };
+});
+
+vi.mock('inquirer', () => {
+  const prompt = vi.fn();
+  return {
+    default: { prompt },
+    prompt,
+  };
+});
+
+vi.mock('@/utils/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+vi.mock('@/utils/ui.js', () => ({
+  ui: {
+    error: vi.fn(),
+    info: vi.fn(),
+    list: vi.fn(),
+    muted: vi.fn(),
+    spinner: vi.fn(() => ({ ...spinnerMock })),
+    step: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+describe('git push command', () => {
+  const execaMock = vi.mocked(execa);
+  const promptMock = vi.mocked(inquirer.prompt);
+  let exitMock: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    exitMock = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    spinnerMock.start.mockClear();
+    spinnerMock.stop.mockClear();
+    spinnerMock.succeed.mockClear();
+    spinnerMock.text = '';
+  });
+
+  afterEach(() => {
+    exitMock.mockRestore();
+    vi.resetAllMocks();
+  });
+
+  it('rebases then retries push when remote is ahead and user selects rebase', async () => {
+    const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
+
+    execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch
+    const rejectionError = new Error('non-fast-forward');
+    (rejectionError as { shortMessage?: string }).shortMessage = 'fetch first';
+    execaMock.mockRejectedValueOnce(rejectionError); // push rejected
+    execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // pull --rebase
+    execaMock.mockResolvedValueOnce({ stdout: 'pushed' }); // push retry
+
+    promptMock.mockResolvedValueOnce({ resolution: 'pull-rebase' });
+
+    const command = createPushCommand();
+    await command.parseAsync([], { from: 'user' });
+
+    expect(promptMock).toHaveBeenCalled();
+
+    const pullRebaseCall = execaMock.mock.calls.find(
+      ([_cmd, args]) =>
+        Array.isArray(args) &&
+        args[0] === 'pull' &&
+        args[1] === '--rebase' &&
+        args[2] === 'origin' &&
+        args[3] === 'feature/diverge'
+    );
+    expect(pullRebaseCall).toBeTruthy();
+
+    const pushCalls = execaMock.mock.calls.filter(
+      ([_cmd, args]) =>
+        Array.isArray(args) &&
+        args[0] === 'push' &&
+        args[1] === 'origin' &&
+        args[2] === 'feature/diverge'
+    );
+    expect(pushCalls.length).toBeGreaterThanOrEqual(1);
+    expect(exitMock).toHaveBeenCalledWith(0);
+  });
+
+  it('force pushes when remote is ahead and user selects force', async () => {
+    const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
+
+    execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch
+    const rejectionError = new Error('rejected');
+    (rejectionError as { shortMessage?: string }).shortMessage = 'non-fast-forward';
+    execaMock.mockRejectedValueOnce(rejectionError); // push rejected
+    execaMock.mockResolvedValueOnce({ stdout: 'forced' }); // force push
+
+    promptMock.mockResolvedValueOnce({ resolution: 'force' });
+
+    const command = createPushCommand();
+    await command.parseAsync([], { from: 'user' });
+
+    expect(promptMock).toHaveBeenCalled();
+    expect(
+      execaMock.mock.calls.find(
+        ([_cmd, args]) =>
+          Array.isArray(args) && args.join(' ') === 'push --force origin feature/diverge'
+      )
+    ).toBeTruthy();
+    expect(exitMock).toHaveBeenCalledWith(0);
+  });
+});

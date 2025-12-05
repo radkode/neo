@@ -81,8 +81,8 @@ export function createPullCommand(): Command {
 
         try {
           const { stdout } = await execa('git', ['pull'], {
-            stdio: 'pipe',
             encoding: 'utf8',
+            stdio: 'pipe',
           });
 
           spinner.succeed('Successfully pulled from remote!');
@@ -91,32 +91,27 @@ export function createPullCommand(): Command {
             ui.muted(stdout);
           }
         } catch (error: unknown) {
-          // Check if it's a non-fast-forward error
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const stderr = (error as { stderr?: string }).stderr ?? '';
+          const shortMessage = (error as { shortMessage?: string }).shortMessage ?? '';
+          const combinedMessage = `${
+            error instanceof Error ? error.message : String(error)
+          } ${stderr} ${shortMessage}`.toLowerCase();
 
-          if (
-            (errorMessage.includes('non-fast-forward') ||
-              errorMessage.includes('divergent branches') ||
-              errorMessage.includes('cannot fast-forward')) &&
-            !validatedOptions.noRebase
-          ) {
-            logger.debug('Normal pull failed, attempting rebase...');
-            spinner.text = 'Cannot fast-forward, retrying with rebase...';
+          const diverged =
+            combinedMessage.includes('divergent') ||
+            combinedMessage.includes('diverging') ||
+            combinedMessage.includes('fast-forward') ||
+            combinedMessage.includes('pull.ff') ||
+            combinedMessage.includes('non-fast-forward') ||
+            combinedMessage.includes('not possible to fast-forward');
 
-            const { stdout } = await execa('git', ['pull', '--rebase'], {
-              stdio: 'pipe',
-              encoding: 'utf8',
-            });
-
-            spinner.succeed('Successfully pulled with rebase!');
-            ui.info('Used rebase strategy due to divergent branches');
-
-            if (stdout.trim()) {
-              ui.muted(stdout);
-            }
-          } else {
-            throw error; // Re-throw if not a fast-forward issue
+          if (diverged) {
+            spinner.stop();
+            await handleDivergedPull(branchName, validatedOptions);
+            return;
           }
+
+          throw error;
         }
       } catch (error: unknown) {
         spinner.stop();
@@ -172,6 +167,126 @@ export function createPullCommand(): Command {
     });
 
   return command;
+}
+
+async function handleDivergedPull(
+  branchName: string,
+  validatedOptions: GitPullOptions
+): Promise<void> {
+  ui.error('Local and remote branches have diverged.');
+  ui.warn('Choose how to reconcile the branches.');
+
+  const defaultStrategy = validatedOptions.noRebase ? 'merge' : 'rebase';
+
+  const { strategy } = await inquirer.prompt([
+    {
+      choices: [
+        {
+          name: 'Cancel (do nothing)',
+          value: 'cancel',
+        },
+        {
+          name: 'Merge remote into current branch (--no-ff)',
+          value: 'merge',
+        },
+        {
+          name: 'Rebase onto remote (recommended)',
+          value: 'rebase',
+        },
+      ],
+      default: defaultStrategy,
+      message: 'Branches have diverged. Choose a pull strategy:',
+      name: 'strategy',
+      type: 'list',
+    },
+  ]);
+
+  if (strategy === 'rebase') {
+    const rebaseSpinner = ui.spinner('Pulling with rebase');
+    try {
+      rebaseSpinner.start();
+      const { stdout } = await execa('git', ['pull', '--rebase'], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      rebaseSpinner.succeed('Successfully pulled with rebase');
+      ui.info('Rebased onto remote to resolve divergence');
+
+      if (stdout.trim()) {
+        ui.muted(stdout);
+      }
+
+      return;
+    } catch (error) {
+      rebaseSpinner.stop();
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('conflict')) {
+        ui.error('Rebase hit conflicts.');
+        ui.warn('Resolve conflicts, then continue the rebase:');
+        ui.list([
+          'Fix conflicts in your editor',
+          'Stage resolved files: git add <files>',
+          'Continue rebase: git rebase --continue',
+        ]);
+        ui.muted('Or abort the rebase:');
+        ui.muted('  git rebase --abort');
+        process.exit(1);
+      }
+
+      ui.error('Rebase pull failed.');
+      ui.muted(message);
+      process.exit(1);
+    }
+  }
+
+  if (strategy === 'merge') {
+    const fetchSpinner = ui.spinner('Fetching latest changes');
+    const mergeSpinner = ui.spinner('Merging remote into current branch');
+    const remoteRef = branchName || 'HEAD';
+    try {
+      fetchSpinner.start();
+      await execa('git', ['fetch', 'origin', remoteRef], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      fetchSpinner.succeed('Fetched remote updates');
+
+      mergeSpinner.start();
+      const { stdout } = await execa('git', ['merge', '--no-ff', `origin/${remoteRef}`], {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      mergeSpinner.succeed('Merge completed');
+      ui.info('Merged remote changes (non fast-forward)');
+
+      if (stdout.trim()) {
+        ui.muted(stdout);
+      }
+
+      return;
+    } catch (error) {
+      fetchSpinner.stop();
+      mergeSpinner.stop();
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('conflict')) {
+        ui.error('Merge produced conflicts.');
+        ui.warn('Resolve conflicts, then finish the merge:');
+        ui.list([
+          'Fix conflicts in your editor',
+          'Stage resolved files: git add <files>',
+          'Commit the merge: git commit',
+        ]);
+        process.exit(1);
+      }
+
+      ui.error('Merge pull failed.');
+      ui.muted(message);
+      process.exit(1);
+    }
+  }
+
+  ui.info('Pull cancelled. No changes were applied.');
+  process.exit(1);
 }
 
 /**
