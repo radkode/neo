@@ -1,5 +1,15 @@
 # @radkode/neo
 
+## 0.10.0
+
+### Minor Changes
+
+- [#39](https://github.com/radkode/neo/pull/39) [`1ec42f7`](https://github.com/radkode/neo/commit/1ec42f7cfe1529c13664b2ef31a930ddb0f05d77) Thanks [@jacekradko](https://github.com/jacekradko)! - Add periodic npm version checks and show upgrade prompt before commands.
+
+### Patch Changes
+
+- [#37](https://github.com/radkode/neo/pull/37) [`cf73dda`](https://github.com/radkode/neo/commit/cf73ddaa78dfc089927fdda5f28a709e37948751) Thanks [@jacekradko](https://github.com/jacekradko)! - Improve git push/pull divergence handling UX and cover flows with tests.
+
 ## 0.9.2
 
 ### Patch Changes
