@@ -183,14 +183,17 @@ async function handleDivergedPull(
       choices: [
         {
           name: 'Cancel (do nothing)',
+          short: 'Cancel (do nothing)',
           value: 'cancel',
         },
         {
           name: 'Merge remote into current branch (--no-ff)',
+          short: 'Merge remote into current branch (--no-ff)',
           value: 'merge',
         },
         {
           name: 'Rebase onto remote (recommended)',
+          short: 'Rebase onto remote (recommended)',
           value: 'rebase',
         },
       ],
@@ -300,28 +303,32 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<void> {
 
   const { action } = await inquirer.prompt([
     {
-      type: 'list',
-      name: 'action',
-      message: 'How would you like to resolve this?',
-      default: 'switch_main_delete',
       choices: [
         {
           name: 'Switch to main and delete this branch (recommended)',
+          short: 'Switch to main and delete this branch (recommended)',
           value: 'switch_main_delete',
         },
         {
           name: 'Switch to main and keep this branch',
+          short: 'Switch to main and keep this branch',
           value: 'switch_main_keep',
         },
         {
           name: `Set a new upstream for "${branchName}"`,
+          short: `Set a new upstream for "${branchName}"`,
           value: 'set_upstream',
         },
         {
           name: 'Cancel (no changes)',
+          short: 'Cancel (no changes)',
           value: 'cancel',
         },
       ],
+      default: 'switch_main_delete',
+      message: 'How would you like to resolve this?',
+      name: 'action',
+      type: 'list',
     },
   ]);
 

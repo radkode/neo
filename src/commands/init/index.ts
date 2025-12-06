@@ -48,14 +48,14 @@ export function createInitCommand(): Command {
 
           const { action } = await inquirer.prompt([
             {
-              type: 'list',
-              name: 'action',
-              message: 'What would you like to do?',
               choices: [
-                { name: 'Update configuration', value: 'update' },
-                { name: 'Reset everything', value: 'reset' },
-                { name: 'Cancel', value: 'cancel' },
+                { name: 'Update configuration', short: 'Update configuration', value: 'update' },
+                { name: 'Reset everything', short: 'Reset everything', value: 'reset' },
+                { name: 'Cancel', short: 'Cancel', value: 'cancel' },
               ],
+              message: 'What would you like to do?',
+              name: 'action',
+              type: 'list',
             },
           ]);
 

@@ -163,14 +163,17 @@ export function createPushCommand(): Command {
                 choices: [
                   {
                     name: 'Pull with rebase and retry push',
+                    short: 'Pull with rebase and retry push',
                     value: 'pull-rebase',
                   },
                   {
                     name: 'Force push (overwrite remote)',
+                    short: 'Force push (overwrite remote)',
                     value: 'force',
                   },
                   {
                     name: 'Cancel for now',
+                    short: 'Cancel for now',
                     value: 'cancel',
                   },
                 ],

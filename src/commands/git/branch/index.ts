@@ -323,23 +323,26 @@ async function interactiveBranchCleanup(
 ): Promise<void> {
   const { action } = await inquirer.prompt([
     {
-      type: 'list',
-      name: 'action',
-      message: 'What would you like to do with these branches?',
       choices: [
         {
           name: `Delete all ${cleanupCandidates.length} cleanup candidates`,
+          short: `Delete all ${cleanupCandidates.length} cleanup candidates`,
           value: 'delete_all',
         },
         {
           name: 'Select specific branches to delete',
+          short: 'Select specific branches to delete',
           value: 'delete_selected',
         },
         {
           name: 'Cancel (no changes)',
+          short: 'Cancel (no changes)',
           value: 'cancel',
         },
       ],
+      message: 'What would you like to do with these branches?',
+      name: 'action',
+      type: 'list',
     },
   ]);
 
@@ -364,13 +367,14 @@ async function selectAndDeleteBranches(
   forceMode: boolean
 ): Promise<void> {
   const { selectedBranches } = await inquirer.prompt({
-    type: 'checkbox',
-    name: 'selectedBranches',
-    message: 'Select branches to delete:',
     choices: cleanupCandidates.map((b) => ({
       name: `${b.name}${b.isRemoteDeleted ? ' (deleted remote)' : ' (no remote)'}`,
+      short: `${b.name}${b.isRemoteDeleted ? ' (deleted remote)' : ' (no remote)'}`,
       value: b.name,
     })),
+    message: 'Select branches to delete:',
+    name: 'selectedBranches',
+    type: 'checkbox',
     validate: (choices: readonly { value: unknown }[]) => {
       if (!choices || choices.length === 0) {
         return 'Please select at least one branch';
