@@ -110,9 +110,8 @@ export async function validateConfigValue(
   value: string
 ): Promise<string | number | boolean> {
   // Import schemas dynamically to avoid circular dependencies
-  const { bannerValueSchema, themeValueSchema, shellTypeSchema } = await import(
-    '../types/schemas.js'
-  );
+  const { bannerValueSchema, themeValueSchema, shellTypeSchema } =
+    await import('../types/schemas.js');
 
   // Validate specific known config keys
   if (key === 'preferences.banner') {

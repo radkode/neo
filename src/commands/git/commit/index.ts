@@ -162,7 +162,6 @@ export function createCommitCommand(): Command {
           // Interactive mode
           ui.section('Conventional Commit Wizard');
 
-          // @ts-expect-error - inquirer v12 has a type mismatch with arrays
           const answers = await inquirer.prompt([
             {
               type: 'list',
