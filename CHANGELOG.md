@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.10.1
+
+### Patch Changes
+
+- [#40](https://github.com/radkode/neo/pull/40) [`b5d2817`](https://github.com/radkode/neo/commit/b5d28173c6b59515f4e129f9e8f0aef28fdb2b8b) Thanks [@jacekradko](https://github.com/jacekradko)! - chore: update dependencies and package manager pin
+
 ## 0.10.0
 
 ### Minor Changes
