@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.10.2
+
+### Patch Changes
+
+- [#42](https://github.com/radkode/neo/pull/42) [`41de441`](https://github.com/radkode/neo/commit/41de441086afa5f9c989a541038bc0ad20606fea) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix Select component
+
 ## 0.10.1
 
 ### Patch Changes
