@@ -122,7 +122,12 @@ export function createInitCommand(): Command {
         configSpinner.start();
 
         const newConfig: NeoConfig = {
-          user: {},
+          installation: {
+            completionsPath: join(configManager.getConfigDir(), 'completions'),
+            ...(installStatus.globalPath ? { globalPath: installStatus.globalPath } : {}),
+            installedAt: new Date().toISOString(),
+            version: installStatus.packageVersion || '0.1.0',
+          },
           preferences: {
             aliases: {
               n: true,
@@ -131,15 +136,14 @@ export function createInitCommand(): Command {
             theme: 'auto',
           },
           shell: {
-            type: 'zsh',
             rcFile: shell.getRcFile(),
+            type: 'zsh',
           },
-          installation: {
-            installedAt: new Date().toISOString(),
-            version: installStatus.packageVersion || '0.1.0',
-            ...(installStatus.globalPath && { globalPath: installStatus.globalPath }),
-            completionsPath: join(configManager.getConfigDir(), 'completions'),
+          updates: {
+            lastCheckedAt: null,
+            latestVersion: null,
           },
+          user: {},
         };
 
         await configManager.write(newConfig);

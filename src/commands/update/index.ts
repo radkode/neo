@@ -7,7 +7,8 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { updateOptionsSchema } from '@/types/schemas.js';
 import type { UpdateOptions } from '@/types/schemas.js';
-import type { NpmPackageInfo, PackageManager } from '@/types/index.js';
+import type { PackageManager } from '@/types/index.js';
+import { compareVersions, fetchLatestCliVersion } from '@/utils/update-check.js';
 
 /**
  * Get the current version from package.json
@@ -26,35 +27,11 @@ function getCurrentVersion(): string {
  */
 async function getLatestVersion(): Promise<string> {
   try {
-    const response = await fetch('https://registry.npmjs.org/@radkode/neo');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = (await response.json()) as NpmPackageInfo;
-    return data['dist-tags'].latest;
+    return await fetchLatestCliVersion();
   } catch (error: unknown) {
     ui.error('Failed to fetch latest version from npm registry');
     throw error;
   }
-}
-
-/**
- * Compare version strings
- * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
- */
-function compareVersions(v1: string, v2: string): number {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const part1 = parts1[i] || 0;
-    const part2 = parts2[i] || 0;
-
-    if (part1 > part2) return 1;
-    if (part1 < part2) return -1;
-  }
-
-  return 0;
 }
 
 /**

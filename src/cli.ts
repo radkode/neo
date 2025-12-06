@@ -5,6 +5,7 @@ import type { BannerType } from '@/utils/banner.js';
 import { logger } from '@/utils/logger.js';
 import { registerCommands } from '@/commands/index.js';
 import { configManager } from '@/utils/config.js';
+import { notifyIfCliUpdateAvailable } from '@/utils/update-check.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 export function createCLI(): Command {
@@ -69,6 +70,8 @@ export function createCLI(): Command {
       if (opts.color === false) {
         chalk.level = 0;
       }
+
+      await notifyIfCliUpdateAvailable();
     });
 
   // Register all commands

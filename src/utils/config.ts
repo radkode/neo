@@ -9,9 +9,11 @@ import type { BannerType } from '@/utils/banner.js';
  * Neo CLI configuration structure
  */
 export interface NeoConfig {
-  user: {
-    name?: string;
-    email?: string;
+  installation: {
+    completionsPath?: string;
+    globalPath?: string;
+    installedAt: string;
+    version: string;
   };
   preferences: {
     aliases: {
@@ -24,23 +26,28 @@ export interface NeoConfig {
      * - 'none': Do not display any banner
      */
     banner: BannerType;
-    theme: 'dark' | 'light' | 'auto';
     editor?: string;
+    theme: 'dark' | 'light' | 'auto';
   };
   shell: {
-    type: 'zsh' | 'bash' | 'fish';
     rcFile: string;
+    type: 'zsh' | 'bash' | 'fish';
   };
-  installation: {
-    globalPath?: string;
-    completionsPath?: string;
-    installedAt: string;
-    version: string;
+  updates: {
+    lastCheckedAt: string | null;
+    latestVersion: string | null;
+  };
+  user: {
+    email?: string;
+    name?: string;
   };
 }
 
 const DEFAULT_CONFIG: NeoConfig = {
-  user: {},
+  installation: {
+    installedAt: new Date().toISOString(),
+    version: '0.1.0', // This should be read from package.json in real implementation
+  },
   preferences: {
     aliases: {
       n: true,
@@ -49,13 +56,14 @@ const DEFAULT_CONFIG: NeoConfig = {
     theme: 'auto',
   },
   shell: {
-    type: 'zsh',
     rcFile: join(homedir(), '.zshrc'),
+    type: 'zsh',
   },
-  installation: {
-    installedAt: new Date().toISOString(),
-    version: '0.1.0', // This should be read from package.json in real implementation
+  updates: {
+    lastCheckedAt: null,
+    latestVersion: null,
   },
+  user: {},
 };
 
 export class ConfigManager {
@@ -108,14 +116,15 @@ export class ConfigManager {
       return {
         ...DEFAULT_CONFIG,
         ...config,
-        user: { ...DEFAULT_CONFIG.user, ...config.user },
+        installation: { ...DEFAULT_CONFIG.installation, ...config.installation },
         preferences: {
           ...DEFAULT_CONFIG.preferences,
           ...config.preferences,
           aliases: { ...DEFAULT_CONFIG.preferences.aliases, ...config.preferences?.aliases },
         },
         shell: { ...DEFAULT_CONFIG.shell, ...config.shell },
-        installation: { ...DEFAULT_CONFIG.installation, ...config.installation },
+        updates: { ...DEFAULT_CONFIG.updates, ...config.updates },
+        user: { ...DEFAULT_CONFIG.user, ...config.user },
       };
     } catch (error) {
       logger.warn(`Failed to read config file: ${error}`);
@@ -147,14 +156,15 @@ export class ConfigManager {
     const updated = {
       ...current,
       ...updates,
-      user: { ...current.user, ...updates.user },
+      installation: { ...current.installation, ...updates.installation },
       preferences: {
         ...current.preferences,
         ...updates.preferences,
         aliases: { ...current.preferences.aliases, ...updates.preferences?.aliases },
       },
       shell: { ...current.shell, ...updates.shell },
-      installation: { ...current.installation, ...updates.installation },
+      updates: { ...current.updates, ...updates.updates },
+      user: { ...current.user, ...updates.user },
     };
 
     await this.write(updated);
