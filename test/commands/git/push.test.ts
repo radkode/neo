@@ -1,6 +1,6 @@
 import { execa } from 'execa';
-import inquirer from 'inquirer';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { promptSelect } from '@/utils/prompt.js';
 
 const spinnerMock = {
   start: vi.fn(),
@@ -14,12 +14,9 @@ vi.mock('execa', () => {
   return { execa };
 });
 
-vi.mock('inquirer', () => {
-  const prompt = vi.fn();
-  return {
-    default: { prompt },
-    prompt,
-  };
+vi.mock('@/utils/prompt.js', () => {
+  const promptSelect = vi.fn();
+  return { promptSelect };
 });
 
 vi.mock('@/utils/logger.js', () => ({
@@ -46,7 +43,7 @@ vi.mock('@/utils/ui.js', () => ({
 
 describe('git push command', () => {
   const execaMock = vi.mocked(execa);
-  const promptMock = vi.mocked(inquirer.prompt);
+  const promptSelectMock = vi.mocked(promptSelect);
   let exitMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -73,12 +70,12 @@ describe('git push command', () => {
     execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // pull --rebase
     execaMock.mockResolvedValueOnce({ stdout: 'pushed' }); // push retry
 
-    promptMock.mockResolvedValueOnce({ resolution: 'pull-rebase' });
+    promptSelectMock.mockResolvedValueOnce('pull-rebase');
 
     const command = createPushCommand();
     await command.parseAsync([], { from: 'user' });
 
-    expect(promptMock).toHaveBeenCalled();
+    expect(promptSelectMock).toHaveBeenCalled();
 
     const pullRebaseCall = execaMock.mock.calls.find(
       ([_cmd, args]) =>
@@ -110,12 +107,12 @@ describe('git push command', () => {
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
     execaMock.mockResolvedValueOnce({ stdout: 'forced' }); // force push
 
-    promptMock.mockResolvedValueOnce({ resolution: 'force' });
+    promptSelectMock.mockResolvedValueOnce('force');
 
     const command = createPushCommand();
     await command.parseAsync([], { from: 'user' });
 
-    expect(promptMock).toHaveBeenCalled();
+    expect(promptSelectMock).toHaveBeenCalled();
     expect(
       execaMock.mock.calls.find(
         ([_cmd, args]) =>

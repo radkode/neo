@@ -11,6 +11,9 @@ importers:
       '@commander-js/extra-typings':
         specifier: ^14.0.0
         version: 14.0.0(commander@14.0.2)
+      '@inquirer/select':
+        specifier: ^5.0.2
+        version: 5.0.2(@types/node@24.10.1)
       better-sqlite3:
         specifier: ^12.5.0
         version: 12.5.0

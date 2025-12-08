@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
+import { promptSelect } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPushOptionsSchema } from '@/types/schemas.js';
@@ -158,31 +159,24 @@ export function createPushCommand(): Command {
             ui.error('Push was rejected because the remote has new commits.');
             ui.warn('Choose how to resolve the divergence:');
 
-            const { resolution } = await inquirer.prompt([
-              {
-                choices: [
-                  {
-                    name: 'Pull with rebase and retry push',
-                    short: 'Pull with rebase and retry push',
-                    value: 'pull-rebase',
-                  },
-                  {
-                    name: 'Force push (overwrite remote)',
-                    short: 'Force push (overwrite remote)',
-                    value: 'force',
-                  },
-                  {
-                    name: 'Cancel for now',
-                    short: 'Cancel for now',
-                    value: 'cancel',
-                  },
-                ],
-                default: 'pull-rebase',
-                message: 'Select a resolution strategy',
-                name: 'resolution',
-                type: 'list',
-              },
-            ]);
+            const resolution = await promptSelect({
+              choices: [
+                {
+                  label: 'Pull with rebase and retry push',
+                  value: 'pull-rebase',
+                },
+                {
+                  label: 'Force push (overwrite remote)',
+                  value: 'force',
+                },
+                {
+                  label: 'Cancel for now',
+                  value: 'cancel',
+                },
+              ],
+              defaultValue: 'pull-rebase',
+              message: 'Select a resolution strategy',
+            });
 
             if (resolution === 'pull-rebase') {
               const rebaseSpinner = ui.spinner('Pulling latest changes with rebase');

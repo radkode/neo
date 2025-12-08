@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
+import { promptSelect } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
@@ -176,33 +177,26 @@ async function handleDivergedPull(
   ui.error('Local and remote branches have diverged.');
   ui.warn('Choose how to reconcile the branches.');
 
-  const defaultStrategy = validatedOptions.noRebase ? 'merge' : 'rebase';
+  const defaultStrategy: 'merge' | 'rebase' = validatedOptions.noRebase ? 'merge' : 'rebase';
 
-  const { strategy } = await inquirer.prompt([
-    {
-      choices: [
-        {
-          name: 'Cancel (do nothing)',
-          short: 'Cancel (do nothing)',
-          value: 'cancel',
-        },
-        {
-          name: 'Merge remote into current branch (--no-ff)',
-          short: 'Merge remote into current branch (--no-ff)',
-          value: 'merge',
-        },
-        {
-          name: 'Rebase onto remote (recommended)',
-          short: 'Rebase onto remote (recommended)',
-          value: 'rebase',
-        },
-      ],
-      default: defaultStrategy,
-      message: 'Branches have diverged. Choose a pull strategy:',
-      name: 'strategy',
-      type: 'list',
-    },
-  ]);
+  const strategy = await promptSelect({
+    choices: [
+      {
+        label: 'Cancel (do nothing)',
+        value: 'cancel',
+      },
+      {
+        label: 'Merge remote into current branch (--no-ff)',
+        value: 'merge',
+      },
+      {
+        label: 'Rebase onto remote (recommended)',
+        value: 'rebase',
+      },
+    ],
+    defaultValue: defaultStrategy,
+    message: 'Branches have diverged. Choose a pull strategy:',
+  });
 
   if (strategy === 'rebase') {
     const rebaseSpinner = ui.spinner('Pulling with rebase');
@@ -301,38 +295,30 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<void> {
   ui.warn(`Your local branch "${branchName}" is tracking a remote branch that has been deleted`);
   console.log('');
 
-  const { action } = await inquirer.prompt([
-    {
+  const validatedAction = deletedBranchActionSchema.parse(
+    await promptSelect({
       choices: [
         {
-          name: 'Switch to main and delete this branch (recommended)',
-          short: 'Switch to main and delete this branch (recommended)',
+          label: 'Switch to main and delete this branch (recommended)',
           value: 'switch_main_delete',
         },
         {
-          name: 'Switch to main and keep this branch',
-          short: 'Switch to main and keep this branch',
+          label: 'Switch to main and keep this branch',
           value: 'switch_main_keep',
         },
         {
-          name: `Set a new upstream for "${branchName}"`,
-          short: `Set a new upstream for "${branchName}"`,
+          label: `Set a new upstream for "${branchName}"`,
           value: 'set_upstream',
         },
         {
-          name: 'Cancel (no changes)',
-          short: 'Cancel (no changes)',
+          label: 'Cancel (no changes)',
           value: 'cancel',
         },
       ],
-      default: 'switch_main_delete',
+      defaultValue: 'switch_main_delete',
       message: 'How would you like to resolve this?',
-      name: 'action',
-      type: 'list',
-    },
-  ]);
-
-  const validatedAction = deletedBranchActionSchema.parse(action);
+    })
+  );
 
   switch (validatedAction) {
     case 'switch_main_delete':

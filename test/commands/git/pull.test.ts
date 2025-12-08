@@ -1,6 +1,6 @@
 import { execa } from 'execa';
-import inquirer from 'inquirer';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { promptSelect } from '@/utils/prompt.js';
 
 const spinnerMock = {
   start: vi.fn(),
@@ -14,12 +14,9 @@ vi.mock('execa', () => {
   return { execa };
 });
 
-vi.mock('inquirer', () => {
-  const prompt = vi.fn();
-  return {
-    default: { prompt },
-    prompt,
-  };
+vi.mock('@/utils/prompt.js', () => {
+  const promptSelect = vi.fn();
+  return { promptSelect };
 });
 
 vi.mock('@/utils/logger.js', () => ({
@@ -47,7 +44,7 @@ vi.mock('@/utils/ui.js', () => ({
 describe('git pull command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   const execaMock = vi.mocked(execa);
-  const promptMock = vi.mocked(inquirer.prompt);
+  const promptSelectMock = vi.mocked(promptSelect);
   let exitMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -105,12 +102,12 @@ describe('git pull command', () => {
       execaMock.mockRejectedValueOnce(divergenceError); // initial pull
       execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // rebase pull
 
-      promptMock.mockResolvedValueOnce({ strategy: 'rebase' });
+      promptSelectMock.mockResolvedValueOnce('rebase');
 
       const command = createPullCommand();
       await command.parseAsync([], { from: 'user' });
 
-      expect(promptMock).toHaveBeenCalled();
+      expect(promptSelectMock).toHaveBeenCalled();
       expect(execaMock).toHaveBeenCalledWith(
         'git',
         ['pull', '--rebase'],
@@ -129,12 +126,12 @@ describe('git pull command', () => {
       execaMock.mockResolvedValueOnce({ stdout: '' }); // fetch
       execaMock.mockResolvedValueOnce({ stdout: 'merged' }); // merge
 
-      promptMock.mockResolvedValueOnce({ strategy: 'merge' });
+      promptSelectMock.mockResolvedValueOnce('merge');
 
       const command = createPullCommand();
       await command.parseAsync([], { from: 'user' });
 
-      expect(promptMock).toHaveBeenCalled();
+      expect(promptSelectMock).toHaveBeenCalled();
       expect(execaMock).toHaveBeenCalledWith(
         'git',
         ['fetch', 'origin', 'feature/diverge'],
