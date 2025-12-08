@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.10.3
+
+### Patch Changes
+
+- [#44](https://github.com/radkode/neo/pull/44) [`95d6e67`](https://github.com/radkode/neo/commit/95d6e6742cc8f03063eed3cde43f5e75e4c2df3f) Thanks [@jacekradko](https://github.com/jacekradko)! - Fixing an issue with multiple choice prompt
+
 ## 0.10.2
 
 ### Patch Changes
