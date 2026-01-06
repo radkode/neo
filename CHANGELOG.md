@@ -1,5 +1,19 @@
 # @radkode/neo
 
+## 0.11.0
+
+### Minor Changes
+
+- [#46](https://github.com/radkode/neo/pull/46) [`bc3c4dc`](https://github.com/radkode/neo/commit/bc3c4dcfdad28f1fc8b53d7a71b3a5a2356f4a4c) Thanks [@jacekradko](https://github.com/jacekradko)! - Initialize beads functionality
+
+### Patch Changes
+
+- [#48](https://github.com/radkode/neo/pull/48) [`aa2583d`](https://github.com/radkode/neo/commit/aa2583d17fda1c169c6ffd0b9c1e18bbc592518e) Thanks [@jacekradko](https://github.com/jacekradko)! - Streamline CLI output styling with reduced color palette
+  - Reduce color palette from 7 to 4 semantic colors (primary, success, error, muted)
+  - Simplify banner gradient from 6 colors to 3 blue shades
+  - Update info() and step() to use muted gray for cleaner output
+  - Unify logger to use Colors constant for consistent styling
+
 ## 0.10.3
 
 ### Patch Changes
