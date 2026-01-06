@@ -6,6 +6,7 @@ import { logger } from '@/utils/logger.js';
 import { registerCommands } from '@/commands/index.js';
 import { configManager } from '@/utils/config.js';
 import { notifyIfCliUpdateAvailable } from '@/utils/update-check.js';
+import { Colors } from '@/utils/ui-types.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 export function createCLI(): Command {
@@ -108,9 +109,9 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
       // Handle missing command gracefully
       if (err.code === 'commander.missingArgument' || err.code === 'commander.unknownCommand') {
         console.error(
-          `\n${chalk.red('Error:')} ${err instanceof Error ? err.message : String(err)}`
+          `\n${chalk.hex(Colors.error)('Error:')} ${err instanceof Error ? err.message : String(err)}`
         );
-        console.log(`\nRun ${chalk.cyan('neo --help')} for usage information.`);
+        console.log(`\nRun ${chalk.hex(Colors.primary)('neo --help')} for usage information.`);
         process.exit(1);
       }
     }

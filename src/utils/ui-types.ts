@@ -7,19 +7,13 @@ import type { Ora } from 'ora';
  * and are drawn from the Neo CLI brand gradient
  */
 export const Colors = {
-  /** Primary blue - used for info, links, and highlights */
-  blue: '#0066FF',
-  /** Purple - used for steps and progress indicators */
-  purple: '#997FFF',
-  /** Pink/Magenta - used for special highlights and accents */
-  pink: '#F33FFF',
+  /** Primary blue - used for links, highlights, and interactive elements */
+  primary: '#0066FF',
   /** Success green - used for successful operations */
   success: '#00CC66',
-  /** Error red - used for errors and failures */
+  /** Error red - used for errors, warnings, and failures */
   error: '#FF3366',
-  /** Warning amber - used for warnings and cautions */
-  warning: '#FFAA33',
-  /** Muted gray - used for secondary text and hints */
+  /** Muted gray - used for info, steps, secondary text, and hints */
   muted: '#6B7280',
 } as const;
 

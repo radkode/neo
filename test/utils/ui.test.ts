@@ -374,12 +374,9 @@ describe('UI System', () => {
   describe('Constants and Exports', () => {
     it('should export Colors constant', () => {
       expect(Colors).toBeDefined();
-      expect(Colors.blue).toBe('#0066FF');
-      expect(Colors.purple).toBe('#997FFF');
-      expect(Colors.pink).toBe('#F33FFF');
+      expect(Colors.primary).toBe('#0066FF');
       expect(Colors.success).toBe('#00CC66');
       expect(Colors.error).toBe('#FF3366');
-      expect(Colors.warning).toBe('#FFAA33');
       expect(Colors.muted).toBe('#6B7280');
     });
 

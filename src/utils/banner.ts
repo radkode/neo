@@ -9,17 +9,17 @@ export type BannerType = 'full' | 'compact' | 'none';
  * Displays the full ASCII art banner for Neo CLI
  *
  * This banner features large ASCII art with the Neo CLI branding
- * with a beautiful horizontal blue to purple gradient.
+ * with a subtle blue gradient for a clean, modern look.
  * Use this for a prominent, eye-catching display.
  */
 export function showBanner(): void {
   const banner = `
-${chalk.bold.hex('#0066FF')('  ███╗   ██╗')}${chalk.bold.hex('#3D7FFF')('███████╗ ')}${chalk.bold.hex('#6B7FFF')('██████╗ ')}${chalk.bold.hex('#997FFF')('    ██████╗')}${chalk.bold.hex('#C65FFF')('██╗     ')}${chalk.bold.hex('#F33FFF')('██╗')}
-${chalk.bold.hex('#0066FF')('  ████╗  ██║')}${chalk.bold.hex('#3D7FFF')('██╔════╝')}${chalk.bold.hex('#6B7FFF')('██╔═══██╗')}${chalk.bold.hex('#997FFF')('   ██╔════╝')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
-${chalk.bold.hex('#0066FF')('  ██╔██╗ ██║')}${chalk.bold.hex('#3D7FFF')('█████╗  ')}${chalk.bold.hex('#6B7FFF')('██║   ██║')}${chalk.bold.hex('#997FFF')('   ██║     ')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
-${chalk.bold.hex('#0066FF')('  ██║╚██╗██║')}${chalk.bold.hex('#3D7FFF')('██╔══╝  ')}${chalk.bold.hex('#6B7FFF')('██║   ██║')}${chalk.bold.hex('#997FFF')('   ██║     ')}${chalk.bold.hex('#C65FFF')('██║     ')}${chalk.bold.hex('#F33FFF')('██║')}
-${chalk.bold.hex('#0066FF')('  ██║ ╚████║')}${chalk.bold.hex('#3D7FFF')('███████╗')}${chalk.bold.hex('#6B7FFF')('╚██████╔╝')}${chalk.bold.hex('#997FFF')('   ╚██████╗')}${chalk.bold.hex('#C65FFF')('███████╗')}${chalk.bold.hex('#F33FFF')('██║')}
-${chalk.bold.hex('#0066FF')('  ╚═╝  ╚═══╝')}${chalk.bold.hex('#3D7FFF')('╚══════╝')}${chalk.bold.hex('#6B7FFF')(' ╚═════╝ ')}${chalk.bold.hex('#997FFF')('    ╚═════╝')}${chalk.bold.hex('#C65FFF')('╚══════╝')}${chalk.bold.hex('#F33FFF')('╚═╝')}
+${chalk.bold.hex('#0066FF')('  ███╗   ██╗')}${chalk.bold.hex('#0066FF')('███████╗ ')}${chalk.bold.hex('#3D7FFF')('██████╗ ')}${chalk.bold.hex('#3D7FFF')('    ██████╗')}${chalk.bold.hex('#5599FF')('██╗     ')}${chalk.bold.hex('#5599FF')('██╗')}
+${chalk.bold.hex('#0066FF')('  ████╗  ██║')}${chalk.bold.hex('#0066FF')('██╔════╝')}${chalk.bold.hex('#3D7FFF')('██╔═══██╗')}${chalk.bold.hex('#3D7FFF')('   ██╔════╝')}${chalk.bold.hex('#5599FF')('██║     ')}${chalk.bold.hex('#5599FF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██╔██╗ ██║')}${chalk.bold.hex('#0066FF')('█████╗  ')}${chalk.bold.hex('#3D7FFF')('██║   ██║')}${chalk.bold.hex('#3D7FFF')('   ██║     ')}${chalk.bold.hex('#5599FF')('██║     ')}${chalk.bold.hex('#5599FF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██║╚██╗██║')}${chalk.bold.hex('#0066FF')('██╔══╝  ')}${chalk.bold.hex('#3D7FFF')('██║   ██║')}${chalk.bold.hex('#3D7FFF')('   ██║     ')}${chalk.bold.hex('#5599FF')('██║     ')}${chalk.bold.hex('#5599FF')('██║')}
+${chalk.bold.hex('#0066FF')('  ██║ ╚████║')}${chalk.bold.hex('#0066FF')('███████╗')}${chalk.bold.hex('#3D7FFF')('╚██████╔╝')}${chalk.bold.hex('#3D7FFF')('   ╚██████╗')}${chalk.bold.hex('#5599FF')('███████╗')}${chalk.bold.hex('#5599FF')('██║')}
+${chalk.bold.hex('#0066FF')('  ╚═╝  ╚═══╝')}${chalk.bold.hex('#0066FF')('╚══════╝')}${chalk.bold.hex('#3D7FFF')(' ╚═════╝ ')}${chalk.bold.hex('#3D7FFF')('    ╚═════╝')}${chalk.bold.hex('#5599FF')('╚══════╝')}${chalk.bold.hex('#5599FF')('╚═╝')}
 `;
   console.log(banner);
 }
@@ -32,7 +32,7 @@ ${chalk.bold.hex('#0066FF')('  ╚═╝  ╚═══╝')}${chalk.bold.hex('#3
  * a cleaner terminal output.
  */
 export function showCompactBanner(): void {
-  const banner = `${chalk.bold.hex('#00BFFF')('⚡ NEO CLI')} ${chalk.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`;
+  const banner = `${chalk.bold.hex('#0066FF')('⚡ NEO CLI')} ${chalk.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`;
   console.log(banner);
 }
 

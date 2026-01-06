@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { Colors } from './ui-types.js';
 
 class Logger {
   private verbose: boolean = false;
@@ -8,24 +9,24 @@ class Logger {
   }
 
   info(message: string): void {
-    console.log(chalk.blue('ℹ'), message);
+    console.log(chalk.hex(Colors.muted)('ℹ'), message);
   }
 
   success(message: string): void {
-    console.log(chalk.green('✓'), message);
+    console.log(chalk.hex(Colors.success)('✓'), message);
   }
 
   warn(message: string): void {
-    console.log(chalk.yellow('⚠'), message);
+    console.log(chalk.hex(Colors.error)('⚠'), message);
   }
 
   error(message: string): void {
-    console.error(chalk.red('✖'), message);
+    console.error(chalk.hex(Colors.error)('✖'), message);
   }
 
   debug(message: string): void {
     if (this.verbose) {
-      console.log(chalk.gray('[DEBUG]'), message);
+      console.log(chalk.hex(Colors.muted)('[DEBUG]'), message);
     }
   }
 

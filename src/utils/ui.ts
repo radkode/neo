@@ -54,21 +54,21 @@ class UISystem implements UI {
    * Display a warning message with warning icon
    */
   public warn(message: string): void {
-    console.log(chalk.hex(Colors.warning)(`${Icons.warning} ${message}`));
+    console.log(chalk.hex(Colors.error)(`${Icons.warning} ${message}`));
   }
 
   /**
    * Display an informational message with info icon
    */
   public info(message: string): void {
-    console.log(chalk.hex(Colors.blue)(`${Icons.info} ${message}`));
+    console.log(chalk.hex(Colors.muted)(`${Icons.info} ${message}`));
   }
 
   /**
    * Display a step or progress message with arrow icon
    */
   public step(message: string): void {
-    console.log(chalk.hex(Colors.purple)(`${Icons.step} ${message}`));
+    console.log(chalk.hex(Colors.muted)(`${Icons.step} ${message}`));
   }
 
   /**
@@ -82,7 +82,7 @@ class UISystem implements UI {
    * Display a highlighted message with diamond icon
    */
   public highlight(message: string): void {
-    console.log(chalk.hex(Colors.pink)(`${Icons.highlight} ${message}`));
+    console.log(chalk.hex(Colors.primary)(`${Icons.highlight} ${message}`));
   }
 
   /**
@@ -90,9 +90,9 @@ class UISystem implements UI {
    */
   public link(text: string, url?: string): void {
     if (url) {
-      console.log(`${text}: ${chalk.hex(Colors.blue).underline(url)}`);
+      console.log(`${text}: ${chalk.hex(Colors.primary).underline(url)}`);
     } else {
-      console.log(chalk.hex(Colors.blue).underline(text));
+      console.log(chalk.hex(Colors.primary).underline(text));
     }
   }
 
@@ -111,7 +111,7 @@ class UISystem implements UI {
    * Display a section header with divider line
    */
   public section(title: string): void {
-    console.log(chalk.bold(title));
+    console.log(chalk.bold.hex(Colors.primary)(title));
     console.log(chalk.hex(Colors.muted)('─'.repeat(title.length)));
   }
 
@@ -138,7 +138,7 @@ class UISystem implements UI {
     pairs.forEach(([key, value]) => {
       const paddedKey = key.padEnd(maxKeyLength);
       console.log(
-        `  ${chalk.hex(Colors.muted)(paddedKey + ':')}  ${chalk.hex(Colors.blue)(value)}`
+        `  ${chalk.hex(Colors.muted)(paddedKey + ':')}  ${chalk.hex(Colors.primary)(value)}`
       );
     });
   }
@@ -263,10 +263,10 @@ class UISystem implements UI {
 
     instance.warn = (text?: string): StyledSpinner => {
       const options: { symbol: string; text?: string } = {
-        symbol: chalk.hex(Colors.warning)(Icons.warning),
+        symbol: chalk.hex(Colors.error)(Icons.warning),
       };
       if (text) {
-        options.text = chalk.hex(Colors.warning)(text);
+        options.text = chalk.hex(Colors.error)(text);
       }
       instance.stopAndPersist(options);
       return instance;
@@ -274,10 +274,10 @@ class UISystem implements UI {
 
     instance.info = (text?: string): StyledSpinner => {
       const options: { symbol: string; text?: string } = {
-        symbol: chalk.hex(Colors.blue)(Icons.info),
+        symbol: chalk.hex(Colors.muted)(Icons.info),
       };
       if (text) {
-        options.text = chalk.hex(Colors.blue)(text);
+        options.text = chalk.hex(Colors.muted)(text);
       }
       instance.stopAndPersist(options);
       return instance;

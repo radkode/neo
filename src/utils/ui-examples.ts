@@ -46,13 +46,10 @@ async function runExamples(): Promise<void> {
   console.log('\n');
 
   ui.list([
-    `Blue: ${ui.colors.blue} (info, links, highlights)`,
-    `Purple: ${ui.colors.purple} (steps, progress)`,
-    `Pink: ${ui.colors.pink} (accents, special notes)`,
+    `Primary: ${ui.colors.primary} (links, highlights, interactive elements)`,
     `Success: ${ui.colors.success} (success messages)`,
-    `Error: ${ui.colors.error} (error messages)`,
-    `Warning: ${ui.colors.warning} (warnings)`,
-    `Muted: ${ui.colors.muted} (secondary text)`,
+    `Error: ${ui.colors.error} (errors and warnings)`,
+    `Muted: ${ui.colors.muted} (info, steps, secondary text)`,
   ]);
 
   console.log('\n');
