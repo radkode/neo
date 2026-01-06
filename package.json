@@ -30,6 +30,9 @@
     "url": "https://github.com/radkode/neo/issues"
   },
   "homepage": "https://github.com/radkode/neo#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc && tsc-alias",
     "changeset": "changeset",
