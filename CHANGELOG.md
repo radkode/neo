@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 0.11.3
+
+### Patch Changes
+
+- [#54](https://github.com/radkode/neo/pull/54) [`b47d77c`](https://github.com/radkode/neo/commit/b47d77c416d2b4efe45710b868e774d6716baa3f) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: use NODE_AUTH_TOKEN for npm authentication in CI
+
+- [#54](https://github.com/radkode/neo/pull/54) [`b47d77c`](https://github.com/radkode/neo/commit/b47d77c416d2b4efe45710b868e774d6716baa3f) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: configure npm trusted publishing with provenance
+
 ## 0.11.2
 
 ### Patch Changes
