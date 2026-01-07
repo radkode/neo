@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 0.11.1
+
+### Patch Changes
+
+- [#50](https://github.com/radkode/neo/pull/50) [`b265714`](https://github.com/radkode/neo/commit/b265714ebfab8c15d115914a6276a1853600f108) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix GitHub Actions release workflow permissions to allow Changesets to create release PRs
+
+- [#49](https://github.com/radkode/neo/pull/49) [`06e7f8a`](https://github.com/radkode/neo/commit/06e7f8ab89f915a6bf85154b2d0d9139f0dcb818) Thanks [@jacekradko](https://github.com/jacekradko)! - Configured NPM trusted publisher for automated releases
+
 ## 0.11.0
 
 ### Minor Changes

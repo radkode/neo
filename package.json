@@ -1,6 +1,6 @@
 {
   "name": "@radkode/neo",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Modern CLI toolkit with intelligent git workflows and configuration management",
   "author": "Jacek Radko",
   "license": "MIT",
