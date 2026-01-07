@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.11.2
+
+### Patch Changes
+
+- [#52](https://github.com/radkode/neo/pull/52) [`d22c1c5`](https://github.com/radkode/neo/commit/d22c1c50859a6bf099995b197996f43ba701cfd3) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: configure npm trusted publishing with provenance
+
 ## 0.11.1
 
 ### Patch Changes
