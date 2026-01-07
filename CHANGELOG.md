@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.11.4
+
+### Patch Changes
+
+- [#56](https://github.com/radkode/neo/pull/56) [`281d772`](https://github.com/radkode/neo/commit/281d7728c9232222c12cb0917a03d3d7ff1e36e5) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: configure pnpm for npm registry authentication in CI
+
 ## 0.11.3
 
 ### Patch Changes
