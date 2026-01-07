@@ -31,22 +31,21 @@
   },
   "homepage": "https://github.com/radkode/neo#readme",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "build": "tsc && tsc-alias",
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "changeset:version": "changeset version",
-    "changeset:publish": "pnpm run build && changeset publish --provenance",
+    "changeset:publish": "pnpm run build && changeset publish",
     "dev": "tsx src/cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "link-local": "pnpm run build && pnpm link --global",
     "lint": "eslint src --ext .ts",
     "prepublishOnly": "pnpm run build && pnpm run test",
-    "release": "pnpm run build && pnpm run test && changeset publish --provenance",
+    "release": "pnpm run build && pnpm run test && changeset publish",
     "start": "node dist/cli.js",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
