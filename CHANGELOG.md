@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 0.11.5
+
+### Patch Changes
+
+- [#58](https://github.com/radkode/neo/pull/58) [`96209d1`](https://github.com/radkode/neo/commit/96209d160f3ae959ad50f173a1711fbba8ec342c) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: create .npmrc file explicitly for npm authentication in CI
+
+- [#58](https://github.com/radkode/neo/pull/58) [`96209d1`](https://github.com/radkode/neo/commit/96209d160f3ae959ad50f173a1711fbba8ec342c) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: configure pnpm for npm registry authentication in CI
+
 ## 0.11.4
 
 ### Patch Changes
