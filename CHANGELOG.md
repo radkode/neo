@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 0.11.6
+
+### Patch Changes
+
+- [#60](https://github.com/radkode/neo/pull/60) [`a3381ad`](https://github.com/radkode/neo/commit/a3381ad7ccffb4260201b0c49c67b6e8778ee7d6) Thanks [@jacekradko](https://github.com/jacekradko)! - fix: remove provenance for private repository compatibility
+
 ## 0.11.5
 
 ### Patch Changes
