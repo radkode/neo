@@ -32,9 +32,10 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Configure pnpm for npm registry
+      - name: Create .npmrc for authentication
         run: |
-          pnpm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+          echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" > ~/.npmrc
+          cat ~/.npmrc
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
