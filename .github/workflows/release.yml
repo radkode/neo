@@ -51,6 +51,7 @@ jobs:
           commit: 'chore: release package'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Send a Slack notification if a publish happens
         if: steps.changesets.outputs.published == 'true'
