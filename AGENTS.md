@@ -7,6 +7,7 @@
 This project uses **bd** (beads) for AI-native issue tracking. This is the PRIMARY tool for managing work.
 
 **Before starting ANY work:**
+
 ```bash
 bd onboard            # Get started with beads (first time)
 bd ready              # Find available work
@@ -14,6 +15,7 @@ bd show <id>          # View issue details
 ```
 
 **While working:**
+
 ```bash
 bd update <id> --status in_progress  # Claim work
 bd create "description"              # Create new issues
@@ -21,6 +23,7 @@ bd list                              # View all issues
 ```
 
 **When finishing:**
+
 ```bash
 bd close <id>         # Complete work
 bd sync               # Sync with git
@@ -47,6 +50,7 @@ bd sync               # Sync with git
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
@@ -57,4 +61,3 @@ bd sync               # Sync with git
 - **Issue Tracking**: Beads (`.beads/` directory) - CLI-first, AI-native
 - **Package Manager**: pnpm
 - **Build**: TypeScript
-
