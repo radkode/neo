@@ -7,13 +7,15 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPushOptionsSchema } from '@/types/schemas.js';
 import type { GitPushOptions } from '@/types/schemas.js';
+import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
-  type Result,
-  success,
-  failure,
-  isFailure,
-  CommandError,
-} from '@/core/errors/index.js';
+  GitErrors,
+  isNotGitRepository,
+  isNoUpstreamError,
+  isNonFastForwardError,
+  isAuthenticationError,
+  isConflictError,
+} from '@/utils/git-errors.js';
 
 /**
  * Execute the push command logic
@@ -125,84 +127,55 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
   } catch (error: unknown) {
     spinner.stop();
 
-    if (error instanceof Error) {
-      const stderr = (error as { stderr?: string }).stderr ?? '';
-      const shortMessage = (error as { shortMessage?: string }).shortMessage ?? '';
-      const combinedMessage = `${error.message} ${stderr} ${shortMessage}`.toLowerCase();
-
-      if (error.message?.includes('not a git repository')) {
-        return failure(
-          new CommandError('Not a git repository!', 'push', {
-            suggestions: ['Make sure you are in a git repository directory'],
-          })
-        );
-      }
-
-      if (error.message?.includes('no upstream branch')) {
-        return failure(
-          new CommandError('No upstream branch configured!', 'push', {
-            suggestions: [`Use --set-upstream to set the upstream branch: git push -u origin ${branchName || 'your-branch'}`],
-          })
-        );
-      }
-
-      if (
-        combinedMessage.includes('non-fast-forward') ||
-        combinedMessage.includes('fetch first') ||
-        combinedMessage.includes('behind') ||
-        combinedMessage.includes('remote contains') ||
-        combinedMessage.includes('tip of your current branch is behind its remote counterpart')
-      ) {
-        ui.error('Push was rejected because the remote has new commits.');
-        ui.warn('Choose how to resolve the divergence:');
-
-        const resolution = await promptSelect({
-          choices: [
-            {
-              label: 'Pull with rebase and retry push',
-              value: 'pull-rebase',
-            },
-            {
-              label: 'Force push (overwrite remote)',
-              value: 'force',
-            },
-            {
-              label: 'Cancel for now',
-              value: 'cancel',
-            },
-          ],
-          defaultValue: 'pull-rebase',
-          message: 'Select a resolution strategy',
-        });
-
-        if (resolution === 'pull-rebase') {
-          const rebaseResult = await handlePullRebase(branchName, pushArgs, options);
-          return rebaseResult;
-        }
-
-        if (resolution === 'force') {
-          const forceResult = await handleForcePush(pushArgs, options);
-          return forceResult;
-        }
-
-        ui.info('Push cancelled. No changes were pushed.');
-        return failure(new CommandError('Push cancelled by user', 'push'));
-      }
-
-      if (error.message?.includes('authentication')) {
-        return failure(
-          new CommandError('Authentication failed!', 'push', {
-            suggestions: ['Check your git credentials or SSH keys'],
-          })
-        );
-      }
+    // Use shared git error detection
+    if (isNotGitRepository(error)) {
+      return failure(GitErrors.notARepository('push'));
     }
 
-    return failure(
-      new CommandError('Failed to push to remote', 'push', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    if (isNoUpstreamError(error)) {
+      return failure(GitErrors.noUpstream('push', branchName));
+    }
+
+    if (isNonFastForwardError(error)) {
+      ui.error('Push was rejected because the remote has new commits.');
+      ui.warn('Choose how to resolve the divergence:');
+
+      const resolution = await promptSelect({
+        choices: [
+          {
+            label: 'Pull with rebase and retry push',
+            value: 'pull-rebase',
+          },
+          {
+            label: 'Force push (overwrite remote)',
+            value: 'force',
+          },
+          {
+            label: 'Cancel for now',
+            value: 'cancel',
+          },
+        ],
+        defaultValue: 'pull-rebase',
+        message: 'Select a resolution strategy',
+      });
+
+      if (resolution === 'pull-rebase') {
+        return handlePullRebase(branchName, pushArgs, options);
+      }
+
+      if (resolution === 'force') {
+        return handleForcePush(pushArgs, options);
+      }
+
+      ui.info('Push cancelled. No changes were pushed.');
+      return failure(GitErrors.unknown('push'));
+    }
+
+    if (isAuthenticationError(error)) {
+      return failure(GitErrors.authenticationFailed('push'));
+    }
+
+    return failure(GitErrors.unknown('push', error));
   }
 }
 
@@ -239,11 +212,10 @@ async function handlePullRebase(
     return success(undefined);
   } catch (rebaseError) {
     rebaseSpinner.stop();
-    return failure(
-      new CommandError('Rebase failed. Resolve conflicts then push again.', 'push', {
-        context: { error: rebaseError instanceof Error ? rebaseError.message : String(rebaseError) },
-      })
-    );
+    if (isConflictError(rebaseError)) {
+      return failure(GitErrors.rebaseConflict('push'));
+    }
+    return failure(GitErrors.unknown('push', rebaseError));
   }
 }
 
@@ -277,11 +249,7 @@ async function handleForcePush(
     return success(undefined);
   } catch (forceError) {
     forceSpinner.stop();
-    return failure(
-      new CommandError('Force push failed.', 'push', {
-        context: { error: forceError instanceof Error ? forceError.message : String(forceError) },
-      })
-    );
+    return failure(GitErrors.unknown('push', forceError));
   }
 }
 

@@ -6,13 +6,8 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitBranchOptionsSchema } from '@/types/schemas.js';
 import type { GitBranchOptions } from '@/types/schemas.js';
-import {
-  type Result,
-  success,
-  failure,
-  isFailure,
-  CommandError,
-} from '@/core/errors/index.js';
+import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
+import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 
 /**
  * Interface for branch information
@@ -80,29 +75,17 @@ export async function executeBranch(options: GitBranchOptions): Promise<Result<v
   } catch (error: unknown) {
     spinner.fail('Failed to analyze branches');
 
-    if (error instanceof Error) {
-      if (error.message.includes('not a git repository')) {
-        return failure(
-          new CommandError('Not a git repository!', 'branch', {
-            suggestions: ['Make sure you are in a git repository directory'],
-          })
-        );
-      }
-
-      if (error.message.includes('no branches found')) {
-        return failure(
-          new CommandError('No local branches found!', 'branch', {
-            suggestions: ['This repository appears to have no local branches'],
-          })
-        );
-      }
+    // Use shared git error detection
+    if (isNotGitRepository(error)) {
+      return failure(GitErrors.notARepository('branch'));
     }
 
-    return failure(
-      new CommandError('An unexpected error occurred', 'branch', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('no branches found')) {
+      return failure(GitErrors.unknown('branch', new Error('No local branches found. This repository appears to have no local branches.')));
+    }
+
+    return failure(GitErrors.unknown('branch', error));
   }
 }
 

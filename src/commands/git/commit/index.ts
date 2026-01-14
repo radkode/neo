@@ -5,13 +5,8 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitCommitOptionsSchema } from '@/types/schemas.js';
 import type { GitCommitOptions, CommitType } from '@/types/schemas.js';
-import {
-  type Result,
-  success,
-  failure,
-  isFailure,
-  CommandError,
-} from '@/core/errors/index.js';
+import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
+import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 
 /**
  * Commit type descriptions for the interactive wizard
@@ -84,6 +79,14 @@ async function getStagedFiles(): Promise<string[]> {
 }
 
 /**
+ * Check if error is "nothing to commit" error
+ */
+function isNothingToCommitError(error: unknown): boolean {
+  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return errorMessage.includes('nothing to commit');
+}
+
+/**
  * Execute the commit command logic
  * Returns a Result indicating success or failure
  */
@@ -101,26 +104,14 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         spinner.succeed('Staged all modified files');
       } catch (error) {
         spinner.fail('Failed to stage files');
-        return failure(
-          new CommandError('Failed to stage files', 'commit', {
-            context: { error: error instanceof Error ? error.message : String(error) },
-          })
-        );
+        return failure(GitErrors.unknown('commit', error));
       }
     }
 
     // Check for staged changes
     const hasStaged = await hasStagedChanges();
     if (!hasStaged) {
-      return failure(
-        new CommandError('No files staged for commit', 'commit', {
-          suggestions: [
-            'Stage specific files: git add <file>',
-            'Stage all changes: git add .',
-            'Use --all flag: neo git commit --all',
-          ],
-        })
-      );
+      return failure(GitErrors.noStagedChanges('commit'));
     }
 
     // Show staged files
@@ -269,36 +260,19 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
       return success(undefined);
     } catch (error) {
       spinner.fail('Failed to create commit');
-      return failure(
-        new CommandError('Failed to create commit', 'commit', {
-          context: { error: error instanceof Error ? error.message : String(error) },
-        })
-      );
+      return failure(GitErrors.unknown('commit', error));
     }
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      if (error.message?.includes('not a git repository')) {
-        return failure(
-          new CommandError('Not a git repository!', 'commit', {
-            suggestions: ['Make sure you are in a git repository directory'],
-          })
-        );
-      }
-
-      if (error.message?.includes('nothing to commit')) {
-        return failure(
-          new CommandError('Nothing to commit', 'commit', {
-            suggestions: ['All changes are already committed'],
-          })
-        );
-      }
+    // Use shared git error detection
+    if (isNotGitRepository(error)) {
+      return failure(GitErrors.notARepository('commit'));
     }
 
-    return failure(
-      new CommandError('Failed to create commit', 'commit', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    if (isNothingToCommitError(error)) {
+      return failure(GitErrors.nothingToCommit('commit'));
+    }
+
+    return failure(GitErrors.unknown('commit', error));
   }
 }
 

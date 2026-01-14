@@ -7,13 +7,23 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
 import type { GitPullOptions } from '@/types/schemas.js';
+import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
-  type Result,
-  success,
-  failure,
-  isFailure,
-  CommandError,
-} from '@/core/errors/index.js';
+  GitErrors,
+  isNotGitRepository,
+  isAuthenticationError,
+  isNetworkError,
+  isConflictError,
+  isNonFastForwardError,
+} from '@/utils/git-errors.js';
+
+/**
+ * Check if error indicates remote branch was deleted
+ */
+function isRemoteBranchDeletedError(error: unknown): boolean {
+  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return errorMessage.includes('no such ref was fetched') || errorMessage.includes('but no such ref was fetched');
+}
 
 /**
  * Execute the pull command logic
@@ -34,14 +44,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
     try {
       await execa('git', ['rev-parse', '--abbrev-ref', '@{u}']);
     } catch {
-      return failure(
-        new CommandError('No upstream branch configured!', 'pull', {
-          suggestions: [
-            `Set an upstream branch first: git branch --set-upstream-to=origin/${branchName} ${branchName}`,
-            `Or push with upstream: neo git push -u ${branchName}`,
-          ],
-        })
-      );
+      return failure(GitErrors.noUpstream('pull', branchName));
     }
 
     spinner.start();
@@ -82,21 +85,8 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
 
       return success(undefined);
     } catch (error: unknown) {
-      const stderr = (error as { stderr?: string }).stderr ?? '';
-      const shortMessage = (error as { shortMessage?: string }).shortMessage ?? '';
-      const combinedMessage = `${
-        error instanceof Error ? error.message : String(error)
-      } ${stderr} ${shortMessage}`.toLowerCase();
-
-      const diverged =
-        combinedMessage.includes('divergent') ||
-        combinedMessage.includes('diverging') ||
-        combinedMessage.includes('fast-forward') ||
-        combinedMessage.includes('pull.ff') ||
-        combinedMessage.includes('non-fast-forward') ||
-        combinedMessage.includes('not possible to fast-forward');
-
-      if (diverged) {
+      // Check for diverged branches
+      if (isNonFastForwardError(error)) {
         spinner.stop();
         return handleDivergedPull(branchName, options);
       }
@@ -106,60 +96,28 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
   } catch (error: unknown) {
     spinner.stop();
 
-    if (error instanceof Error) {
-      const errorMessage = error.message;
-
-      if (errorMessage.includes('not a git repository')) {
-        return failure(
-          new CommandError('Not a git repository!', 'pull', {
-            suggestions: ['Make sure you are in a git repository directory'],
-          })
-        );
-      }
-
-      // Handle deleted remote branch
-      if (
-        errorMessage.includes('no such ref was fetched') ||
-        errorMessage.includes('but no such ref was fetched')
-      ) {
-        return handleDeletedRemoteBranch(branchName);
-      }
-
-      if (errorMessage.includes('conflict')) {
-        return failure(
-          new CommandError('Merge conflicts detected!', 'pull', {
-            suggestions: [
-              'Fix conflicts in your editor',
-              'Stage resolved files: git add <files>',
-              'Continue rebase: git rebase --continue',
-              'Or abort the rebase: git rebase --abort',
-            ],
-          })
-        );
-      }
-
-      if (errorMessage.includes('authentication') || errorMessage.includes('permission')) {
-        return failure(
-          new CommandError('Authentication failed!', 'pull', {
-            suggestions: ['Check your git credentials or SSH keys'],
-          })
-        );
-      }
-
-      if (errorMessage.includes('Could not resolve host')) {
-        return failure(
-          new CommandError('Network error!', 'pull', {
-            suggestions: ['Check your internet connection'],
-          })
-        );
-      }
+    // Use shared git error detection
+    if (isNotGitRepository(error)) {
+      return failure(GitErrors.notARepository('pull'));
     }
 
-    return failure(
-      new CommandError('Failed to pull from remote', 'pull', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    if (isRemoteBranchDeletedError(error)) {
+      return handleDeletedRemoteBranch(branchName);
+    }
+
+    if (isConflictError(error)) {
+      return failure(GitErrors.mergeConflict('pull'));
+    }
+
+    if (isAuthenticationError(error)) {
+      return failure(GitErrors.authenticationFailed('pull'));
+    }
+
+    if (isNetworkError(error)) {
+      return failure(GitErrors.networkError('pull'));
+    }
+
+    return failure(GitErrors.unknown('pull', error));
   }
 }
 
@@ -209,25 +167,10 @@ async function handleDivergedPull(
       return success(undefined);
     } catch (error) {
       rebaseSpinner.stop();
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.toLowerCase().includes('conflict')) {
-        return failure(
-          new CommandError('Rebase hit conflicts.', 'pull', {
-            suggestions: [
-              'Fix conflicts in your editor',
-              'Stage resolved files: git add <files>',
-              'Continue rebase: git rebase --continue',
-              'Or abort the rebase: git rebase --abort',
-            ],
-          })
-        );
+      if (isConflictError(error)) {
+        return failure(GitErrors.rebaseConflict('pull'));
       }
-
-      return failure(
-        new CommandError('Rebase pull failed.', 'pull', {
-          context: { error: message },
-        })
-      );
+      return failure(GitErrors.unknown('pull', error));
     }
   }
 
@@ -259,29 +202,15 @@ async function handleDivergedPull(
     } catch (error) {
       fetchSpinner.stop();
       mergeSpinner.stop();
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.toLowerCase().includes('conflict')) {
-        return failure(
-          new CommandError('Merge produced conflicts.', 'pull', {
-            suggestions: [
-              'Fix conflicts in your editor',
-              'Stage resolved files: git add <files>',
-              'Commit the merge: git commit',
-            ],
-          })
-        );
+      if (isConflictError(error)) {
+        return failure(GitErrors.mergeConflict('pull'));
       }
-
-      return failure(
-        new CommandError('Merge pull failed.', 'pull', {
-          context: { error: message },
-        })
-      );
+      return failure(GitErrors.unknown('pull', error));
     }
   }
 
   ui.info('Pull cancelled. No changes were applied.');
-  return failure(new CommandError('Pull cancelled by user', 'pull'));
+  return failure(GitErrors.unknown('pull'));
 }
 
 /**
@@ -376,11 +305,7 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<void>> 
 
     return success(undefined);
   } catch (error) {
-    return failure(
-      new CommandError('Failed to switch branches or delete branch', 'pull', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    return failure(GitErrors.unknown('pull', error));
   }
 }
 
@@ -400,11 +325,7 @@ async function switchToMain(branchName: string): Promise<Result<void>> {
 
     return success(undefined);
   } catch (error) {
-    return failure(
-      new CommandError('Failed to switch to main branch', 'pull', {
-        context: { error: error instanceof Error ? error.message : String(error) },
-      })
-    );
+    return failure(GitErrors.unknown('pull', error));
   }
 }
 
@@ -421,18 +342,9 @@ async function setNewUpstream(branchName: string): Promise<Result<void>> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('does not exist')) {
-      return failure(
-        new CommandError(`Remote branch origin/${branchName} does not exist`, 'pull', {
-          suggestions: [`You may need to push your branch first: git push -u origin ${branchName}`],
-        })
-      );
+      return failure(GitErrors.noUpstream('pull', branchName));
     }
-
-    return failure(
-      new CommandError('Failed to set upstream branch', 'pull', {
-        context: { error: errorMessage },
-      })
-    );
+    return failure(GitErrors.unknown('pull', error));
   }
 }
 
