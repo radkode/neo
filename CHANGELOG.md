@@ -1,5 +1,24 @@
 # @radkode/neo
 
+## 0.12.0
+
+### Minor Changes
+
+- [#65](https://github.com/radkode/neo/pull/65) [`73a96b1`](https://github.com/radkode/neo/commit/73a96b1e72f7169fef3a5b6fd241375f14ce98be) Thanks [@jacekradko](https://github.com/jacekradko)! - Implement ILogger interface in logger.ts
+  - Logger class now implements the ILogger interface from core/interfaces
+  - Added setLevel/getLevel methods for proper log level management
+  - Added optional context parameter to debug, info, warn, error, success methods
+  - Log messages are now filtered based on the configured log level
+  - Maintained backwards compatibility with setVerbose method
+
+- [#67](https://github.com/radkode/neo/pull/67) [`93d8091`](https://github.com/radkode/neo/commit/93d8091f752f9b5b5a9832b3e121a2c559d031eb) Thanks [@jacekradko](https://github.com/jacekradko)! - Adopt Result<T> pattern and shared git error utilities
+  - Refactored git/push, git/pull, git/commit, git/branch to return Result<void>
+  - Commands now use `success()` and `failure()` helpers from core/errors
+  - Replaced direct `process.exit()` calls with Result-based error handling
+  - Added shared `git-errors.ts` utility module with GitError class and error detection
+  - Extracted common error patterns (not a repo, auth, network, conflicts, etc.)
+  - Consistent error reporting with suggestions across all git commands
+
 ## 0.11.6
 
 ### Patch Changes
