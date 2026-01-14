@@ -6,6 +6,13 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitBranchOptionsSchema } from '@/types/schemas.js';
 import type { GitBranchOptions } from '@/types/schemas.js';
+import {
+  type Result,
+  success,
+  failure,
+  isFailure,
+  CommandError,
+} from '@/core/errors/index.js';
 
 /**
  * Interface for branch information
@@ -33,89 +40,70 @@ interface BranchAnalysis {
 }
 
 /**
- * Create the git branch command
- *
- * This command analyzes local git branches to identify which have remote tracking
- * and provides an interactive interface to clean up branches without tracking.
- *
- * @returns Command instance for git branch
+ * Execute the branch command logic
+ * Returns a Result indicating success or failure
  */
-export function createBranchCommand(): Command {
-  const command = new Command('branch');
+export async function executeBranch(options: GitBranchOptions): Promise<Result<void>> {
+  const spinner = ui.spinner('Analyzing local branches');
+  spinner.start();
 
-  command
-    .description('Analyze and manage local git branches')
-    .option('--dry-run', 'show what would be deleted without actually deleting')
-    .option('--force', 'force delete branches without confirmation prompts')
-    .action(async (options: unknown) => {
-      // Validate options
-      let validatedOptions: GitBranchOptions;
-      try {
-        validatedOptions = validate(gitBranchOptionsSchema, options, 'git branch options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
+  try {
+    // Verify we're in a git repository
+    await verifyGitRepository();
+
+    // Analyze all local branches
+    const analysis = await analyzeBranches();
+    spinner.succeed(`Found ${analysis.totalBranches} local branches`);
+
+    // Display branch analysis summary
+    displayBranchSummary(analysis);
+
+    // If no cleanup candidates, nothing to clean up
+    if (analysis.cleanupCandidates.length === 0) {
+      ui.success(
+        'All branches are either protected or have active remote tracking - nothing to clean up!'
+      );
+      return success(undefined);
+    }
+
+    // Show branches that could be deleted
+    displayCleanupCandidates(analysis);
+
+    // Handle dry run mode
+    if (options.dryRun) {
+      ui.warn('Dry run mode - no branches will be deleted');
+      return success(undefined);
+    }
+
+    // Interactive cleanup prompt
+    return interactiveBranchCleanup(analysis.cleanupCandidates, options.force);
+  } catch (error: unknown) {
+    spinner.fail('Failed to analyze branches');
+
+    if (error instanceof Error) {
+      if (error.message.includes('not a git repository')) {
+        return failure(
+          new CommandError('Not a git repository!', 'branch', {
+            suggestions: ['Make sure you are in a git repository directory'],
+          })
+        );
       }
 
-      const spinner = ui.spinner('Analyzing local branches');
-      spinner.start();
-
-      try {
-        // Verify we're in a git repository
-        await verifyGitRepository();
-
-        // Analyze all local branches
-        const analysis = await analyzeBranches();
-        spinner.succeed(`Found ${analysis.totalBranches} local branches`);
-
-        // Display branch analysis summary
-        displayBranchSummary(analysis);
-
-        // If no cleanup candidates, nothing to clean up
-        if (analysis.cleanupCandidates.length === 0) {
-          ui.success(
-            'All branches are either protected or have active remote tracking - nothing to clean up!'
-          );
-          return;
-        }
-
-        // Show branches that could be deleted
-        displayCleanupCandidates(analysis);
-
-        // Handle dry run mode
-        if (validatedOptions.dryRun) {
-          ui.warn('Dry run mode - no branches will be deleted');
-          return;
-        }
-
-        // Interactive cleanup prompt
-        await interactiveBranchCleanup(analysis.cleanupCandidates, validatedOptions.force);
-      } catch (error: unknown) {
-        spinner.fail('Failed to analyze branches');
-
-        if (error instanceof Error) {
-          if (error.message.includes('not a git repository')) {
-            ui.error('Not a git repository!');
-            ui.warn('Make sure you are in a git repository directory');
-            process.exit(1);
-          }
-
-          if (error.message.includes('no branches found')) {
-            ui.error('No local branches found!');
-            ui.warn('This repository appears to have no local branches');
-            process.exit(1);
-          }
-        }
-
-        ui.error('An unexpected error occurred');
-        ui.muted(error instanceof Error ? error.message : String(error));
-        process.exit(1);
+      if (error.message.includes('no branches found')) {
+        return failure(
+          new CommandError('No local branches found!', 'branch', {
+            suggestions: ['This repository appears to have no local branches'],
+          })
+        );
       }
-    });
+    }
 
-  return command;
+    return failure(
+      new CommandError('An unexpected error occurred', 'branch', {
+        context: { error: error instanceof Error ? error.message : String(error) },
+      })
+    );
+  }
 }
 
 /**
@@ -320,7 +308,7 @@ function displayCleanupCandidates(analysis: BranchAnalysis): void {
 async function interactiveBranchCleanup(
   cleanupCandidates: BranchInfo[],
   forceMode: boolean = false
-): Promise<void> {
+): Promise<Result<void>> {
   const { action } = await inquirer.prompt([
     {
       choices: [
@@ -348,15 +336,15 @@ async function interactiveBranchCleanup(
 
   switch (action) {
     case 'delete_all':
-      await deleteBranches(cleanupCandidates, forceMode);
-      break;
+      return deleteBranches(cleanupCandidates, forceMode);
     case 'delete_selected':
-      await selectAndDeleteBranches(cleanupCandidates, forceMode);
-      break;
+      return selectAndDeleteBranches(cleanupCandidates, forceMode);
     case 'cancel':
       ui.muted('Operation cancelled. No branches were deleted.');
-      return;
+      return success(undefined);
   }
+
+  return success(undefined);
 }
 
 /**
@@ -365,7 +353,7 @@ async function interactiveBranchCleanup(
 async function selectAndDeleteBranches(
   cleanupCandidates: BranchInfo[],
   forceMode: boolean
-): Promise<void> {
+): Promise<Result<void>> {
   const { selectedBranches } = await inquirer.prompt({
     choices: cleanupCandidates.map((b) => ({
       name: `${b.name}${b.isRemoteDeleted ? ' (deleted remote)' : ' (no remote)'}`,
@@ -384,16 +372,16 @@ async function selectAndDeleteBranches(
   });
 
   const branchesToDelete = cleanupCandidates.filter((b) => selectedBranches.includes(b.name));
-  await deleteBranches(branchesToDelete, forceMode);
+  return deleteBranches(branchesToDelete, forceMode);
 }
 
 /**
  * Delete the specified branches
  */
-async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promise<void> {
+async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promise<Result<void>> {
   if (branches.length === 0) {
     ui.info('No branches selected for deletion');
-    return;
+    return success(undefined);
   }
 
   // Final confirmation unless in force mode
@@ -409,7 +397,7 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
 
     if (!confirm) {
       ui.muted('Operation cancelled. No branches were deleted.');
-      return;
+      return success(undefined);
     }
   }
 
@@ -483,6 +471,8 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
 
   // Display summary
   displayDeletionSummary(results);
+
+  return success(undefined);
 }
 
 /**
@@ -649,4 +639,44 @@ function displayDeletionSummary(results: {
     console.log('');
     ui.success('Branch cleanup completed!');
   }
+}
+
+/**
+ * Create the git branch command
+ */
+export function createBranchCommand(): Command {
+  const command = new Command('branch');
+
+  command
+    .description('Analyze and manage local git branches')
+    .option('--dry-run', 'show what would be deleted without actually deleting')
+    .option('--force', 'force delete branches without confirmation prompts')
+    .action(async (options: unknown) => {
+      // Validate options
+      let validatedOptions: GitBranchOptions;
+      try {
+        validatedOptions = validate(gitBranchOptionsSchema, options, 'git branch options');
+      } catch (error) {
+        if (isValidationError(error)) {
+          process.exit(1);
+        }
+        throw error;
+      }
+
+      const result = await executeBranch(validatedOptions);
+
+      if (isFailure(result)) {
+        ui.error(result.error.message);
+        if (result.error.suggestions && result.error.suggestions.length > 0) {
+          ui.warn('Suggestions:');
+          ui.list(result.error.suggestions);
+        }
+        if (result.error.context?.['error']) {
+          ui.muted(String(result.error.context['error']));
+        }
+        process.exit(1);
+      }
+    });
+
+  return command;
 }

@@ -95,7 +95,8 @@ describe('git push command', () => {
         args[2] === 'feature/diverge'
     );
     expect(pushCalls.length).toBeGreaterThanOrEqual(1);
-    expect(exitMock).toHaveBeenCalledWith(0);
+    // With Result pattern, successful commands don't call process.exit()
+    expect(exitMock).not.toHaveBeenCalledWith(1);
   });
 
   it('force pushes when remote is ahead and user selects force', async () => {
@@ -119,6 +120,7 @@ describe('git push command', () => {
           Array.isArray(args) && args.join(' ') === 'push --force origin feature/diverge'
       )
     ).toBeTruthy();
-    expect(exitMock).toHaveBeenCalledWith(0);
+    // With Result pattern, successful commands don't call process.exit()
+    expect(exitMock).not.toHaveBeenCalledWith(1);
   });
 });

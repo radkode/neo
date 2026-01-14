@@ -466,3 +466,49 @@ export class ErrorHandler {
 
 // Export a singleton error handler
 export const errorHandler = new ErrorHandler();
+
+/**
+ * Handle a command result by displaying errors and exiting appropriately
+ * This provides a bridge between Result-returning functions and the CLI
+ */
+export function handleCommandResult(result: Result<void>): void {
+  if (isSuccess(result)) {
+    return;
+  }
+
+  // Import ui dynamically to avoid circular dependencies
+  import('@/utils/ui.js').then(({ ui }) => {
+    const error = result.error;
+    ui.error(error.message);
+
+    if (error.suggestions && error.suggestions.length > 0) {
+      ui.warn('Suggestions:');
+      ui.list(error.suggestions);
+    }
+
+    process.exit(1);
+  });
+}
+
+/**
+ * Synchronous version of handleCommandResult for use in async command handlers
+ * Uses pre-imported ui module
+ */
+export function handleCommandResultSync(
+  result: Result<void>,
+  ui: { error: (msg: string) => void; warn: (msg: string) => void; list: (items: string[]) => void }
+): void {
+  if (isSuccess(result)) {
+    return;
+  }
+
+  const error = result.error;
+  ui.error(error.message);
+
+  if (error.suggestions && error.suggestions.length > 0) {
+    ui.warn('Suggestions:');
+    ui.list(error.suggestions);
+  }
+
+  process.exit(1);
+}

@@ -5,6 +5,13 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitCommitOptionsSchema } from '@/types/schemas.js';
 import type { GitCommitOptions, CommitType } from '@/types/schemas.js';
+import {
+  type Result,
+  success,
+  failure,
+  isFailure,
+  CommandError,
+} from '@/core/errors/index.js';
 
 /**
  * Commit type descriptions for the interactive wizard
@@ -77,6 +84,225 @@ async function getStagedFiles(): Promise<string[]> {
 }
 
 /**
+ * Execute the commit command logic
+ * Returns a Result indicating success or failure
+ */
+export async function executeCommit(options: GitCommitOptions): Promise<Result<void>> {
+  try {
+    // Check if we're in a git repository
+    await execa('git', ['rev-parse', '--git-dir']);
+
+    // Stage all files if --all flag is provided
+    if (options.all) {
+      const spinner = ui.spinner('Staging modified files');
+      spinner.start();
+      try {
+        await execa('git', ['add', '-u']);
+        spinner.succeed('Staged all modified files');
+      } catch (error) {
+        spinner.fail('Failed to stage files');
+        return failure(
+          new CommandError('Failed to stage files', 'commit', {
+            context: { error: error instanceof Error ? error.message : String(error) },
+          })
+        );
+      }
+    }
+
+    // Check for staged changes
+    const hasStaged = await hasStagedChanges();
+    if (!hasStaged) {
+      return failure(
+        new CommandError('No files staged for commit', 'commit', {
+          suggestions: [
+            'Stage specific files: git add <file>',
+            'Stage all changes: git add .',
+            'Use --all flag: neo git commit --all',
+          ],
+        })
+      );
+    }
+
+    // Show staged files
+    const stagedFiles = await getStagedFiles();
+    ui.section('Staged Files');
+    ui.list(stagedFiles.slice(0, 10));
+    if (stagedFiles.length > 10) {
+      ui.muted(`... and ${stagedFiles.length - 10} more files`);
+    }
+    console.log('');
+
+    let commitType: CommitType;
+    let commitScope: string | undefined;
+    let commitMessage: string;
+    let commitBody: string | undefined;
+    let isBreaking: boolean;
+
+    // Check if we're in quick mode (all options provided)
+    const quickMode =
+      options.type !== undefined && options.message !== undefined;
+
+    if (quickMode) {
+      // Quick commit mode with CLI options
+      commitType = options.type!;
+      commitScope = options.scope;
+      commitMessage = options.message!;
+      commitBody = options.body;
+      isBreaking = options.breaking || false;
+    } else {
+      // Interactive mode
+      ui.section('Conventional Commit Wizard');
+
+      const answers = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'type',
+          message: 'Select the type of change:',
+          choices: Object.entries(COMMIT_TYPE_DESCRIPTIONS).map(([value, description]) => ({
+            name: `${value.padEnd(10)} - ${description}`,
+            value,
+            short: value,
+          })),
+          default: options.type,
+        },
+        {
+          type: 'input',
+          name: 'scope',
+          message: 'Scope of the change (optional, lowercase):',
+          default: options.scope,
+          validate: (input: string) => {
+            if (!input) return true; // Optional
+            if (!/^[a-z][a-z0-9-]*$/.test(input)) {
+              return 'Scope must be lowercase and alphanumeric with hyphens';
+            }
+            return true;
+          },
+        },
+        {
+          type: 'input',
+          name: 'message',
+          message: 'Short description (max 100 chars):',
+          default: options.message,
+          validate: (input: string) => {
+            if (!input || input.trim().length === 0) {
+              return 'Message is required';
+            }
+            if (input.length > 100) {
+              return 'Message too long (max 100 characters)';
+            }
+            return true;
+          },
+        },
+        {
+          type: 'input',
+          name: 'body',
+          message: 'Longer description (optional, press Enter to skip):',
+          default: options.body,
+        },
+        {
+          type: 'confirm',
+          name: 'breaking',
+          message: 'Is this a breaking change?',
+          default: options.breaking || false,
+        },
+      ]);
+
+      commitType = answers.type as CommitType;
+      commitScope = answers.scope || undefined;
+      commitMessage = answers.message;
+      commitBody = answers.body || undefined;
+      isBreaking = answers.breaking;
+    }
+
+    // Format the commit message
+    const formattedMessage = formatCommitMessage(
+      commitType,
+      commitScope,
+      commitMessage,
+      commitBody,
+      isBreaking
+    );
+
+    // Show preview
+    console.log('');
+    ui.section('Commit Preview');
+    ui.keyValue([
+      ['Type', commitType],
+      ['Scope', commitScope || '(none)'],
+      ['Breaking', isBreaking ? 'Yes' : 'No'],
+    ]);
+    console.log('');
+    ui.highlight('Full commit message:');
+    console.log('');
+    ui.muted(formattedMessage);
+    console.log('');
+
+    // Confirm commit
+    if (!quickMode) {
+      const { confirm } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirm',
+          message: 'Create this commit?',
+          default: true,
+        },
+      ]);
+
+      if (!confirm) {
+        ui.warn('Commit cancelled');
+        return success(undefined);
+      }
+    }
+
+    // Create the commit
+    const spinner = ui.spinner('Creating commit');
+    spinner.start();
+
+    try {
+      await execa('git', ['commit', '-m', formattedMessage]);
+      spinner.succeed('Commit created successfully!');
+
+      // Show commit hash
+      const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
+      ui.info(`Commit: ${commitHash.trim()}`);
+
+      return success(undefined);
+    } catch (error) {
+      spinner.fail('Failed to create commit');
+      return failure(
+        new CommandError('Failed to create commit', 'commit', {
+          context: { error: error instanceof Error ? error.message : String(error) },
+        })
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message?.includes('not a git repository')) {
+        return failure(
+          new CommandError('Not a git repository!', 'commit', {
+            suggestions: ['Make sure you are in a git repository directory'],
+          })
+        );
+      }
+
+      if (error.message?.includes('nothing to commit')) {
+        return failure(
+          new CommandError('Nothing to commit', 'commit', {
+            suggestions: ['All changes are already committed'],
+          })
+        );
+      }
+    }
+
+    return failure(
+      new CommandError('Failed to create commit', 'commit', {
+        context: { error: error instanceof Error ? error.message : String(error) },
+      })
+    );
+  }
+}
+
+/**
  * Create the git commit command
  */
 export function createCommitCommand(): Command {
@@ -102,199 +328,17 @@ export function createCommitCommand(): Command {
         throw error;
       }
 
-      try {
-        // Check if we're in a git repository
-        await execa('git', ['rev-parse', '--git-dir']);
+      const result = await executeCommit(validatedOptions);
 
-        // Stage all files if --all flag is provided
-        if (validatedOptions.all) {
-          const spinner = ui.spinner('Staging modified files');
-          spinner.start();
-          try {
-            await execa('git', ['add', '-u']);
-            spinner.succeed('Staged all modified files');
-          } catch (error) {
-            spinner.fail('Failed to stage files');
-            throw error;
-          }
+      if (isFailure(result)) {
+        ui.error(result.error.message);
+        if (result.error.suggestions && result.error.suggestions.length > 0) {
+          ui.warn('Suggestions:');
+          ui.list(result.error.suggestions);
         }
-
-        // Check for staged changes
-        const hasStaged = await hasStagedChanges();
-        if (!hasStaged) {
-          ui.warn('No files staged for commit');
-          ui.info('Stage files before committing:');
-          ui.list([
-            'Stage specific files: git add <file>',
-            'Stage all changes: git add .',
-            'Use --all flag: neo git commit --all',
-          ]);
-          process.exit(1);
+        if (result.error.context?.['error']) {
+          ui.muted(String(result.error.context['error']));
         }
-
-        // Show staged files
-        const stagedFiles = await getStagedFiles();
-        ui.section('Staged Files');
-        ui.list(stagedFiles.slice(0, 10));
-        if (stagedFiles.length > 10) {
-          ui.muted(`... and ${stagedFiles.length - 10} more files`);
-        }
-        console.log('');
-
-        let commitType: CommitType;
-        let commitScope: string | undefined;
-        let commitMessage: string;
-        let commitBody: string | undefined;
-        let isBreaking: boolean;
-
-        // Check if we're in quick mode (all options provided)
-        const quickMode =
-          validatedOptions.type !== undefined && validatedOptions.message !== undefined;
-
-        if (quickMode) {
-          // Quick commit mode with CLI options
-          commitType = validatedOptions.type!;
-          commitScope = validatedOptions.scope;
-          commitMessage = validatedOptions.message!;
-          commitBody = validatedOptions.body;
-          isBreaking = validatedOptions.breaking || false;
-        } else {
-          // Interactive mode
-          ui.section('Conventional Commit Wizard');
-
-          const answers = await inquirer.prompt([
-            {
-              type: 'list',
-              name: 'type',
-              message: 'Select the type of change:',
-              choices: Object.entries(COMMIT_TYPE_DESCRIPTIONS).map(([value, description]) => ({
-                name: `${value.padEnd(10)} - ${description}`,
-                value,
-                short: value,
-              })),
-              default: validatedOptions.type,
-            },
-            {
-              type: 'input',
-              name: 'scope',
-              message: 'Scope of the change (optional, lowercase):',
-              default: validatedOptions.scope,
-              validate: (input: string) => {
-                if (!input) return true; // Optional
-                if (!/^[a-z][a-z0-9-]*$/.test(input)) {
-                  return 'Scope must be lowercase and alphanumeric with hyphens';
-                }
-                return true;
-              },
-            },
-            {
-              type: 'input',
-              name: 'message',
-              message: 'Short description (max 100 chars):',
-              default: validatedOptions.message,
-              validate: (input: string) => {
-                if (!input || input.trim().length === 0) {
-                  return 'Message is required';
-                }
-                if (input.length > 100) {
-                  return 'Message too long (max 100 characters)';
-                }
-                return true;
-              },
-            },
-            {
-              type: 'input',
-              name: 'body',
-              message: 'Longer description (optional, press Enter to skip):',
-              default: validatedOptions.body,
-            },
-            {
-              type: 'confirm',
-              name: 'breaking',
-              message: 'Is this a breaking change?',
-              default: validatedOptions.breaking || false,
-            },
-          ]);
-
-          commitType = answers.type as CommitType;
-          commitScope = answers.scope || undefined;
-          commitMessage = answers.message;
-          commitBody = answers.body || undefined;
-          isBreaking = answers.breaking;
-        }
-
-        // Format the commit message
-        const formattedMessage = formatCommitMessage(
-          commitType,
-          commitScope,
-          commitMessage,
-          commitBody,
-          isBreaking
-        );
-
-        // Show preview
-        console.log('');
-        ui.section('Commit Preview');
-        ui.keyValue([
-          ['Type', commitType],
-          ['Scope', commitScope || '(none)'],
-          ['Breaking', isBreaking ? 'Yes' : 'No'],
-        ]);
-        console.log('');
-        ui.highlight('Full commit message:');
-        console.log('');
-        ui.muted(formattedMessage);
-        console.log('');
-
-        // Confirm commit
-        if (!quickMode) {
-          const { confirm } = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'confirm',
-              message: 'Create this commit?',
-              default: true,
-            },
-          ]);
-
-          if (!confirm) {
-            ui.warn('Commit cancelled');
-            process.exit(0);
-          }
-        }
-
-        // Create the commit
-        const spinner = ui.spinner('Creating commit');
-        spinner.start();
-
-        try {
-          await execa('git', ['commit', '-m', formattedMessage]);
-          spinner.succeed('Commit created successfully!');
-
-          // Show commit hash
-          const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
-          ui.info(`Commit: ${commitHash.trim()}`);
-        } catch (error) {
-          spinner.fail('Failed to create commit');
-          throw error;
-        }
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          if (error.message?.includes('not a git repository')) {
-            ui.error('Not a git repository!');
-            ui.warn('Make sure you are in a git repository directory');
-            process.exit(1);
-          }
-
-          if (error.message?.includes('nothing to commit')) {
-            ui.error('Nothing to commit');
-            ui.warn('All changes are already committed');
-            process.exit(1);
-          }
-        }
-
-        ui.error('Failed to create commit');
-        ui.muted(error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
