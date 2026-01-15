@@ -147,13 +147,13 @@ async function addContext(content: ContextContent, options: AgentContextAddOptio
 
   try {
     const db = await ContextDB.create(dbPath);
-    const contextItem = await db.addContext({
+    const contextItem = db.addContext({
       content,
       tags: options.tag || [],
       priority: options.priority || 'medium',
     });
 
-    await db.close();
+    db.close();
     spinner.succeed('Context added successfully');
 
     // Display the added context
@@ -190,9 +190,9 @@ async function listContexts(options: AgentContextListOptions): Promise<void> {
     if (options.tag) filters.tag = options.tag;
     if (options.priority) filters.priority = options.priority;
 
-    const contexts = await db.listContexts(filters);
-    const stats = await db.getStats();
-    await db.close();
+    const contexts = db.listContexts(filters);
+    const stats = db.getStats();
+    db.close();
 
     spinner.succeed('Contexts loaded');
 
@@ -252,9 +252,9 @@ async function removeContext(id: ContextId): Promise<void> {
     const db = await ContextDB.create(dbPath);
 
     // Find the context first
-    const context = await db.getContext(id);
+    const context = db.getContext(id);
     if (!context) {
-      await db.close();
+      db.close();
       ui.error('Context not found');
       ui.muted(`No context found with ID: ${id}`);
       process.exit(1);
@@ -281,7 +281,7 @@ async function removeContext(id: ContextId): Promise<void> {
     ]);
 
     if (!confirmed) {
-      await db.close();
+      db.close();
       ui.info('Context removal cancelled');
       return;
     }
@@ -289,8 +289,8 @@ async function removeContext(id: ContextId): Promise<void> {
     const spinner = ui.spinner('Removing context');
     spinner.start();
 
-    const removed = await db.removeContext(id);
-    await db.close();
+    const removed = db.removeContext(id);
+    db.close();
 
     if (removed) {
       spinner.succeed('Context removed successfully');

@@ -75,8 +75,8 @@ async function initializeAgent(options: AgentInitOptions): Promise<void> {
     const db = await ContextDB.create(dbPath);
 
     // Test database connection
-    const stats = await db.getStats();
-    await db.close();
+    const stats = db.getStats();
+    db.close();
 
     // Create configuration
     spinner.text = 'Creating configuration';
