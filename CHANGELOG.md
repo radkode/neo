@@ -1,5 +1,34 @@
 # @radkode/neo
 
+## 0.13.0
+
+### Minor Changes
+
+- [#71](https://github.com/radkode/neo/pull/71) [`23b4c1b`](https://github.com/radkode/neo/commit/23b4c1bbe14549ab08c9129a2541b70ed4bb45e0) Thanks [@jacekradko](https://github.com/jacekradko)! - Add interactive git stash management commands
+
+  New commands:
+  - `neo git stash` - Save changes to stash with interactive naming
+  - `neo git stash list` - List stashes with interactive selection
+  - `neo git stash show [n]` - Show stash contents with optional diff
+  - `neo git stash apply [n]` - Apply stash with conflict detection
+  - `neo git stash pop [n]` - Apply and remove stash
+  - `neo git stash drop [n]` - Remove stash with confirmation
+
+  Features:
+  - Visual stash list with timestamps and branch info
+  - Interactive selection for all operations
+  - Conflict detection before applying
+  - Confirmation prompts for destructive operations
+  - Support for untracked files and keep-index options
+
+### Patch Changes
+
+- [#69](https://github.com/radkode/neo/pull/69) [`fd65a4f`](https://github.com/radkode/neo/commit/fd65a4f6b78ca01289059ca7c51a54d0d11d3a4b) Thanks [@jacekradko](https://github.com/jacekradko)! - Refactor ContextDB to use async factory pattern with sync methods
+  - Made constructor private, moved initialization to static `create()` factory
+  - Converted all DB methods from async to sync (better-sqlite3 is synchronous)
+  - Removed unnecessary `ready` promise and `ensureReady()` calls
+  - Updated all callers to use sync method signatures
+
 ## 0.12.0
 
 ### Minor Changes
