@@ -25,6 +25,9 @@ export enum GitErrorCode {
   NOTHING_TO_COMMIT = 'GIT_NOTHING_TO_COMMIT',
   NO_STAGED_CHANGES = 'GIT_NO_STAGED_CHANGES',
   REMOTE_BRANCH_DELETED = 'GIT_REMOTE_BRANCH_DELETED',
+  STASH_NOT_FOUND = 'GIT_STASH_NOT_FOUND',
+  STASH_APPLY_CONFLICT = 'GIT_STASH_APPLY_CONFLICT',
+  STASH_NOTHING_TO_STASH = 'GIT_STASH_NOTHING_TO_STASH',
   UNKNOWN = 'GIT_UNKNOWN_ERROR',
 }
 
@@ -166,6 +169,35 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
       `Or set a new upstream: git branch --set-upstream-to=origin/${ctx.branchName} ${ctx.branchName}`,
     ],
   },
+  {
+    code: GitErrorCode.STASH_NOT_FOUND,
+    patterns: ['no stash entries found', 'does not exist', 'stash@{', 'log for'],
+    message: 'Stash not found!',
+    getSuggestions: () => [
+      'Use "neo git stash list" to see available stashes',
+      'The stash may have been dropped or applied already',
+    ],
+  },
+  {
+    code: GitErrorCode.STASH_APPLY_CONFLICT,
+    patterns: ['conflict', 'could not apply stash', 'needs merge'],
+    message: 'Conflicts detected when applying stash!',
+    getSuggestions: () => [
+      'Resolve conflicts manually in your editor',
+      'Stage resolved files: git add <files>',
+      'The stash was not dropped - you can retry after resolving',
+    ],
+  },
+  {
+    code: GitErrorCode.STASH_NOTHING_TO_STASH,
+    patterns: ['no local changes to save', 'no changes added to commit but untracked'],
+    message: 'No changes to stash!',
+    getSuggestions: () => [
+      'Make some changes first, then try stashing again',
+      'Use "git status" to see the current state',
+      'Use --include-untracked to stash untracked files',
+    ],
+  },
 ];
 
 /**
@@ -283,6 +315,27 @@ export function isNonFastForwardError(error: unknown): boolean {
 }
 
 /**
+ * Check if error is stash not found error
+ */
+export function isStashNotFoundError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.STASH_NOT_FOUND);
+}
+
+/**
+ * Check if error is stash apply conflict error
+ */
+export function isStashApplyConflictError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.STASH_APPLY_CONFLICT);
+}
+
+/**
+ * Check if error is nothing to stash error
+ */
+export function isNothingToStashError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.STASH_NOTHING_TO_STASH);
+}
+
+/**
  * Create specific git errors with appropriate messages and suggestions
  */
 export const GitErrors = {
@@ -386,5 +439,34 @@ export const GitErrors = {
       options.originalError = error;
     }
     return new GitError(`Git command failed: ${commandName}`, GitErrorCode.UNKNOWN, commandName, options);
+  },
+
+  stashNotFound(commandName: string): GitError {
+    return new GitError('Stash not found!', GitErrorCode.STASH_NOT_FOUND, commandName, {
+      suggestions: [
+        'Use "neo git stash list" to see available stashes',
+        'The stash may have been dropped or applied already',
+      ],
+    });
+  },
+
+  stashApplyConflict(commandName: string): GitError {
+    return new GitError('Conflicts detected when applying stash!', GitErrorCode.STASH_APPLY_CONFLICT, commandName, {
+      suggestions: [
+        'Resolve conflicts manually in your editor',
+        'Stage resolved files: git add <files>',
+        'The stash was not dropped - you can retry after resolving',
+      ],
+    });
+  },
+
+  nothingToStash(commandName: string): GitError {
+    return new GitError('No changes to stash!', GitErrorCode.STASH_NOTHING_TO_STASH, commandName, {
+      suggestions: [
+        'Make some changes first, then try stashing again',
+        'Use "git status" to see the current state',
+        'Use --include-untracked to stash untracked files',
+      ],
+    });
   },
 };

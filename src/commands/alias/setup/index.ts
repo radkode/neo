@@ -13,6 +13,7 @@ interface AliasDefinition {
 const ALIASES: AliasDefinition = Object.freeze({
   gp: 'neo git pull',
   gpu: 'neo git push',
+  gst: 'neo git stash',
 });
 
 /**
@@ -50,7 +51,7 @@ export function createSetupCommand(): Command {
   const command = new Command('setup');
 
   command
-    .description('Setup ZSH aliases for Neo CLI (gp, gpu). Backs up ~/.zshrc before modifying.')
+    .description('Setup ZSH aliases for Neo CLI. Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
     .action(async (options: unknown): Promise<void> => {
       // Validate options
