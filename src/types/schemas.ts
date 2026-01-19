@@ -87,6 +87,7 @@ export const gitCommitOptionsSchema = baseOptionsSchema.extend({
   body: z.string().optional(),
   breaking: z.boolean().optional(),
   all: z.boolean().optional(),
+  ai: z.boolean().optional(),
 });
 
 /**

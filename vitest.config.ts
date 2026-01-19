@@ -12,6 +12,7 @@ export default defineConfig({
       '@/utils': resolve(__dirname, './src/utils'),
       '@/types': resolve(__dirname, './src/types'),
       '@/storage': resolve(__dirname, './src/storage'),
+      '@/services': resolve(__dirname, './src/services'),
       '@/config': resolve(__dirname, './src/config'),
       '@/test': resolve(__dirname, './test'),
       '@/cli': resolve(__dirname, './src/cli.js'),

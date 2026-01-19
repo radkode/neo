@@ -7,6 +7,8 @@ import { gitCommitOptionsSchema } from '@/types/schemas.js';
 import type { GitCommitOptions, CommitType } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
+import { generateCommitMessage, isAICommitAvailable, AIErrors } from '@/services/ai/index.js';
+import type { AICommitResponse } from '@/services/ai/index.js';
 
 /**
  * Commit type descriptions for the interactive wizard
@@ -87,6 +89,87 @@ function isNothingToCommitError(error: unknown): boolean {
 }
 
 /**
+ * Get the staged diff content
+ */
+async function getStagedDiff(): Promise<string> {
+  try {
+    const { stdout } = await execa('git', ['diff', '--cached']);
+    return stdout;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Get recent commit messages for context
+ */
+async function getRecentCommits(count: number = 5): Promise<string[]> {
+  try {
+    const { stdout } = await execa('git', ['log', '--oneline', `-${count}`]);
+    return stdout.trim().split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the current branch name
+ */
+async function getCurrentBranch(): Promise<string> {
+  try {
+    const { stdout } = await execa('git', ['branch', '--show-current']);
+    return stdout.trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * AI commit action choices
+ */
+type AICommitAction = 'commit' | 'edit' | 'regenerate' | 'cancel';
+
+/**
+ * Execute AI-powered commit flow
+ */
+async function executeAICommit(stagedFiles: string[]): Promise<Result<AICommitResponse | null>> {
+  // Check if API key is available
+  if (!isAICommitAvailable()) {
+    return failure(AIErrors.missingApiKey());
+  }
+
+  // Get context for AI
+  const [diff, recentCommits, branchName] = await Promise.all([
+    getStagedDiff(),
+    getRecentCommits(5),
+    getCurrentBranch(),
+  ]);
+
+  if (!diff) {
+    return failure(GitErrors.noStagedChanges('commit'));
+  }
+
+  // Generate commit message with spinner
+  const spinner = ui.spinner('Generating commit message with AI...');
+  spinner.start();
+
+  const result = await generateCommitMessage({
+    diff,
+    recentCommits,
+    branchName,
+    stagedFiles,
+  });
+
+  if (isFailure(result)) {
+    spinner.fail('Failed to generate commit message');
+    return result;
+  }
+
+  spinner.succeed('Generated commit message');
+  return success(result.data);
+}
+
+/**
  * Execute the commit command logic
  * Returns a Result indicating success or failure
  */
@@ -128,6 +211,107 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     let commitMessage: string;
     let commitBody: string | undefined;
     let isBreaking: boolean;
+
+    // AI-powered commit flow
+    if (options.ai) {
+      let aiResponse: AICommitResponse | null = null;
+      let action: AICommitAction = 'regenerate';
+
+      // Loop for regenerate option
+      while (action === 'regenerate') {
+        const aiResult = await executeAICommit(stagedFiles);
+
+        if (isFailure(aiResult)) {
+          return aiResult;
+        }
+
+        aiResponse = aiResult.data;
+        if (!aiResponse) {
+          return failure(GitErrors.unknown('commit', new Error('No AI response')));
+        }
+
+        // Show AI-generated message preview
+        console.log('');
+        ui.section('AI-Generated Commit');
+        const previewMessage = formatCommitMessage(
+          aiResponse.type,
+          aiResponse.scope,
+          aiResponse.message,
+          aiResponse.body,
+          aiResponse.breaking
+        );
+        ui.code(previewMessage);
+        console.log('');
+
+        // Ask what to do
+        const { selectedAction } = await inquirer.prompt([
+          {
+            type: 'list',
+            name: 'selectedAction',
+            message: 'What would you like to do?',
+            choices: [
+              { name: 'Commit with this message', value: 'commit' },
+              { name: 'Edit in wizard', value: 'edit' },
+              { name: 'Regenerate', value: 'regenerate' },
+              { name: 'Cancel', value: 'cancel' },
+            ],
+          },
+        ]);
+
+        action = selectedAction as AICommitAction;
+      }
+
+      if (action === 'cancel') {
+        ui.warn('Commit cancelled');
+        return success(undefined);
+      }
+
+      if (action === 'commit' && aiResponse) {
+        // Commit directly with AI-generated message
+        commitType = aiResponse.type;
+        commitScope = aiResponse.scope;
+        commitMessage = aiResponse.message;
+        commitBody = aiResponse.body;
+        isBreaking = aiResponse.breaking;
+
+        // Format and create commit
+        const formattedMessage = formatCommitMessage(
+          commitType,
+          commitScope,
+          commitMessage,
+          commitBody,
+          isBreaking
+        );
+
+        const spinner = ui.spinner('Creating commit');
+        spinner.start();
+
+        try {
+          await execa('git', ['commit', '-m', formattedMessage]);
+          spinner.succeed('Commit created successfully!');
+
+          const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
+          ui.info(`Commit: ${commitHash.trim()}`);
+
+          return success(undefined);
+        } catch (error) {
+          spinner.fail('Failed to create commit');
+          return failure(GitErrors.unknown('commit', error));
+        }
+      }
+
+      // action === 'edit' - Fall through to interactive mode with AI values pre-filled
+      if (aiResponse) {
+        options = {
+          ...options,
+          type: aiResponse.type,
+          scope: aiResponse.scope,
+          message: aiResponse.message,
+          body: aiResponse.body,
+          breaking: aiResponse.breaking,
+        };
+      }
+    }
 
     // Check if we're in quick mode (all options provided)
     const quickMode =
@@ -290,6 +474,7 @@ export function createCommitCommand(): Command {
     .option('-b, --body <body>', 'commit body (optional)')
     .option('--breaking', 'mark as breaking change')
     .option('-a, --all', 'automatically stage all modified files')
+    .option('--ai', 'generate commit message using AI')
     .action(async (options: unknown) => {
       // Validate options
       let validatedOptions: GitCommitOptions;

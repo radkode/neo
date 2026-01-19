@@ -33,6 +33,16 @@ describe('git commit command', () => {
       expect(helpText).toContain('--body');
       expect(helpText).toContain('--breaking');
       expect(helpText).toContain('--all');
+      expect(helpText).toContain('--ai');
+    });
+
+    it('should have --ai option for AI-powered commit messages', async () => {
+      const { createCommitCommand } = await import('../../../src/commands/git/commit/index.js');
+      const command = createCommitCommand();
+
+      const helpText = command.helpInformation();
+      expect(helpText).toContain('--ai');
+      expect(helpText).toContain('generate commit message using AI');
     });
   });
 
@@ -148,6 +158,10 @@ describe('git commit command', () => {
         all: false,
       };
       expect(gitCommitOptionsSchema.parse(allOptions)).toEqual(allOptions);
+
+      // Test with ai option
+      const withAi = { ai: true };
+      expect(gitCommitOptionsSchema.parse(withAi)).toEqual(withAi);
     });
 
     it('should reject invalid option types', async () => {

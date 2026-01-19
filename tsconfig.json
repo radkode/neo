@@ -59,6 +59,7 @@
       "@/utils/*": ["src/utils/*"],
       "@/types/*": ["src/types/*"],
       "@/storage/*": ["src/storage/*"],
+      "@/services/*": ["src/services/*"],
       "@/config/*": ["src/config/*"],
       "@/test/*": ["test/*"],
       "@/cli": ["src/cli.js"],
