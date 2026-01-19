@@ -1,5 +1,15 @@
 # @radkode/neo
 
+## 0.14.0
+
+### Minor Changes
+
+- [#72](https://github.com/radkode/neo/pull/72) [`640ea39`](https://github.com/radkode/neo/commit/640ea39950b4bcc4b7d4c837606774401ba37921) Thanks [@jacekradko](https://github.com/jacekradko)! - Add AI-powered commit message generation with `neo git commit --ai`
+  - Generates conventional commit messages using Claude API (claude-3-haiku)
+  - Analyzes staged diff and repository context (recent commits, branch name)
+  - Shows preview with options to commit, edit in wizard, regenerate, or cancel
+  - Requires ANTHROPIC_API_KEY environment variable
+
 ## 0.13.0
 
 ### Minor Changes
