@@ -1,9 +1,16 @@
 import { Command } from '@commander-js/extra-typings';
 import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
+import { secretsManager, SecretsManager } from '@/utils/secrets.js';
 import { validateArgument, validateConfigValue, isValidationError } from '@/utils/validation.js';
-import { configKeySchema } from '@/types/schemas.js';
+import { configKeySchema, aiApiKeySchema } from '@/types/schemas.js';
+import { promptPassword } from '@/utils/prompt.js';
 import type { NeoConfig } from '@/utils/config.js';
+
+/**
+ * Keys that are stored in the secrets file instead of config
+ */
+const SECRET_KEYS = ['ai.apiKey'];
 
 export function createConfigCommand(): Command {
   const command = new Command('config');
@@ -39,6 +46,23 @@ function createConfigGetCommand(): Command {
         }
         throw error;
       }
+
+      // Handle secret keys differently
+      if (SECRET_KEYS.includes(key)) {
+        try {
+          const value = await secretsManager.getSecret(key);
+          if (value) {
+            ui.keyValue([[key, `${SecretsManager.maskSecret(value)} (configured)`]]);
+          } else {
+            ui.keyValue([[key, 'not configured']]);
+          }
+          return;
+        } catch (error) {
+          ui.error(`Failed to read secret: ${error}`);
+          process.exit(1);
+        }
+      }
+
       try {
         const config = await configManager.read();
         const value = getNestedValue(config, key);
@@ -74,8 +98,8 @@ function createConfigSetCommand(): Command {
   command
     .description('Set a configuration value')
     .argument('<key>', 'configuration key (supports dot notation, e.g., preferences.banner)')
-    .argument('<value>', 'configuration value')
-    .action(async (rawKey: string, rawValue: string) => {
+    .argument('[value]', 'configuration value (omit for secrets to use masked input)')
+    .action(async (rawKey: string, rawValue?: string) => {
       // Validate key
       let key: string;
       try {
@@ -86,6 +110,44 @@ function createConfigSetCommand(): Command {
         }
         throw error;
       }
+
+      // Handle secret keys differently
+      if (SECRET_KEYS.includes(key)) {
+        try {
+          let secretValue = rawValue;
+
+          // If no value provided, prompt for masked input
+          if (!secretValue) {
+            secretValue = await promptPassword({ message: 'Enter API key' });
+          }
+
+          if (!secretValue || secretValue.trim() === '') {
+            ui.error('API key cannot be empty');
+            process.exit(1);
+          }
+
+          // Validate API key format
+          const parseResult = aiApiKeySchema.safeParse(secretValue);
+          if (!parseResult.success) {
+            ui.error(`Invalid API key format: ${parseResult.error.issues[0]?.message}`);
+            process.exit(1);
+          }
+
+          await secretsManager.setSecret(key, secretValue);
+          ui.success(`Secret updated: ${key} = ${SecretsManager.maskSecret(secretValue)}`);
+          return;
+        } catch (error) {
+          ui.error(`Failed to set secret: ${error}`);
+          process.exit(1);
+        }
+      }
+
+      // Regular config keys require a value
+      if (!rawValue) {
+        ui.error('Value is required for non-secret configuration keys');
+        process.exit(1);
+      }
+
       // Validate and parse value
       let value: string | number | boolean;
       try {
@@ -157,8 +219,21 @@ function createConfigListCommand(): Command {
   command.description('List all configuration values').action(async () => {
     try {
       const config = await configManager.read();
+      const apiKeyConfigured = await secretsManager.isConfigured('ai.apiKey');
 
       ui.info('Current Neo CLI Configuration');
+      console.log('');
+
+      // AI section
+      ui.section('AI');
+      const aiPairs: Array<[string, string]> = [
+        ['enabled', config.ai.enabled ? 'yes' : 'no'],
+        ['apiKey', apiKeyConfigured ? 'configured' : 'not configured'],
+      ];
+      if (config.ai.model) {
+        aiPairs.push(['model', config.ai.model]);
+      }
+      ui.keyValue(aiPairs);
       console.log('');
 
       if (config.user.name || config.user.email) {
@@ -205,6 +280,7 @@ function createConfigListCommand(): Command {
 
       ui.divider();
       ui.muted(`Config file: ${configManager.getConfigFile()}`);
+      ui.muted(`Secrets file: ${secretsManager.getSecretsFile()}`);
       ui.muted(
         `\nUse these full keys with 'neo config get <key>' or 'neo config set <key> <value>'`
       );

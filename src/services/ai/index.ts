@@ -3,6 +3,8 @@
  */
 
 import { type Result, success, failure } from '@/core/errors/index.js';
+import { secretsManager } from '@/utils/secrets.js';
+import { configManager } from '@/utils/config.js';
 import { AIErrors } from './errors.js';
 import {
   buildCommitPrompt,
@@ -22,14 +24,28 @@ export { AIError, AIErrors } from './errors.js';
  */
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
-const DEFAULT_MODEL = 'claude-3-haiku-20240307';
 const MAX_TOKENS = 500;
 
 /**
- * Get the API key from environment
+ * Get the API key from secrets file, falling back to environment variable
  */
-function getApiKey(): string | undefined {
+async function getApiKey(): Promise<string | undefined> {
+  // First check secrets file
+  const secretKey = await secretsManager.getSecret('ai.apiKey');
+  if (secretKey) {
+    return secretKey;
+  }
+
+  // Fall back to environment variable
   return process.env['ANTHROPIC_API_KEY'];
+}
+
+/**
+ * Get the configured AI model
+ */
+async function getModel(): Promise<string> {
+  const config = await configManager.read();
+  return config.ai.model || 'claude-3-haiku-20240307';
 }
 
 /**
@@ -65,11 +81,12 @@ interface AnthropicErrorResponse {
  * Call the Anthropic API with retry logic
  */
 async function callAnthropicAPI(prompt: string, retries = 3): Promise<Result<string>> {
-  const apiKey = getApiKey();
+  const apiKey = await getApiKey();
   if (!apiKey) {
     return failure(AIErrors.missingApiKey());
   }
 
+  const model = await getModel();
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -82,7 +99,7 @@ async function callAnthropicAPI(prompt: string, retries = 3): Promise<Result<str
           'anthropic-version': ANTHROPIC_VERSION,
         },
         body: JSON.stringify({
-          model: DEFAULT_MODEL,
+          model,
           max_tokens: MAX_TOKENS,
           messages: [
             {
@@ -193,6 +210,7 @@ export async function generateCommitMessage(request: AICommitRequest): Promise<R
 /**
  * Check if AI commit is available (API key is set)
  */
-export function isAICommitAvailable(): boolean {
-  return Boolean(getApiKey());
+export async function isAICommitAvailable(): Promise<boolean> {
+  const apiKey = await getApiKey();
+  return Boolean(apiKey);
 }

@@ -134,7 +134,7 @@ type AICommitAction = 'commit' | 'edit' | 'regenerate' | 'cancel';
  */
 async function executeAICommit(stagedFiles: string[]): Promise<Result<AICommitResponse | null>> {
   // Check if API key is available
-  if (!isAICommitAvailable()) {
+  if (!(await isAICommitAvailable())) {
     return failure(AIErrors.missingApiKey());
   }
 

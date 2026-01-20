@@ -80,3 +80,67 @@ export async function promptSelect<T extends string>({
     rl.close();
   }
 }
+
+export interface PasswordPromptOptions {
+  message: string;
+}
+
+/**
+ * Prompt for a password/secret with masked input
+ * Uses raw mode to hide typed characters
+ */
+export async function promptPassword({ message }: PasswordPromptOptions): Promise<string> {
+  return new Promise((resolve) => {
+    let password = '';
+
+    output.write(`${message}: `);
+
+    if (input.isTTY) {
+      input.setRawMode(true);
+    }
+    input.resume();
+    input.setEncoding('utf8');
+
+    const onData = (char: string) => {
+      const charCode = char.charCodeAt(0);
+
+      // Enter key
+      if (charCode === 13 || charCode === 10) {
+        if (input.isTTY) {
+          input.setRawMode(false);
+        }
+        input.pause();
+        input.removeListener('data', onData);
+        output.write('\n');
+        resolve(password);
+        return;
+      }
+
+      // Ctrl+C
+      if (charCode === 3) {
+        if (input.isTTY) {
+          input.setRawMode(false);
+        }
+        input.pause();
+        input.removeListener('data', onData);
+        output.write('\n');
+        process.exit(1);
+      }
+
+      // Backspace
+      if (charCode === 127 || charCode === 8) {
+        if (password.length > 0) {
+          password = password.slice(0, -1);
+          output.write('\b \b');
+        }
+        return;
+      }
+
+      // Regular character
+      password += char;
+      output.write('*');
+    };
+
+    input.on('data', onData);
+  });
+}

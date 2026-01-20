@@ -149,6 +149,25 @@ export const shellTypeSchema = z.enum(['zsh', 'bash', 'fish'], {
 });
 
 /**
+ * AI API key schema
+ * Validates Anthropic API key format
+ */
+export const aiApiKeySchema = z
+  .string()
+  .min(1, 'API key cannot be empty')
+  .regex(/^sk-ant-/, 'API key must start with sk-ant-');
+
+/**
+ * Valid AI model values
+ */
+export const aiModelSchema = z.enum(
+  ['claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
+  {
+    message: 'Model must be a valid Claude model identifier',
+  }
+);
+
+/**
  * Alias setup options schema
  */
 export const aliasSetupOptionsSchema = baseOptionsSchema.extend({
@@ -228,3 +247,5 @@ export type AgentContextAddOptions = z.infer<typeof agentContextAddOptionsSchema
 export type AgentContextListOptions = z.infer<typeof agentContextListOptionsSchema>;
 export type ContextId = z.infer<typeof contextIdSchema>;
 export type ContextContent = z.infer<typeof contextContentSchema>;
+export type AiApiKey = z.infer<typeof aiApiKeySchema>;
+export type AiModel = z.infer<typeof aiModelSchema>;

@@ -122,6 +122,10 @@ export function createInitCommand(): Command {
         configSpinner.start();
 
         const newConfig: NeoConfig = {
+          ai: {
+            enabled: true,
+            model: 'claude-3-haiku-20240307',
+          },
           installation: {
             completionsPath: join(configManager.getConfigDir(), 'completions'),
             ...(installStatus.globalPath ? { globalPath: installStatus.globalPath } : {}),

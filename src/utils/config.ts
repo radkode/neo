@@ -9,6 +9,10 @@ import type { BannerType } from '@/utils/banner.js';
  * Neo CLI configuration structure
  */
 export interface NeoConfig {
+  ai: {
+    enabled: boolean;
+    model?: string;
+  };
   installation: {
     completionsPath?: string;
     globalPath?: string;
@@ -44,6 +48,10 @@ export interface NeoConfig {
 }
 
 const DEFAULT_CONFIG: NeoConfig = {
+  ai: {
+    enabled: true,
+    model: 'claude-3-haiku-20240307',
+  },
   installation: {
     installedAt: new Date().toISOString(),
     version: '0.1.0', // This should be read from package.json in real implementation
@@ -116,6 +124,7 @@ export class ConfigManager {
       return {
         ...DEFAULT_CONFIG,
         ...config,
+        ai: { ...DEFAULT_CONFIG.ai, ...config.ai },
         installation: { ...DEFAULT_CONFIG.installation, ...config.installation },
         preferences: {
           ...DEFAULT_CONFIG.preferences,
@@ -156,6 +165,7 @@ export class ConfigManager {
     const updated = {
       ...current,
       ...updates,
+      ai: { ...current.ai, ...updates.ai },
       installation: { ...current.installation, ...updates.installation },
       preferences: {
         ...current.preferences,
