@@ -38,30 +38,7 @@ export function createCLI(): Command {
         process.argv.includes('--help') ||
         process.argv.includes('-h');
 
-      // Skip banner for help/version commands
-      if (isHelpOrVersion) {
-        return;
-      }
-
-      // Check for --no-banner flag
-      if (opts.banner === false) {
-        return;
-      }
-
-      // Read banner preference from config
-      let bannerType: BannerType = 'full'; // Default fallback
-      try {
-        const config = await configManager.read();
-        bannerType = config.preferences.banner;
-      } catch (error) {
-        // If config read fails, use default 'full' banner
-        logger.debug(`Failed to read banner config, using default: ${error}`);
-      }
-
-      // Display banner based on configuration
-      displayBanner(bannerType);
-
-      // Configure logger
+      // Configure logger early
       if (opts.verbose) {
         logger.setVerbose(true);
         logger.debug(`Executing command: ${commandName}`);
@@ -72,7 +49,26 @@ export function createCLI(): Command {
         chalk.level = 0;
       }
 
-      await notifyIfCliUpdateAvailable();
+      // Skip banner for help/version commands
+      if (!isHelpOrVersion && opts.banner !== false) {
+        // Read banner preference from config
+        let bannerType: BannerType = 'full'; // Default fallback
+        try {
+          const config = await configManager.read();
+          bannerType = config.preferences.banner;
+        } catch (error) {
+          // If config read fails, use default 'full' banner
+          logger.debug(`Failed to read banner config, using default: ${error}`);
+        }
+
+        // Display banner based on configuration
+        displayBanner(bannerType);
+      }
+
+      // Always check for updates (except help/version)
+      if (!isHelpOrVersion) {
+        await notifyIfCliUpdateAvailable();
+      }
     });
 
   // Register all commands
