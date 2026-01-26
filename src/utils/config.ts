@@ -9,10 +9,21 @@ import type { BannerType } from '@/utils/banner.js';
  * Neo CLI configuration structure
  */
 export interface NeoConfig {
+  /**
+   * Name of the active configuration profile
+   * Defaults to 'default' if not specified
+   */
+  activeProfile?: string;
   ai: {
     enabled: boolean;
     model?: string;
   };
+  /**
+   * Directory-based auto-switch rules for profiles
+   * Keys are glob patterns, values are profile names
+   * Example: { "~/work/*": "work", "~/personal/*": "personal" }
+   */
+  autoSwitch?: Record<string, string>;
   installation: {
     completionsPath?: string;
     globalPath?: string;
@@ -48,10 +59,12 @@ export interface NeoConfig {
 }
 
 const DEFAULT_CONFIG: NeoConfig = {
+  activeProfile: 'default',
   ai: {
     enabled: true,
     model: 'claude-3-haiku-20240307',
   },
+  autoSwitch: {},
   installation: {
     installedAt: new Date().toISOString(),
     version: '0.1.0', // This should be read from package.json in real implementation
@@ -74,13 +87,17 @@ const DEFAULT_CONFIG: NeoConfig = {
   user: {},
 };
 
+export { DEFAULT_CONFIG };
+
 export class ConfigManager {
   private configDir: string;
   private configFile: string;
+  private profilesDir: string;
 
   constructor() {
     this.configDir = join(homedir(), '.config', 'neo');
     this.configFile = join(this.configDir, 'config.json');
+    this.profilesDir = join(this.configDir, 'profiles');
   }
 
   /**
@@ -125,6 +142,7 @@ export class ConfigManager {
         ...DEFAULT_CONFIG,
         ...config,
         ai: { ...DEFAULT_CONFIG.ai, ...config.ai },
+        autoSwitch: { ...DEFAULT_CONFIG.autoSwitch, ...config.autoSwitch },
         installation: { ...DEFAULT_CONFIG.installation, ...config.installation },
         preferences: {
           ...DEFAULT_CONFIG.preferences,
@@ -166,6 +184,7 @@ export class ConfigManager {
       ...current,
       ...updates,
       ai: { ...current.ai, ...updates.ai },
+      autoSwitch: { ...current.autoSwitch, ...updates.autoSwitch },
       installation: { ...current.installation, ...updates.installation },
       preferences: {
         ...current.preferences,
@@ -192,6 +211,13 @@ export class ConfigManager {
    */
   getConfigFile(): string {
     return this.configFile;
+  }
+
+  /**
+   * Gets the profiles directory path
+   */
+  getProfilesDir(): string {
+    return this.profilesDir;
   }
 
   /**

@@ -249,3 +249,61 @@ export type ContextId = z.infer<typeof contextIdSchema>;
 export type ContextContent = z.infer<typeof contextContentSchema>;
 export type AiApiKey = z.infer<typeof aiApiKeySchema>;
 export type AiModel = z.infer<typeof aiModelSchema>;
+
+/**
+ * GitHub PR create command options schema
+ */
+export const ghPrCreateOptionsSchema = baseOptionsSchema.extend({
+  title: z.string().min(1, 'PR title cannot be empty').optional(),
+  body: z.string().optional(),
+  base: z
+    .string()
+    .min(1, 'Base branch cannot be empty')
+    .regex(/^[a-zA-Z0-9/._-]+$/, 'Invalid branch name format')
+    .optional(),
+  draft: z.boolean().optional(),
+  reviewer: z.array(z.string().min(1, 'Reviewer cannot be empty')).optional(),
+  label: z.array(z.string().min(1, 'Label cannot be empty')).optional(),
+  web: z.boolean().optional(),
+});
+
+export type GhPrCreateOptions = z.infer<typeof ghPrCreateOptionsSchema>;
+
+/**
+ * Profile name schema
+ * Must be alphanumeric with hyphens and underscores
+ */
+export const profileNameSchema = z
+  .string()
+  .min(1, 'Profile name cannot be empty')
+  .max(50, 'Profile name too long (max 50 characters)')
+  .regex(
+    /^[a-zA-Z][a-zA-Z0-9_-]*$/,
+    'Profile name must start with a letter and contain only letters, numbers, hyphens, and underscores'
+  );
+
+/**
+ * Profile create command options schema
+ */
+export const profileCreateOptionsSchema = baseOptionsSchema.extend({
+  from: z.string().optional(),
+});
+
+/**
+ * Profile export command options schema
+ */
+export const profileExportOptionsSchema = baseOptionsSchema.extend({
+  output: z.string().optional(),
+});
+
+/**
+ * Profile import command options schema
+ */
+export const profileImportOptionsSchema = baseOptionsSchema.extend({
+  name: z.string().optional(),
+});
+
+export type ProfileName = z.infer<typeof profileNameSchema>;
+export type ProfileCreateOptions = z.infer<typeof profileCreateOptionsSchema>;
+export type ProfileExportOptions = z.infer<typeof profileExportOptionsSchema>;
+export type ProfileImportOptions = z.infer<typeof profileImportOptionsSchema>;

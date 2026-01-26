@@ -5,6 +5,7 @@ import { secretsManager, SecretsManager } from '@/utils/secrets.js';
 import { validateArgument, validateConfigValue, isValidationError } from '@/utils/validation.js';
 import { configKeySchema, aiApiKeySchema } from '@/types/schemas.js';
 import { promptPassword } from '@/utils/prompt.js';
+import { createProfileCommand } from '@/commands/config/profile/index.js';
 import type { NeoConfig } from '@/utils/config.js';
 
 /**
@@ -19,7 +20,8 @@ export function createConfigCommand(): Command {
     .description('Manage configuration')
     .addCommand(createConfigGetCommand())
     .addCommand(createConfigSetCommand())
-    .addCommand(createConfigListCommand());
+    .addCommand(createConfigListCommand())
+    .addCommand(createProfileCommand());
 
   return command;
 }
@@ -222,6 +224,11 @@ function createConfigListCommand(): Command {
       const apiKeyConfigured = await secretsManager.isConfigured('ai.apiKey');
 
       ui.info('Current Neo CLI Configuration');
+
+      // Show active profile if set
+      if (config.activeProfile) {
+        ui.muted(`Active profile: ${config.activeProfile}`);
+      }
       console.log('');
 
       // AI section
