@@ -1,5 +1,17 @@
 # @radkode/neo
 
+## 0.16.0
+
+### Minor Changes
+
+- [#79](https://github.com/radkode/neo/pull/79) [`ce8617f`](https://github.com/radkode/neo/commit/ce8617f640b25e7cbd6bd44de4baf715ff684798) Thanks [@jacekradko](https://github.com/jacekradko)! - Add compact banner redesign with gradient styling and GitHub PR creation command
+
+- [#78](https://github.com/radkode/neo/pull/78) [`4b5e48c`](https://github.com/radkode/neo/commit/4b5e48c7357c3bf883ca0df43d69ec12ac8e4878) Thanks [@jacekradko](https://github.com/jacekradko)! - Add configuration profiles support for managing multiple config presets
+
+### Patch Changes
+
+- [#76](https://github.com/radkode/neo/pull/76) [`75f84d9`](https://github.com/radkode/neo/commit/75f84d989f41f07bfeceed26cd010a3cf224702c) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix update notification not showing when using `--no-banner` flag
+
 ## 0.15.0
 
 ### Minor Changes
