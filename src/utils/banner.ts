@@ -32,7 +32,10 @@ ${chalk.bold.hex('#0066FF')('  ╚═╝  ╚═══╝')}${chalk.bold.hex('#0
  * a cleaner terminal output.
  */
 export function showCompactBanner(): void {
-  const banner = `${chalk.bold.hex('#0066FF')('⚡ NEO CLI')} ${chalk.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`;
+  const logo = `${chalk.bold.hex('#0066FF')('▐')}${chalk.bold.hex('#3D7FFF')('█')}${chalk.bold.hex('#5599FF')('▌')}`;
+  const text = `${chalk.bold.hex('#0066FF')('N')}${chalk.bold.hex('#1A73FF')('E')}${chalk.bold.hex('#3D7FFF')('O')} ${chalk.bold.hex('#4D8CFF')('C')}${chalk.bold.hex('#5599FF')('L')}${chalk.bold.hex('#5599FF')('I')}`;
+  const line = `${chalk.hex('#5599FF')('━━━━━━')}${chalk.hex('#6BA3FF')('━━━━━━')}${chalk.hex('#80ADFF')('━━━━━━')}${chalk.hex('#99BFFF')('━━━━━━')}${chalk.hex('#B3D1FF')('━━━━━')}${chalk.dim('━━━━━━━━━━━━━━━━━━━━━')}`;
+  const banner = `  ${logo} ${text} ${line}`;
   console.log(banner);
 }
 

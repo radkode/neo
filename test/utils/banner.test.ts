@@ -38,7 +38,7 @@ describe('Banner Utilities', () => {
       expect(consoleLogSpy).toHaveBeenCalledOnce();
       const output = consoleLogSpy.mock.calls[0][0];
       expect(output).toContain('NEO CLI');
-      expect(output).toContain('⚡');
+      expect(output).toContain('▐█▌');
       // Should be much shorter than full banner
       expect(output.split('\n').length).toBeLessThan(5);
     });
@@ -58,7 +58,7 @@ describe('Banner Utilities', () => {
 
       expect(consoleLogSpy).toHaveBeenCalledOnce();
       const output = consoleLogSpy.mock.calls[0][0];
-      expect(output).toContain('⚡');
+      expect(output).toContain('▐█▌');
       expect(output).toContain('NEO CLI');
     });
 
