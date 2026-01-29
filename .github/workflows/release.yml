@@ -41,15 +41,28 @@ jobs:
       - name: Build project
         run: pnpm build
 
-      - name: Create Release Pull Request or Publish to npm
+      - name: Create Release Pull Request
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: npm publish --provenance --access public
           title: 'chore: release package'
           commit: 'chore: release package'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm with provenance
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          # Check if version was bumped (changeset consumed)
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          NPM_VERSION=$(npm view @radkode/neo version 2>/dev/null || echo "0.0.0")
+
+          if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
+            echo "Publishing version $CURRENT_VERSION (npm has $NPM_VERSION)"
+            npm publish --provenance --access public
+          else
+            echo "Version $CURRENT_VERSION already published, skipping"
+          fi
 
       - name: Send a Slack notification if a publish happens
         if: steps.changesets.outputs.published == 'true'
