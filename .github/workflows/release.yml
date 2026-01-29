@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+          # Note: not using registry-url to avoid NODE_AUTH_TOKEN interference with OIDC
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -52,8 +52,6 @@ jobs:
 
       - name: Publish to npm with provenance
         if: steps.changesets.outputs.hasChangesets == 'false'
-        env:
-          NPM_CONFIG_PROVENANCE: true
         run: |
           # Check if version was bumped (changeset consumed)
           CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -61,11 +59,10 @@ jobs:
 
           if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
             echo "Publishing version $CURRENT_VERSION (npm has $NPM_VERSION)"
-            # Unset NODE_AUTH_TOKEN to force npm to use OIDC for trusted publishing
-            unset NODE_AUTH_TOKEN
-            # Remove any auth token from .npmrc that might interfere with OIDC
-            npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
-            npm publish --access public
+            echo "npm version: $(npm --version)"
+            # Publish with provenance - npm should use OIDC auth automatically
+            # when id-token permission is set and trusted publishing is configured
+            npm publish --access public --provenance
           else
             echo "Version $CURRENT_VERSION already published, skipping"
           fi
