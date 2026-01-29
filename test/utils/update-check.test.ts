@@ -89,7 +89,7 @@ describe('checkForCliUpdates', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        'dist-tags': { latest: '1.0.0' },
+        'dist-tags': { latest: '99.0.0' },
       }),
     });
 
@@ -100,11 +100,11 @@ describe('checkForCliUpdates', () => {
     expect(mocks.configManager.update).toHaveBeenCalledWith({
       updates: {
         lastCheckedAt: expect.any(String),
-        latestVersion: '1.0.0',
+        latestVersion: '99.0.0',
       },
     });
     expect(result.hasUpdate).toBe(true);
-    expect(result.latestVersion).toBe('1.0.0');
+    expect(result.latestVersion).toBe('99.0.0');
   });
 
   it('uses cached version when check is recent', async () => {
@@ -113,7 +113,7 @@ describe('checkForCliUpdates', () => {
       ...baseConfig,
       updates: {
         lastCheckedAt: now,
-        latestVersion: '1.0.0',
+        latestVersion: '99.0.0',
       },
     });
 
@@ -121,7 +121,7 @@ describe('checkForCliUpdates', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.configManager.update).not.toHaveBeenCalled();
-    expect(result.latestVersion).toBe('1.0.0');
+    expect(result.latestVersion).toBe('99.0.0');
   });
 });
 
@@ -139,7 +139,7 @@ describe('notifyIfCliUpdateAvailable', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        'dist-tags': { latest: '1.0.0' },
+        'dist-tags': { latest: '99.0.0' },
       }),
     });
 
