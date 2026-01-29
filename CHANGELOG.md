@@ -1,5 +1,30 @@
 # @radkode/neo
 
+## 1.0.0
+
+### Major Changes
+
+- [`0b0f618`](https://github.com/radkode/neo/commit/0b0f61845fe2907c0af7a017c0ceac723f3d3c09) Thanks [@jacekradko](https://github.com/jacekradko)! - Open source release with clean git history and full OSS documentation
+
+### Minor Changes
+
+- [`e6a358c`](https://github.com/radkode/neo/commit/e6a358c1d07b55445fe91ebeac6318e435087d47) Thanks [@jacekradko](https://github.com/jacekradko)! - Add plugin system for extending CLI functionality
+  - Load local ESM plugins from ~/.config/neo/plugins/
+  - Support lifecycle hooks (beforeCommand, afterCommand, onError, onExit)
+  - Plugin commands automatically registered with CLI
+  - Configuration options for enabling/disabling plugins
+
+### Patch Changes
+
+- [`45cc421`](https://github.com/radkode/neo/commit/45cc42112b6952e3072706c2aef5c142dc509774) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix `neo git push` to accept positional arguments like standard git push
+
+  The command now supports:
+  - `neo git push -u origin branch-name`
+  - `neo git push origin branch-name`
+  - `neo git push` (defaults to origin + current branch)
+
+  Previously, `--set-upstream` expected a single branch value, but git uses it as a flag with separate remote and branch arguments.
+
 ## 0.16.0
 
 ### Minor Changes
