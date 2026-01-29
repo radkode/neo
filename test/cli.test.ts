@@ -5,8 +5,8 @@ import { createCLI } from '../src/cli.js';
 describe('CLI', () => {
   let program: Command;
 
-  beforeEach(() => {
-    program = createCLI();
+  beforeEach(async () => {
+    program = await createCLI();
   });
 
   it('should have the correct name', () => {

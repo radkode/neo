@@ -7,9 +7,14 @@ import { registerCommands } from '@/commands/index.js';
 import { configManager } from '@/utils/config.js';
 import { notifyIfCliUpdateAvailable } from '@/utils/update-check.js';
 import { Colors } from '@/utils/ui-types.js';
+import { pluginRegistry, commandRegistry } from '@/core/plugins/index.js';
+import { success } from '@/core/errors/index.js';
 import packageJson from '../package.json' with { type: 'json' };
 
-export function createCLI(): Command {
+// Track if plugins are loaded
+let pluginsLoaded = false;
+
+export async function createCLI(): Promise<Command> {
   const program = new Command();
 
   program
@@ -69,51 +74,161 @@ export function createCLI(): Command {
       if (!isHelpOrVersion) {
         await notifyIfCliUpdateAvailable();
       }
+
+      // Execute plugin beforeCommand hooks
+      if (pluginsLoaded) {
+        await pluginRegistry.executeBeforeCommand(commandName, opts);
+      }
+    })
+    .hook('postAction', async (_thisCommand, actionCommand) => {
+      const commandName = actionCommand.name();
+
+      // Execute plugin afterCommand hooks
+      if (pluginsLoaded) {
+        await pluginRegistry.executeAfterCommand(commandName, success(undefined));
+      }
     });
 
-  // Register all commands
+  // Register all built-in commands
   registerCommands(program);
+
+  // Load and initialize plugins
+  try {
+    const config = await configManager.read();
+    const pluginsEnabled = config.plugins?.enabled !== false;
+
+    if (pluginsEnabled) {
+      const disabledPlugins = config.plugins?.disabled ?? [];
+      await pluginRegistry.loadPlugins(disabledPlugins);
+      pluginsLoaded = true;
+
+      // Register plugin commands with Commander
+      for (const command of commandRegistry.getAll()) {
+        const cmd = new Command(command.name);
+        cmd.description(command.description);
+
+        // Add options
+        if (command.options) {
+          for (const opt of command.options) {
+            if (opt.required) {
+              cmd.requiredOption(opt.flags, opt.description, opt.defaultValue as string);
+            } else {
+              cmd.option(opt.flags, opt.description, opt.defaultValue as string);
+            }
+          }
+        }
+
+        // Add arguments
+        if (command.arguments) {
+          for (const arg of command.arguments) {
+            if (arg.required) {
+              cmd.argument(`<${arg.name}>`, arg.description);
+            } else {
+              cmd.argument(`[${arg.name}]`, arg.description);
+            }
+          }
+        }
+
+        // Add action
+        cmd.action(async (...args: unknown[]) => {
+          const opts = args[args.length - 2] as unknown;
+          const cmdArgs = args.slice(0, -2) as string[];
+
+          if (command.validate && !command.validate(opts)) {
+            logger.error(`Invalid options for command "${command.name}"`);
+            process.exit(1);
+          }
+
+          const result = await command.execute(opts, cmdArgs);
+          if (!result.success) {
+            logger.error(result.error.message);
+            process.exit(1);
+          }
+        });
+
+        program.addCommand(cmd);
+        logger.debug(`Registered plugin command: ${command.name}`);
+      }
+
+      if (pluginRegistry.size > 0) {
+        logger.debug(`Loaded ${pluginRegistry.size} plugin(s)`);
+      }
+    }
+  } catch (error) {
+    logger.debug(`Plugin loading failed: ${error}`);
+    // Continue without plugins
+  }
 
   return program;
 }
 
+// Cleanup function for graceful shutdown
+async function cleanup(code: number): Promise<void> {
+  if (pluginsLoaded) {
+    await pluginRegistry.executeOnExit(code);
+    await pluginRegistry.disposeAll();
+  }
+}
+
 // Only run if this is the main module
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('cli.js')) {
-  const program = createCLI();
+  // Handle process exit
+  process.on('beforeExit', async (code) => {
+    await cleanup(code);
+  });
 
-  // If no arguments provided (only the script name), show help
-  if (process.argv.length <= 2) {
-    program.help();
-  }
+  // Handle SIGINT (Ctrl+C)
+  process.on('SIGINT', async () => {
+    await cleanup(130);
+    process.exit(130);
+  });
 
-  program.exitOverride();
+  // Handle SIGTERM
+  process.on('SIGTERM', async () => {
+    await cleanup(143);
+    process.exit(143);
+  });
 
-  try {
-    program.parse();
-  } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err) {
-      // Handle help display gracefully
-      if (err.code === 'commander.helpDisplayed' || err.code === 'commander.help') {
-        process.exit(0);
+  createCLI()
+    .then((program) => {
+      // If no arguments provided (only the script name), show help
+      if (process.argv.length <= 2) {
+        program.help();
       }
 
-      // Handle version display gracefully
-      if (err.code === 'commander.version') {
-        process.exit(0);
-      }
+      program.exitOverride();
 
-      // Handle missing command gracefully
-      if (err.code === 'commander.missingArgument' || err.code === 'commander.unknownCommand') {
-        console.error(
-          `\n${chalk.hex(Colors.error)('Error:')} ${err instanceof Error ? err.message : String(err)}`
-        );
-        console.log(`\nRun ${chalk.hex(Colors.primary)('neo --help')} for usage information.`);
+      try {
+        program.parse();
+      } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'code' in err) {
+          // Handle help display gracefully
+          if (err.code === 'commander.helpDisplayed' || err.code === 'commander.help') {
+            process.exit(0);
+          }
+
+          // Handle version display gracefully
+          if (err.code === 'commander.version') {
+            process.exit(0);
+          }
+
+          // Handle missing command gracefully
+          if (err.code === 'commander.missingArgument' || err.code === 'commander.unknownCommand') {
+            console.error(
+              `\n${chalk.hex(Colors.error)('Error:')} ${err instanceof Error ? err.message : String(err)}`
+            );
+            console.log(`\nRun ${chalk.hex(Colors.primary)('neo --help')} for usage information.`);
+            process.exit(1);
+          }
+        }
+
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logger.error(errorMessage);
         process.exit(1);
       }
-    }
-
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error(errorMessage);
-    process.exit(1);
-  }
+    })
+    .catch((err) => {
+      logger.error(`CLI initialization failed: ${err}`);
+      process.exit(1);
+    });
 }
