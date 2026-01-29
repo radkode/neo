@@ -61,8 +61,13 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
 
     spinner.start();
 
+    const remoteName = options.remote || 'origin';
+    const targetBranch = options.branch || branchName;
+
     logger.debug(`Force push: ${options.force || false}`);
-    logger.debug(`Set upstream: ${options.setUpstream || 'none'}`);
+    logger.debug(`Set upstream: ${options.setUpstream || false}`);
+    logger.debug(`Remote: ${remoteName}`);
+    logger.debug(`Target branch: ${targetBranch}`);
     logger.debug(`Dry run: ${options.dryRun || false}`);
     logger.debug(`Push tags: ${options.tags || false}`);
 
@@ -101,10 +106,10 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
     }
 
     if (options.setUpstream) {
-      pushArgs.push('-u', 'origin', options.setUpstream);
-    } else {
-      pushArgs.push('origin', branchName);
+      pushArgs.push('-u');
     }
+
+    pushArgs.push(remoteName, targetBranch);
 
     logger.debug(`Executing: git ${pushArgs.join(' ')}`);
 
@@ -120,7 +125,7 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
     }
 
     if (options.setUpstream) {
-      ui.info(`Set upstream branch: ${options.setUpstream}`);
+      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
     return success(undefined);
@@ -206,7 +211,10 @@ async function handlePullRebase(
     }
 
     if (options.setUpstream) {
-      ui.info(`Set upstream branch: ${options.setUpstream}`);
+      // Extract remote and branch from pushArgs (last two elements)
+      const remoteName = pushArgs[pushArgs.length - 2];
+      const targetBranch = pushArgs[pushArgs.length - 1];
+      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
     return success(undefined);
@@ -243,7 +251,10 @@ async function handleForcePush(
     }
 
     if (options.setUpstream) {
-      ui.info(`Set upstream branch: ${options.setUpstream}`);
+      // Extract remote and branch from pushArgs (last two elements)
+      const remoteName = pushArgs[pushArgs.length - 2];
+      const targetBranch = pushArgs[pushArgs.length - 1];
+      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
     return success(undefined);
@@ -258,15 +269,24 @@ export function createPushCommand(): Command {
 
   command
     .description('Push changes to remote repository')
+    .argument('[remote]', 'remote name (default: origin)')
+    .argument('[branch]', 'branch name (default: current branch)')
     .option('-f, --force', 'force push (overwrites remote)')
-    .option('-u, --set-upstream <branch>', 'set upstream branch')
+    .option('-u, --set-upstream', 'set upstream tracking reference')
     .option('--dry-run', 'show what would be pushed without actually pushing')
     .option('--tags', 'push tags along with commits')
-    .action(async (options: unknown) => {
+    .action(async (remote: string | undefined, branch: string | undefined, options: unknown) => {
+      // Merge positional arguments into options
+      const mergedOptions = {
+        ...(options as object),
+        remote,
+        branch,
+      };
+
       // Validate options
       let validatedOptions: GitPushOptions;
       try {
-        validatedOptions = validate(gitPushOptionsSchema, options, 'git push options');
+        validatedOptions = validate(gitPushOptionsSchema, mergedOptions, 'git push options');
       } catch (error) {
         if (isValidationError(error)) {
           process.exit(1);

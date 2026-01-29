@@ -24,12 +24,10 @@ export const initOptionsSchema = baseOptionsSchema.extend({
 export const gitPushOptionsSchema = baseOptionsSchema.extend({
   dryRun: z.boolean().optional(),
   force: z.boolean().optional(),
-  setUpstream: z
-    .string()
-    .min(1, 'Branch name cannot be empty')
-    .regex(/^[a-zA-Z0-9/._-]+$/, 'Invalid branch name format')
-    .optional(),
+  setUpstream: z.boolean().optional(),
   tags: z.boolean().optional(),
+  remote: z.string().optional(),
+  branch: z.string().optional(),
 });
 
 /**

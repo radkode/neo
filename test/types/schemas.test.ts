@@ -68,34 +68,27 @@ describe('schemas', () => {
       const valid = {
         dryRun: true,
         force: false,
-        setUpstream: 'feature/test',
+        setUpstream: true,
         tags: true,
+        remote: 'origin',
+        branch: 'feature/test',
       };
       expect(gitPushOptionsSchema.safeParse(valid).success).toBe(true);
     });
 
-    it('should validate valid branch names', () => {
-      const validBranches = ['main', 'feature/test', 'feature-123', 'fix_bug', 'release/v1.0.0'];
-
-      for (const branch of validBranches) {
-        const result = gitPushOptionsSchema.safeParse({ setUpstream: branch });
-        expect(result.success).toBe(true);
-      }
+    it('should accept setUpstream as boolean', () => {
+      expect(gitPushOptionsSchema.safeParse({ setUpstream: true }).success).toBe(true);
+      expect(gitPushOptionsSchema.safeParse({ setUpstream: false }).success).toBe(true);
     });
 
-    it('should reject empty branch names', () => {
-      const invalid = { setUpstream: '' };
-      const result = gitPushOptionsSchema.safeParse(invalid);
-      expect(result.success).toBe(false);
+    it('should accept remote and branch strings', () => {
+      const valid = { remote: 'upstream', branch: 'main' };
+      expect(gitPushOptionsSchema.safeParse(valid).success).toBe(true);
     });
 
-    it('should reject invalid branch name characters', () => {
-      const invalidBranches = ['feature@test', 'main branch', 'test!', 'feat#123'];
-
-      for (const branch of invalidBranches) {
-        const result = gitPushOptionsSchema.safeParse({ setUpstream: branch });
-        expect(result.success).toBe(false);
-      }
+    it('should accept empty options', () => {
+      const result = gitPushOptionsSchema.safeParse({});
+      expect(result.success).toBe(true);
     });
   });
 
