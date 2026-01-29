@@ -53,7 +53,6 @@ jobs:
       - name: Publish to npm with provenance
         if: steps.changesets.outputs.hasChangesets == 'false'
         env:
-          # Don't set NODE_AUTH_TOKEN - let npm use OIDC for trusted publishing
           NPM_CONFIG_PROVENANCE: true
         run: |
           # Check if version was bumped (changeset consumed)
@@ -62,6 +61,10 @@ jobs:
 
           if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
             echo "Publishing version $CURRENT_VERSION (npm has $NPM_VERSION)"
+            # Unset NODE_AUTH_TOKEN to force npm to use OIDC for trusted publishing
+            unset NODE_AUTH_TOKEN
+            # Remove any auth token from .npmrc that might interfere with OIDC
+            npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
             npm publish --access public
           else
             echo "Version $CURRENT_VERSION already published, skipping"
