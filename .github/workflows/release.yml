@@ -45,12 +45,11 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset publish --access public
+          publish: npm publish --provenance --access public
           title: 'chore: release package'
           commit: 'chore: release package'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
 
       - name: Send a Slack notification if a publish happens
         if: steps.changesets.outputs.published == 'true'
