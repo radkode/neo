@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.0.1
+
+### Patch Changes
+
+- [#2](https://github.com/radkode/neo/pull/2) [`82a6ffb`](https://github.com/radkode/neo/commit/82a6ffbfb823e6109655e6a47eda4fcd565e9969) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix git push to pass through unknown options to git (e.g., --force-with-lease)
+
 ## 1.0.0
 
 ### Major Changes
