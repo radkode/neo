@@ -23,11 +23,9 @@ export const initOptionsSchema = baseOptionsSchema.extend({
  */
 export const gitPushOptionsSchema = baseOptionsSchema.extend({
   dryRun: z.boolean().optional(),
-  force: z.boolean().optional(),
-  setUpstream: z.boolean().optional(),
-  tags: z.boolean().optional(),
   remote: z.string().optional(),
   branch: z.string().optional(),
+  passthrough: z.array(z.string()).default([]),
 });
 
 /**

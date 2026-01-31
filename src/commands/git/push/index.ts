@@ -4,9 +4,6 @@ import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { promptSelect } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
-import { gitPushOptionsSchema } from '@/types/schemas.js';
-import type { GitPushOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
   GitErrors,
@@ -17,11 +14,18 @@ import {
   isConflictError,
 } from '@/utils/git-errors.js';
 
+interface PushOptions {
+  dryRun?: boolean | undefined;
+  passthrough: string[];
+  remote?: string | undefined;
+  branch?: string | undefined;
+}
+
 /**
  * Execute the push command logic
  * Returns a Result indicating success or failure
  */
-export async function executePush(options: GitPushOptions): Promise<Result<void>> {
+export async function executePush(options: PushOptions): Promise<Result<void>> {
   let branchName: string = '';
   const spinner = ui.spinner('Pushing to remote');
   let pushArgs: string[] = [];
@@ -59,20 +63,15 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
       ui.step('Proceeding with push to main branch');
     }
 
-    spinner.start();
-
     const remoteName = options.remote || 'origin';
     const targetBranch = options.branch || branchName;
 
-    logger.debug(`Force push: ${options.force || false}`);
-    logger.debug(`Set upstream: ${options.setUpstream || false}`);
     logger.debug(`Remote: ${remoteName}`);
     logger.debug(`Target branch: ${targetBranch}`);
     logger.debug(`Dry run: ${options.dryRun || false}`);
-    logger.debug(`Push tags: ${options.tags || false}`);
+    logger.debug(`Passthrough args: ${options.passthrough.join(' ')}`);
 
     if (options.dryRun) {
-      spinner.stop();
       ui.warn('Dry run mode - no changes will be pushed');
       ui.info(`Would push from branch: ${branchName}`);
 
@@ -95,21 +94,10 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
       return success(undefined);
     }
 
-    pushArgs = ['push'];
+    spinner.start();
 
-    if (options.force) {
-      pushArgs.push('--force');
-    }
-
-    if (options.tags) {
-      pushArgs.push('--tags');
-    }
-
-    if (options.setUpstream) {
-      pushArgs.push('-u');
-    }
-
-    pushArgs.push(remoteName, targetBranch);
+    // Build push args: git push [passthrough options] remote branch
+    pushArgs = ['push', ...options.passthrough, remoteName, targetBranch];
 
     logger.debug(`Executing: git ${pushArgs.join(' ')}`);
 
@@ -124,7 +112,7 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
       ui.muted(pushResult.stdout);
     }
 
-    if (options.setUpstream) {
+    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
       ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
@@ -190,7 +178,7 @@ export async function executePush(options: GitPushOptions): Promise<Result<void>
 async function handlePullRebase(
   branchName: string,
   pushArgs: string[],
-  options: GitPushOptions
+  options: PushOptions
 ): Promise<Result<void>> {
   const rebaseSpinner = ui.spinner('Pulling latest changes with rebase');
   try {
@@ -210,7 +198,7 @@ async function handlePullRebase(
       ui.muted(retryResult.stdout);
     }
 
-    if (options.setUpstream) {
+    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
       // Extract remote and branch from pushArgs (last two elements)
       const remoteName = pushArgs[pushArgs.length - 2];
       const targetBranch = pushArgs[pushArgs.length - 1];
@@ -230,14 +218,13 @@ async function handlePullRebase(
 /**
  * Handle force push
  */
-async function handleForcePush(
-  pushArgs: string[],
-  options: GitPushOptions
-): Promise<Result<void>> {
+async function handleForcePush(pushArgs: string[], options: PushOptions): Promise<Result<void>> {
   const forceSpinner = ui.spinner('Force pushing (overwriting remote)');
-  const forceArgs = pushArgs.includes('--force')
-    ? pushArgs
-    : ['push', '--force', ...pushArgs.slice(1)];
+  const hasForce =
+    pushArgs.includes('--force') ||
+    pushArgs.includes('-f') ||
+    pushArgs.includes('--force-with-lease');
+  const forceArgs = hasForce ? pushArgs : ['push', '--force', ...pushArgs.slice(1)];
   try {
     forceSpinner.start();
     const forceResult = await execa('git', forceArgs, {
@@ -250,7 +237,7 @@ async function handleForcePush(
       ui.muted(forceResult.stdout);
     }
 
-    if (options.setUpstream) {
+    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
       // Extract remote and branch from pushArgs (last two elements)
       const remoteName = pushArgs[pushArgs.length - 2];
       const targetBranch = pushArgs[pushArgs.length - 1];
@@ -268,33 +255,49 @@ export function createPushCommand(): Command {
   const command = new Command('push');
 
   command
-    .description('Push changes to remote repository')
+    .description('Push changes to remote repository (passes unknown options to git)')
     .argument('[remote]', 'remote name (default: origin)')
     .argument('[branch]', 'branch name (default: current branch)')
-    .option('-f, --force', 'force push (overwrites remote)')
-    .option('-u, --set-upstream', 'set upstream tracking reference')
     .option('--dry-run', 'show what would be pushed without actually pushing')
-    .option('--tags', 'push tags along with commits')
-    .action(async (remote: string | undefined, branch: string | undefined, options: unknown) => {
-      // Merge positional arguments into options
-      const mergedOptions = {
-        ...(options as object),
+    .allowUnknownOption()
+    .action(async (remote: string | undefined, branch: string | undefined, opts, cmd) => {
+      // Get all raw args passed to this command
+      const rawArgs = cmd.args;
+
+      // Filter out the remote and branch positional args to get passthrough options
+      const passthrough: string[] = [];
+      let skipNext = false;
+
+      for (const arg of rawArgs) {
+        if (skipNext) {
+          skipNext = false;
+          continue;
+        }
+
+        // Skip our known options
+        if (arg === '--dry-run') {
+          continue;
+        }
+
+        // Skip remote and branch positional args
+        if (arg === remote || arg === branch) {
+          continue;
+        }
+
+        // Include everything else as passthrough
+        passthrough.push(arg);
+      }
+
+      const options: PushOptions = {
+        dryRun: (opts as { dryRun?: boolean }).dryRun,
+        passthrough,
         remote,
         branch,
       };
 
-      // Validate options
-      let validatedOptions: GitPushOptions;
-      try {
-        validatedOptions = validate(gitPushOptionsSchema, mergedOptions, 'git push options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      logger.debug(`Options: ${JSON.stringify(options)}`);
 
-      const result = await executePush(validatedOptions);
+      const result = await executePush(options);
 
       if (isFailure(result)) {
         ui.error(result.error.message);
