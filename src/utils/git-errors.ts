@@ -28,6 +28,9 @@ export enum GitErrorCode {
   STASH_NOT_FOUND = 'GIT_STASH_NOT_FOUND',
   STASH_APPLY_CONFLICT = 'GIT_STASH_APPLY_CONFLICT',
   STASH_NOTHING_TO_STASH = 'GIT_STASH_NOTHING_TO_STASH',
+  WORKTREE_NOT_FOUND = 'GIT_WORKTREE_NOT_FOUND',
+  WORKTREE_ALREADY_EXISTS = 'GIT_WORKTREE_ALREADY_EXISTS',
+  WORKTREE_BRANCH_CHECKED_OUT = 'GIT_WORKTREE_BRANCH_CHECKED_OUT',
   UNKNOWN = 'GIT_UNKNOWN_ERROR',
 }
 
@@ -196,6 +199,24 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
       'Make some changes first, then try stashing again',
       'Use "git status" to see the current state',
       'Use --include-untracked to stash untracked files',
+    ],
+  },
+  {
+    code: GitErrorCode.WORKTREE_ALREADY_EXISTS,
+    patterns: ['already exists', 'already a worktree'],
+    message: 'Worktree already exists!',
+    getSuggestions: () => [
+      'Use "neo git worktree list" to see existing worktrees',
+      'Remove the existing worktree first with "neo git worktree remove"',
+    ],
+  },
+  {
+    code: GitErrorCode.WORKTREE_BRANCH_CHECKED_OUT,
+    patterns: ['is already checked out', 'already used by worktree'],
+    message: 'Branch is already checked out in another worktree!',
+    getSuggestions: () => [
+      'Use "neo git worktree switch" to switch to the existing worktree',
+      'Or create a new branch with: git checkout -b new-branch',
     ],
   },
 ];
@@ -468,5 +489,37 @@ export const GitErrors = {
         'Use --include-untracked to stash untracked files',
       ],
     });
+  },
+
+  worktreeNotFound(commandName: string, path: string): GitError {
+    return new GitError(`Worktree not found: ${path}`, GitErrorCode.WORKTREE_NOT_FOUND, commandName, {
+      suggestions: [
+        'Use "neo git worktree list" to see available worktrees',
+        'The worktree may have been removed or the path is incorrect',
+      ],
+    });
+  },
+
+  worktreeAlreadyExists(commandName: string, path: string): GitError {
+    return new GitError(`Worktree already exists at: ${path}`, GitErrorCode.WORKTREE_ALREADY_EXISTS, commandName, {
+      suggestions: [
+        'Use "neo git worktree list" to see existing worktrees',
+        'Remove the existing worktree first with "neo git worktree remove"',
+      ],
+    });
+  },
+
+  worktreeBranchCheckedOut(commandName: string, branch: string): GitError {
+    return new GitError(
+      `Branch "${branch}" is already checked out in another worktree!`,
+      GitErrorCode.WORKTREE_BRANCH_CHECKED_OUT,
+      commandName,
+      {
+        suggestions: [
+          'Use "neo git worktree switch" to switch to the existing worktree',
+          'Or create a new branch with: git checkout -b new-branch',
+        ],
+      }
+    );
   },
 };

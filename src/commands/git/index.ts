@@ -4,6 +4,7 @@ import { createPullCommand } from '@/commands/git/pull/index.js';
 import { createBranchCommand } from '@/commands/git/branch/index.js';
 import { createCommitCommand } from '@/commands/git/commit/index.js';
 import { createStashCommand } from '@/commands/git/stash/index.js';
+import { createWorktreeCommand } from '@/commands/git/worktree/index.js';
 
 export function createGitCommand(): Command {
   const command = new Command('git');
@@ -14,7 +15,8 @@ export function createGitCommand(): Command {
     .addCommand(createPushCommand())
     .addCommand(createPullCommand())
     .addCommand(createBranchCommand())
-    .addCommand(createStashCommand());
+    .addCommand(createStashCommand())
+    .addCommand(createWorktreeCommand());
 
   return command;
 }
