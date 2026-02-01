@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.0.2
+
+### Patch Changes
+
+- [#4](https://github.com/radkode/neo/pull/4) [`d8104f1`](https://github.com/radkode/neo/commit/d8104f1ae3c41ae59d73d2ffd94135719950f924) Thanks [@jacekradko](https://github.com/jacekradko)! - Improve unit test coverage from 29% to 64% with comprehensive tests for core infrastructure, utilities, commands, and services.
+
 ## 1.0.1
 
 ### Patch Changes
