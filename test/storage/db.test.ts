@@ -143,18 +143,11 @@ describe('ContextDB', () => {
     it('should order by priority DESC and created_at DESC', () => {
       const contexts = db.listContexts();
 
-      // Note: Current implementation uses text sorting which doesn't match semantic priority
-      // Text sorting: medium > low > high > critical (alphabetical DESC)
-      // TODO: Fix implementation to use CASE statement for proper priority ordering
-      // Expected semantic order: critical > high > medium > low
+      // Semantic priority order: critical > high > medium > low
       const priorities = contexts.map(c => c.priority);
 
-      // Verify results are ordered (even if not semantically correct)
       expect(contexts).toHaveLength(4);
-      expect(priorities).toContain('critical');
-      expect(priorities).toContain('high');
-      expect(priorities).toContain('medium');
-      expect(priorities).toContain('low');
+      expect(priorities).toEqual(['critical', 'high', 'medium', 'low']);
     });
   });
 

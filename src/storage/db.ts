@@ -93,7 +93,13 @@ export class ContextDB {
       params.push(filters.tag);
     }
 
-    query += ' ORDER BY priority DESC, created_at DESC';
+    query += ` ORDER BY CASE priority
+      WHEN 'critical' THEN 4
+      WHEN 'high' THEN 3
+      WHEN 'medium' THEN 2
+      WHEN 'low' THEN 1
+      ELSE 0
+    END DESC, created_at DESC`;
 
     const stmt = this.db.prepare(query);
     const rows = stmt.all(...params) as RawContextItem[];
