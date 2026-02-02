@@ -280,4 +280,112 @@ describe('EventBus', () => {
       expect(handler).toHaveBeenCalledWith({ id: 1, name: 'Test' });
     });
   });
+
+  describe('CLI lifecycle events', () => {
+    it('should emit typed cli:start event', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+      type CliStartEvent = { version: string; args: string[] };
+
+      const handler = vi.fn<[CliStartEvent | undefined], void>();
+      eventBus.on<CliStartEvent>(CliEvents.CLI_START, handler);
+
+      eventBus.emit<CliStartEvent>(CliEvents.CLI_START, {
+        version: '1.0.0',
+        args: ['--help'],
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        version: '1.0.0',
+        args: ['--help'],
+      });
+    });
+
+    it('should emit typed command:before event', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+      type CommandBeforeEvent = { command: string; options: unknown };
+
+      const handler = vi.fn<[CommandBeforeEvent | undefined], void>();
+      eventBus.on<CommandBeforeEvent>(CliEvents.COMMAND_BEFORE, handler);
+
+      eventBus.emit<CommandBeforeEvent>(CliEvents.COMMAND_BEFORE, {
+        command: 'init',
+        options: { force: true },
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        command: 'init',
+        options: { force: true },
+      });
+    });
+
+    it('should emit typed command:after event', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+      type CommandAfterEvent = { command: string; success: boolean; duration: number };
+
+      const handler = vi.fn<[CommandAfterEvent | undefined], void>();
+      eventBus.on<CommandAfterEvent>(CliEvents.COMMAND_AFTER, handler);
+
+      eventBus.emit<CommandAfterEvent>(CliEvents.COMMAND_AFTER, {
+        command: 'init',
+        success: true,
+        duration: 150,
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        command: 'init',
+        success: true,
+        duration: 150,
+      });
+    });
+
+    it('should emit typed cli:exit event', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+      type CliExitEvent = { code: number; reason: 'normal' | 'error' | 'signal' };
+
+      const handler = vi.fn<[CliExitEvent | undefined], void>();
+      eventBus.on<CliExitEvent>(CliEvents.CLI_EXIT, handler);
+
+      eventBus.emit<CliExitEvent>(CliEvents.CLI_EXIT, {
+        code: 0,
+        reason: 'normal',
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        code: 0,
+        reason: 'normal',
+      });
+    });
+
+    it('should emit typed cli:error event', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+      type CliErrorEvent = { error: Error; command?: string };
+
+      const handler = vi.fn<[CliErrorEvent | undefined], void>();
+      eventBus.on<CliErrorEvent>(CliEvents.CLI_ERROR, handler);
+
+      const testError = new Error('Test error');
+      eventBus.emit<CliErrorEvent>(CliEvents.CLI_ERROR, {
+        error: testError,
+        command: 'init',
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        error: testError,
+        command: 'init',
+      });
+    });
+
+    it('should have all expected event names', async () => {
+      const { CliEvents } = await import('../../../src/core/interfaces/index.js');
+
+      expect(CliEvents.CLI_START).toBe('cli:start');
+      expect(CliEvents.CLI_EXIT).toBe('cli:exit');
+      expect(CliEvents.CLI_ERROR).toBe('cli:error');
+      expect(CliEvents.COMMAND_BEFORE).toBe('command:before');
+      expect(CliEvents.COMMAND_AFTER).toBe('command:after');
+      expect(CliEvents.CONFIG_CHANGED).toBe('config:changed');
+      expect(CliEvents.PLUGIN_LOADED).toBe('plugin:loaded');
+      expect(CliEvents.PLUGIN_ERROR).toBe('plugin:error');
+    });
+  });
 });

@@ -7,12 +7,17 @@ import { registerCommands } from '@/commands/index.js';
 import { configManager } from '@/utils/config.js';
 import { notifyIfCliUpdateAvailable } from '@/utils/update-check.js';
 import { Colors } from '@/utils/ui-types.js';
-import { pluginRegistry, commandRegistry } from '@/core/plugins/index.js';
+import { pluginRegistry, commandRegistry, eventBus } from '@/core/plugins/index.js';
+import { CliEvents } from '@/core/interfaces/index.js';
+import type { CliStartEvent, CommandBeforeEvent, CommandAfterEvent, CliExitEvent, CliErrorEvent } from '@/core/interfaces/index.js';
 import { success } from '@/core/errors/index.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 // Track if plugins are loaded
 let pluginsLoaded = false;
+
+// Track command start time for duration calculation
+let commandStartTime: number = 0;
 
 export async function createCLI(): Promise<Command> {
   const program = new Command();
@@ -75,6 +80,15 @@ export async function createCLI(): Promise<Command> {
         await notifyIfCliUpdateAvailable();
       }
 
+      // Track command start time
+      commandStartTime = Date.now();
+
+      // Emit command:before event
+      eventBus.emit<CommandBeforeEvent>(CliEvents.COMMAND_BEFORE, {
+        command: commandName,
+        options: opts,
+      });
+
       // Execute plugin beforeCommand hooks
       if (pluginsLoaded) {
         await pluginRegistry.executeBeforeCommand(commandName, opts);
@@ -82,6 +96,14 @@ export async function createCLI(): Promise<Command> {
     })
     .hook('postAction', async (_thisCommand, actionCommand) => {
       const commandName = actionCommand.name();
+      const duration = Date.now() - commandStartTime;
+
+      // Emit command:after event
+      eventBus.emit<CommandAfterEvent>(CliEvents.COMMAND_AFTER, {
+        command: commandName,
+        success: true,
+        duration,
+      });
 
       // Execute plugin afterCommand hooks
       if (pluginsLoaded) {
@@ -163,7 +185,10 @@ export async function createCLI(): Promise<Command> {
 }
 
 // Cleanup function for graceful shutdown
-async function cleanup(code: number): Promise<void> {
+async function cleanup(code: number, reason: 'normal' | 'error' | 'signal' = 'normal'): Promise<void> {
+  // Emit cli:exit event
+  eventBus.emit<CliExitEvent>(CliEvents.CLI_EXIT, { code, reason });
+
   if (pluginsLoaded) {
     await pluginRegistry.executeOnExit(code);
     await pluginRegistry.disposeAll();
@@ -179,18 +204,24 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
 
   // Handle SIGINT (Ctrl+C)
   process.on('SIGINT', async () => {
-    await cleanup(130);
+    await cleanup(130, 'signal');
     process.exit(130);
   });
 
   // Handle SIGTERM
   process.on('SIGTERM', async () => {
-    await cleanup(143);
+    await cleanup(143, 'signal');
     process.exit(143);
   });
 
   createCLI()
-    .then((program) => {
+    .then(async (program) => {
+      // Emit cli:start event
+      eventBus.emit<CliStartEvent>(CliEvents.CLI_START, {
+        version: packageJson.version,
+        args: process.argv.slice(2),
+      });
+
       // If no arguments provided (only the script name), show help
       if (process.argv.length <= 2) {
         program.help();
@@ -222,13 +253,18 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
           }
         }
 
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        logger.error(errorMessage);
+        const error = err instanceof Error ? err : new Error(String(err));
+        eventBus.emit<CliErrorEvent>(CliEvents.CLI_ERROR, { error });
+        logger.error(error.message);
+        await cleanup(1, 'error');
         process.exit(1);
       }
     })
-    .catch((err) => {
-      logger.error(`CLI initialization failed: ${err}`);
+    .catch(async (err) => {
+      const error = err instanceof Error ? err : new Error(String(err));
+      eventBus.emit<CliErrorEvent>(CliEvents.CLI_ERROR, { error });
+      logger.error(`CLI initialization failed: ${error.message}`);
+      await cleanup(1, 'error');
       process.exit(1);
     });
 }

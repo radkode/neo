@@ -195,6 +195,51 @@ export interface IEventBus {
 export type EventHandler<T = unknown> = (data: T) => void | Promise<void>;
 
 /**
+ * CLI lifecycle event types
+ */
+export interface CliStartEvent {
+  version: string;
+  args: string[];
+}
+
+export interface CommandBeforeEvent {
+  command: string;
+  options: unknown;
+}
+
+export interface CommandAfterEvent {
+  command: string;
+  success: boolean;
+  duration: number;
+}
+
+export interface CliExitEvent {
+  code: number;
+  reason: 'normal' | 'error' | 'signal';
+}
+
+export interface CliErrorEvent {
+  error: Error;
+  command?: string;
+}
+
+/**
+ * Standard CLI event names
+ */
+export const CliEvents = {
+  CLI_START: 'cli:start',
+  CLI_EXIT: 'cli:exit',
+  CLI_ERROR: 'cli:error',
+  COMMAND_BEFORE: 'command:before',
+  COMMAND_AFTER: 'command:after',
+  CONFIG_CHANGED: 'config:changed',
+  PLUGIN_LOADED: 'plugin:loaded',
+  PLUGIN_ERROR: 'plugin:error',
+} as const;
+
+export type CliEventName = (typeof CliEvents)[keyof typeof CliEvents];
+
+/**
  * Command registry for managing commands
  */
 export interface ICommandRegistry {
