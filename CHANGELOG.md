@@ -1,5 +1,21 @@
 # @radkode/neo
 
+## 1.1.0
+
+### Minor Changes
+
+- [#6](https://github.com/radkode/neo/pull/6) [`430e9d6`](https://github.com/radkode/neo/commit/430e9d61240d21b0a30fa32748b6dfb5151eeb0c) Thanks [@jacekradko](https://github.com/jacekradko)! - Add git worktree management commands for managing multiple working directories.
+
+  New commands:
+  - `neo git worktree list` - List all worktrees with status
+  - `neo git worktree add <branch>` - Create worktree for a branch
+  - `neo git worktree remove <path>` - Remove a worktree
+  - `neo git worktree switch` - Interactive worktree switcher with clipboard copy
+
+### Patch Changes
+
+- [#4](https://github.com/radkode/neo/pull/4) [`d8104f1`](https://github.com/radkode/neo/commit/d8104f1ae3c41ae59d73d2ffd94135719950f924) Thanks [@jacekradko](https://github.com/jacekradko)! - Improve unit test coverage from 29% to 64% with comprehensive tests for core infrastructure, utilities, commands, and services.
+
 ## 1.0.1
 
 ### Patch Changes
