@@ -58,6 +58,20 @@ describe('ConfigManager', () => {
     });
   });
 
+  describe('getProfilesDir', () => {
+    it('should return the profiles directory path', () => {
+      const profilesDir = configManager.getProfilesDir();
+      expect(profilesDir).toBe(join(tempDir, '.config', 'neo', 'profiles'));
+    });
+  });
+
+  describe('getPluginsDir', () => {
+    it('should return the plugins directory path', () => {
+      const pluginsDir = configManager.getPluginsDir();
+      expect(pluginsDir).toBe(join(tempDir, '.config', 'neo', 'plugins'));
+    });
+  });
+
   describe('isInitialized', () => {
     it('should return false when config does not exist', async () => {
       const result = await configManager.isInitialized();
@@ -261,6 +275,25 @@ describe('ConfigManager', () => {
       // Verify backup content matches original
       const backupContent = await readFile(backupPath!, 'utf-8');
       expect(backupContent).toBe(originalContent);
+    });
+
+    it('should return null if backup fails due to write error', async () => {
+      const { chmod } = await import('fs/promises');
+      // Create initial config file
+      const configDir = join(tempDir, '.config', 'neo');
+      await mkdir(configDir, { recursive: true });
+      await writeFile(join(configDir, 'config.json'), '{}');
+
+      // Make the config directory read-only so backup write fails
+      await chmod(configDir, 0o444);
+
+      try {
+        const result = await configManager.backup();
+        expect(result).toBeNull();
+      } finally {
+        // Restore permissions for cleanup
+        await chmod(configDir, 0o755);
+      }
     });
   });
 });
