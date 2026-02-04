@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.1.1
+
+### Patch Changes
+
+- [#7](https://github.com/radkode/neo/pull/7) [`5dc745d`](https://github.com/radkode/neo/commit/5dc745db12ab8864c987dbe6955ac6374578bae3) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix git pull to fetch latest changes after switching to main when remote branch is deleted
+
 ## 1.1.0
 
 ### Minor Changes
