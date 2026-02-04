@@ -256,37 +256,33 @@ export function createPushCommand(): Command {
 
   command
     .description('Push changes to remote repository (passes unknown options to git)')
-    .argument('[remote]', 'remote name (default: origin)')
-    .argument('[branch]', 'branch name (default: current branch)')
+    .argument('[args...]', 'git push arguments (remote, branch, and options like -u)')
     .option('--dry-run', 'show what would be pushed without actually pushing')
     .allowUnknownOption()
-    .action(async (remote: string | undefined, branch: string | undefined, opts, cmd) => {
-      // Get all raw args passed to this command
-      const rawArgs = cmd.args;
-
-      // Filter out the remote and branch positional args to get passthrough options
+    .action(async (args: string[], opts) => {
+      // Parse args to extract remote, branch, and passthrough options
+      // Options start with - or --, positional args are remote and branch
       const passthrough: string[] = [];
-      let skipNext = false;
+      const positionalArgs: string[] = [];
 
-      for (const arg of rawArgs) {
-        if (skipNext) {
-          skipNext = false;
-          continue;
-        }
-
+      for (const arg of args) {
         // Skip our known options
         if (arg === '--dry-run') {
           continue;
         }
 
-        // Skip remote and branch positional args
-        if (arg === remote || arg === branch) {
-          continue;
+        if (arg.startsWith('-')) {
+          // This is an option to pass through to git
+          passthrough.push(arg);
+        } else {
+          // This is a positional argument (remote or branch)
+          positionalArgs.push(arg);
         }
-
-        // Include everything else as passthrough
-        passthrough.push(arg);
       }
+
+      // First positional is remote, second is branch
+      const remote = positionalArgs[0];
+      const branch = positionalArgs[1];
 
       const options: PushOptions = {
         dryRun: (opts as { dryRun?: boolean }).dryRun,
