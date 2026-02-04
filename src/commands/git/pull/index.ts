@@ -271,6 +271,10 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<void>> 
     await execa('git', ['checkout', mainBranch]);
     ui.success(`Switched to ${mainBranch} branch`);
 
+    // Pull latest changes on main
+    await execa('git', ['pull']);
+    ui.success(`Pulled latest changes on ${mainBranch}`);
+
     // Try to delete the branch
     try {
       await execa('git', ['branch', '-d', branchName]);
@@ -320,6 +324,11 @@ async function switchToMain(branchName: string): Promise<Result<void>> {
     // Switch to main/master
     await execa('git', ['checkout', mainBranch]);
     ui.success(`Switched to ${mainBranch} branch`);
+
+    // Pull latest changes on main
+    await execa('git', ['pull']);
+    ui.success(`Pulled latest changes on ${mainBranch}`);
+
     ui.info(`Branch "${branchName}" was preserved`);
     ui.muted(`You can switch back with: git checkout ${branchName}`);
 
