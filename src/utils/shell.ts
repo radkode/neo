@@ -1,4 +1,4 @@
-import { access, readFile, writeFile, copyFile } from 'fs/promises';
+import { access, readFile, writeFile, copyFile, mkdir } from 'fs/promises';
 import { constants } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -327,5 +327,221 @@ compinit`;
    */
   getRcFile(): string {
     return this.rcFile;
+  }
+}
+
+export class BashIntegration implements ShellIntegration {
+  private rcFile: string;
+
+  constructor(rcFile?: string) {
+    this.rcFile = rcFile || join(homedir(), '.bashrc');
+  }
+
+  private async rcExists(): Promise<boolean> {
+    try {
+      await access(this.rcFile, constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async readRc(): Promise<string> {
+    const exists = await this.rcExists();
+    if (!exists) return '';
+    try {
+      return await readFile(this.rcFile, 'utf-8');
+    } catch (error) {
+      logger.warn(`Failed to read ${this.rcFile}: ${error}`);
+      return '';
+    }
+  }
+
+  private async writeRc(content: string): Promise<void> {
+    try {
+      await writeFile(this.rcFile, content, 'utf-8');
+      logger.debug(`Updated ${this.rcFile}`);
+    } catch (error) {
+      logger.error(`Failed to write ${this.rcFile}: ${error}`);
+      throw error;
+    }
+  }
+
+  private extractNeoSection(content: string): string | null {
+    const startIndex = content.indexOf(NEO_MARKER_START);
+    const endIndex = content.indexOf(NEO_MARKER_END);
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return null;
+    return content.substring(startIndex, endIndex + NEO_MARKER_END.length);
+  }
+
+  private removeNeoSection(content: string): string {
+    const neoSection = this.extractNeoSection(content);
+    if (!neoSection) return content;
+    return content.replace(neoSection, '').replace(/\n\n\n+/g, '\n\n');
+  }
+
+  private async updateNeoSection(neoContent: string): Promise<void> {
+    const currentContent = await this.readRc();
+    const contentWithoutNeo = this.removeNeoSection(currentContent);
+    const newNeoSection = `\n${NEO_MARKER_START}\n${neoContent}\n${NEO_MARKER_END}\n`;
+    await this.writeRc(contentWithoutNeo + newNeoSection);
+  }
+
+  async hasAlias(alias: string): Promise<boolean> {
+    const content = await this.readRc();
+    const neoSection = this.extractNeoSection(content);
+    if (!neoSection) return false;
+    return new RegExp(`^alias ${alias}=`, 'm').test(neoSection);
+  }
+
+  async addAlias(alias: string, command: string): Promise<void> {
+    const content = await this.readRc();
+    const existingSection = this.extractNeoSection(content);
+    let neoContent = '';
+    if (existingSection) {
+      const lines = existingSection.split('\n')
+        .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+        .filter((line) => !line.trim().startsWith(`alias ${alias}=`))
+        .filter((line) => line.trim() !== '');
+      neoContent = lines.join('\n');
+    }
+    neoContent += neoContent ? '\n' : '';
+    neoContent += `alias ${alias}="${command}"`;
+    await this.updateNeoSection(neoContent);
+    logger.debug(`Added alias: ${alias}="${command}"`);
+  }
+
+  async removeAlias(alias: string): Promise<void> {
+    const content = await this.readRc();
+    const existingSection = this.extractNeoSection(content);
+    if (!existingSection) return;
+    const lines = existingSection.split('\n')
+      .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+      .filter((line) => !line.trim().startsWith(`alias ${alias}=`))
+      .filter((line) => line.trim() !== '');
+    if (lines.length === 0) {
+      await this.writeRc(this.removeNeoSection(content));
+    } else {
+      await this.updateNeoSection(lines.join('\n'));
+    }
+    logger.debug(`Removed alias: ${alias}`);
+  }
+
+  async hasCompletions(): Promise<boolean> {
+    const content = await this.readRc();
+    const neoSection = this.extractNeoSection(content);
+    if (!neoSection) return false;
+    return neoSection.includes('source') && neoSection.includes('neo.bash');
+  }
+
+  async addCompletions(completionsFilePath: string): Promise<void> {
+    const content = await this.readRc();
+    const existingSection = this.extractNeoSection(content);
+    let neoContent = '';
+    if (existingSection) {
+      const lines = existingSection.split('\n')
+        .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+        .filter((line) => !line.includes('neo.bash'))
+        .filter((line) => !line.includes('Neo CLI completions'))
+        .filter((line) => line.trim() !== '');
+      neoContent = lines.join('\n');
+    }
+    if (neoContent) neoContent += '\n';
+    neoContent += `# Neo CLI completions\n[ -f "${completionsFilePath}" ] && source "${completionsFilePath}"`;
+    await this.updateNeoSection(neoContent);
+    logger.debug(`Added bash completions from: ${completionsFilePath}`);
+  }
+
+  async removeCompletions(): Promise<void> {
+    const content = await this.readRc();
+    const existingSection = this.extractNeoSection(content);
+    if (!existingSection) return;
+    const lines = existingSection.split('\n')
+      .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+      .filter((line) => !line.includes('neo.bash'))
+      .filter((line) => !line.includes('Neo CLI completions'))
+      .filter((line) => line.trim() !== '');
+    if (lines.length === 0) {
+      await this.writeRc(this.removeNeoSection(content));
+    } else {
+      await this.updateNeoSection(lines.join('\n'));
+    }
+    logger.debug('Removed bash completions setup');
+  }
+
+  async backup(): Promise<string | null> {
+    const exists = await this.rcExists();
+    if (!exists) return null;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = `${this.rcFile}.neo-backup.${timestamp}`;
+    try {
+      await copyFile(this.rcFile, backupFile);
+      logger.debug(`Backed up ${this.rcFile} to: ${backupFile}`);
+      return backupFile;
+    } catch (error) {
+      logger.warn(`Failed to backup ${this.rcFile}: ${error}`);
+      return null;
+    }
+  }
+
+  getRcFile(): string {
+    return this.rcFile;
+  }
+}
+
+export class FishIntegration implements ShellIntegration {
+  private completionsDir: string;
+
+  constructor(completionsDir?: string) {
+    this.completionsDir = completionsDir || join(homedir(), '.config', 'fish', 'completions');
+  }
+
+  async hasAlias(_alias: string): Promise<boolean> {
+    // Fish uses functions for aliases, not tracked here
+    return false;
+  }
+
+  async addAlias(_alias: string, _command: string): Promise<void> {
+    // Fish aliases are handled differently (functions); skip for now
+    logger.debug('Fish alias management not yet implemented');
+  }
+
+  async removeAlias(_alias: string): Promise<void> {
+    logger.debug('Fish alias management not yet implemented');
+  }
+
+  async hasCompletions(): Promise<boolean> {
+    try {
+      await access(join(this.completionsDir, 'neo.fish'), constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async addCompletions(sourceFilePath: string): Promise<void> {
+    try {
+      await mkdir(this.completionsDir, { recursive: true });
+      const destFile = join(this.completionsDir, 'neo.fish');
+      await copyFile(sourceFilePath, destFile);
+      logger.debug(`Installed fish completions to: ${destFile}`);
+    } catch (error) {
+      logger.error(`Failed to install fish completions: ${error}`);
+      throw error;
+    }
+  }
+
+  async removeCompletions(): Promise<void> {
+    // Fish completions are just a file — deleting handled externally
+    logger.debug('Fish completions can be removed by deleting neo.fish from the completions directory');
+  }
+
+  async backup(): Promise<string | null> {
+    // Fish completions are a single file, no RC to backup
+    return null;
+  }
+
+  getCompletionsDir(): string {
+    return this.completionsDir;
   }
 }
