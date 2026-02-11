@@ -26,6 +26,14 @@ function isRemoteBranchDeletedError(error: unknown): boolean {
 }
 
 /**
+ * Check if error indicates pull failed due to multiple branch ambiguity
+ */
+function isMultipleBranchesError(error: unknown): boolean {
+  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return errorMessage.includes('cannot fast-forward to multiple branches');
+}
+
+/**
  * Execute the pull command logic
  * Returns a Result indicating success or failure
  */
@@ -89,6 +97,33 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
       if (isNonFastForwardError(error)) {
         spinner.stop();
         return handleDivergedPull(branchName, options);
+      }
+
+      // Handle "Cannot fast-forward to multiple branches" by retrying with explicit branch
+      if (isMultipleBranchesError(error)) {
+        logger.debug(`Multiple branches error, retrying with explicit branch: ${branchName}`);
+        spinner.text = `Pulling from origin/${branchName}...`;
+
+        try {
+          const { stdout } = await execa('git', ['pull', 'origin', branchName], {
+            encoding: 'utf8',
+            stdio: 'pipe',
+          });
+
+          spinner.succeed('Successfully pulled from remote!');
+
+          if (stdout.trim()) {
+            ui.muted(stdout);
+          }
+
+          return success(undefined);
+        } catch (retryError: unknown) {
+          if (isNonFastForwardError(retryError)) {
+            spinner.stop();
+            return handleDivergedPull(branchName, options);
+          }
+          throw retryError;
+        }
       }
 
       throw error;
