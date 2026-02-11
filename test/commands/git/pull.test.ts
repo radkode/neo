@@ -91,6 +91,53 @@ describe('git pull command', () => {
     });
   });
 
+  describe('multiple branches error', () => {
+    it('retries with explicit branch when pull fails with multiple branches error', async () => {
+      const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce({ stdout: 'main' }); // branch name
+      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
+      execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
+      execaMock.mockResolvedValueOnce({ stdout: 'Already up to date.' }); // retry with explicit branch
+
+      const command = createPullCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['pull', 'origin', 'main'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
+      expect(exitMock).not.toHaveBeenCalled();
+    });
+
+    it('handles divergence on retry after multiple branches error', async () => {
+      const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce({ stdout: 'feature/test' }); // branch name
+      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
+      execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
+      const divergenceError = new Error('Not possible to fast-forward');
+      (divergenceError as { shortMessage?: string }).shortMessage = 'not possible to fast-forward';
+      execaMock.mockRejectedValueOnce(divergenceError); // retry also diverges
+      execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // rebase pull
+
+      promptSelectMock.mockResolvedValueOnce('rebase');
+
+      const command = createPullCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['pull', 'origin', 'feature/test'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
+      expect(promptSelectMock).toHaveBeenCalled();
+    });
+  });
+
   describe('divergence handling', () => {
     it('rebases when pull cannot fast-forward and user selects rebase', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
