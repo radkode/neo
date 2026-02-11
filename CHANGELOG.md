@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.1.2
+
+### Patch Changes
+
+- [#9](https://github.com/radkode/neo/pull/9) [`54b27f3`](https://github.com/radkode/neo/commit/54b27f3ac2a85a8b4e57f4f6e53aab5f9e8133e5) Thanks [@jacekradko](https://github.com/jacekradko)! - Handle "Cannot fast-forward to multiple branches" error in `neo git pull` by retrying with an explicit branch name instead of erroring out
+
 ## 1.1.1
 
 ### Patch Changes
