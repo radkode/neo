@@ -8,6 +8,9 @@ import { gitBranchOptionsSchema } from '@/types/schemas.js';
 import type { GitBranchOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitError } from '@/utils/output.js';
 
 /**
  * Interface for branch information
@@ -292,6 +295,19 @@ async function interactiveBranchCleanup(
   cleanupCandidates: BranchInfo[],
   forceMode: boolean = false
 ): Promise<Result<void>> {
+  const rtCtx = getRuntimeContext();
+  // In --yes mode, delete all cleanup candidates (respecting forceMode for unmerged).
+  if (rtCtx.yes && !rtCtx.nonInteractive) {
+    return deleteBranches(cleanupCandidates, forceMode);
+  }
+  // --non-interactive without --yes: destructive, fail fast.
+  if (rtCtx.nonInteractive) {
+    throw new NonInteractiveError(
+      'Branch cleanup requires interactive confirmation',
+      '--yes (to delete all candidates) or --dry-run'
+    );
+  }
+
   const { action } = await inquirer.prompt([
     {
       choices: [
@@ -367,8 +383,9 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
     return success(undefined);
   }
 
-  // Final confirmation unless in force mode
-  if (!forceMode) {
+  // Final confirmation unless in force/yes mode
+  const rtCtx = getRuntimeContext();
+  if (!forceMode && !rtCtx.yes && !rtCtx.nonInteractive) {
     const { confirm } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -418,14 +435,22 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
               ui.success(`Force deleted branch "${branch.name}"`);
               ui.warn('This branch had unmerged changes');
             } else {
-              const { forceDelete } = await inquirer.prompt([
-                {
-                  type: 'confirm',
-                  name: 'forceDelete',
-                  message: `Branch "${branch.name}" has unmerged changes. Force delete?`,
-                  default: false,
-                },
-              ]);
+              const ctx2 = getRuntimeContext();
+              let forceDelete: boolean;
+              if (ctx2.nonInteractive || ctx2.yes) {
+                // Unmerged force-delete loses data silently — require --force on command.
+                forceDelete = false;
+              } else {
+                const answer = await inquirer.prompt([
+                  {
+                    type: 'confirm',
+                    name: 'forceDelete',
+                    message: `Branch "${branch.name}" has unmerged changes. Force delete?`,
+                    default: false,
+                  },
+                ]);
+                forceDelete = Boolean(answer.forceDelete);
+              }
 
               if (forceDelete) {
                 await execa('git', ['branch', '-D', branch.name]);
@@ -634,8 +659,21 @@ export function createBranchCommand(): Command {
     .description('Analyze and manage local git branches')
     .option('--dry-run', 'show what would be deleted without actually deleting')
     .option('--force', 'force delete branches without confirmation prompts')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Inspect branches only:
+    $ neo git branch --dry-run
+
+  Clean up merged branches interactively:
+    $ neo git branch
+
+  Delete all cleanup candidates (agent-friendly):
+    $ neo git branch --yes
+`
+    )
     .action(async (options: unknown) => {
-      // Validate options
       let validatedOptions: GitBranchOptions;
       try {
         validatedOptions = validate(gitBranchOptionsSchema, options, 'git branch options');
@@ -646,18 +684,18 @@ export function createBranchCommand(): Command {
         throw error;
       }
 
-      const result = await executeBranch(validatedOptions);
-
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+      try {
+        const result = await executeBranch(validatedOptions);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        if (result.error.context?.['error']) {
-          ui.muted(String(result.error.context['error']));
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
         }
-        process.exit(1);
+        throw error;
       }
     });
 

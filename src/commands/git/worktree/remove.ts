@@ -10,6 +10,9 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { listWorktrees } from './utils.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 interface RemoveWorktreeOptions {
   force?: boolean;
@@ -38,8 +41,15 @@ export async function executeWorktreeRemove(
       return failure(GitErrors.unknown('worktree remove', new Error('Cannot remove main worktree')));
     }
 
-    // Warn if dirty
+    const rtCtx = getRuntimeContext();
+
     if (worktree.isDirty && !options.force) {
+      if (rtCtx.nonInteractive || rtCtx.yes) {
+        throw new NonInteractiveError(
+          `Worktree at ${worktree.path} has uncommitted changes`,
+          '--force'
+        );
+      }
       const { confirm } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -55,9 +65,14 @@ export async function executeWorktreeRemove(
       }
     }
 
-    // Warn if locked
     if (worktree.isLocked && !options.force) {
       ui.warn(`Worktree is locked${worktree.lockReason ? `: ${worktree.lockReason}` : ''}`);
+      if (rtCtx.nonInteractive || rtCtx.yes) {
+        throw new NonInteractiveError(
+          `Worktree at ${worktree.path} is locked`,
+          '--force'
+        );
+      }
       const { confirm } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -85,6 +100,8 @@ export async function executeWorktreeRemove(
 
     spinner.succeed(`Removed worktree at ${worktree.path}`);
 
+    emitJson({ ok: true, command: 'git.worktree.remove', path: worktree.path });
+
     return success(undefined);
   } catch (error) {
     spinner.fail('Failed to remove worktree');
@@ -92,6 +109,8 @@ export async function executeWorktreeRemove(
     if (isNotGitRepository(error)) {
       return failure(GitErrors.notARepository('worktree remove'));
     }
+
+    if (error instanceof NonInteractiveError) throw error;
 
     return failure(GitErrors.unknown('worktree remove', error));
   }
@@ -108,15 +127,18 @@ export function createWorktreeRemoveCommand(): Command {
     .argument('<path>', 'path to the worktree to remove')
     .option('-f, --force', 'force removal even if dirty or locked')
     .action(async (path, options) => {
-      const result = await executeWorktreeRemove(path, options);
-
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions?.length) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+      try {
+        const result = await executeWorktreeRemove(path, options);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        process.exit(1);
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
+        throw error;
       }
     });
 

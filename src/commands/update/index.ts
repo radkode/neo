@@ -9,6 +9,8 @@ import { updateOptionsSchema } from '@/types/schemas.js';
 import type { UpdateOptions } from '@/types/schemas.js';
 import type { PackageManager } from '@/types/index.js';
 import { compareVersions, fetchLatestCliVersion } from '@/utils/update-check.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { emitJson } from '@/utils/output.js';
 
 /**
  * Get the current version from package.json
@@ -135,6 +137,12 @@ export function createUpdateCommand(): Command {
           );
 
           if (!validatedOptions.force && !validatedOptions.checkOnly) {
+            const rtCtx = getRuntimeContext();
+            if (rtCtx.nonInteractive || rtCtx.yes) {
+              // Downgrading is potentially destructive; require explicit --force.
+              ui.muted('Downgrade not performed (pass --force to downgrade non-interactively)');
+              return;
+            }
             const { shouldDowngrade } = await inquirer.prompt([
               {
                 type: 'confirm',
@@ -159,24 +167,40 @@ export function createUpdateCommand(): Command {
           ]);
         }
 
-        // If check-only mode, stop here
         if (validatedOptions.checkOnly) {
+          emitJson({
+            ok: true,
+            command: 'update',
+            currentVersion,
+            latestVersion,
+            updateAvailable: comparison > 0,
+          });
           if (comparison > 0) {
             ui.muted('Run neo update to install the latest version');
           }
           return;
         }
 
-        // Ask for confirmation unless force flag is set
         if (!validatedOptions.force && comparison !== 0) {
-          const { confirm } = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'confirm',
-              message: `Update to version ${latestVersion}?`,
-              default: true,
-            },
-          ]);
+          const rtCtx = getRuntimeContext();
+          let confirm: boolean;
+          if (rtCtx.yes) {
+            confirm = true;
+          } else if (rtCtx.nonInteractive) {
+            // Updating rewrites a global binary — require --yes/--force explicitly.
+            ui.muted('Update skipped in non-interactive mode (pass --yes or --force)');
+            return;
+          } else {
+            const answer = await inquirer.prompt([
+              {
+                type: 'confirm',
+                name: 'confirm',
+                message: `Update to version ${latestVersion}?`,
+                default: true,
+              },
+            ]);
+            confirm = Boolean(answer.confirm);
+          }
 
           if (!confirm) {
             ui.muted('Update cancelled');
@@ -196,6 +220,14 @@ export function createUpdateCommand(): Command {
         try {
           await executeUpdate(packageManager, validatedOptions.force || false);
           updateSpinner.succeed(`Successfully updated to version ${latestVersion}!`);
+
+          emitJson({
+            ok: true,
+            command: 'update',
+            from: currentVersion,
+            to: latestVersion,
+            packageManager,
+          });
 
           ui.muted('Run neo --version to verify the installation');
         } catch (error: unknown) {

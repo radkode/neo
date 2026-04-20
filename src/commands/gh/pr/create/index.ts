@@ -4,12 +4,14 @@ import inquirer from 'inquirer';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { logger } from '@/utils/logger.js';
-import { promptSelect } from '@/utils/prompt.js';
+import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { ghPrCreateOptionsSchema } from '@/types/schemas.js';
 import type { GhPrCreateOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure, CommandError } from '@/core/errors/index.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 /**
  * Check if GitHub CLI is installed
@@ -209,14 +211,22 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
         ui.warn('You have unpushed commits');
       }
 
-      const { shouldPush } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'shouldPush',
-          message: 'Push changes to remote before creating PR?',
-          default: true,
-        },
-      ]);
+      const rtCtx = getRuntimeContext();
+      let shouldPush: boolean;
+      if (rtCtx.yes || rtCtx.nonInteractive) {
+        // Default "yes" — pushing is the expected prelude to creating a PR.
+        shouldPush = true;
+      } else {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'shouldPush',
+            message: 'Push changes to remote before creating PR?',
+            default: true,
+          },
+        ]);
+        shouldPush = Boolean(answer.shouldPush);
+      }
 
       if (shouldPush) {
         const pushSpinner = ui.spinner('Pushing to remote');
@@ -248,63 +258,70 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
       ui.info(`Using base branch: ${baseBranch}`);
     }
 
+    const rtCtxForInputs = getRuntimeContext();
+
     // Get title
     let title = options.title;
     if (!title) {
       const branchTitle = generateTitleFromBranch(currentBranch);
       const lastCommit = await getLastCommitMessage();
-
       const titleSuggestion = lastCommit || branchTitle;
 
-      const { prTitle } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'prTitle',
-          message: 'PR title:',
-          default: titleSuggestion,
-          validate: (input: string) => {
-            if (!input.trim()) {
-              return 'PR title cannot be empty';
-            }
-            return true;
+      if (rtCtxForInputs.yes || rtCtxForInputs.nonInteractive) {
+        title = titleSuggestion;
+      } else {
+        const { prTitle } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'prTitle',
+            message: 'PR title:',
+            default: titleSuggestion,
+            validate: (input: string) => {
+              if (!input.trim()) return 'PR title cannot be empty';
+              return true;
+            },
           },
-        },
-      ]);
-      title = prTitle;
+        ]);
+        title = prTitle;
+      }
     }
 
     // Get body
     let body = options.body;
     if (!body) {
       const template = await findPrTemplate();
-
       if (template) {
         ui.info('Found PR template');
       }
 
-      const { wantBody } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'wantBody',
-          message: 'Add a description?',
-          default: !!template,
-        },
-      ]);
-
-      if (wantBody) {
-        const { prBody } = await inquirer.prompt([
+      if (rtCtxForInputs.yes || rtCtxForInputs.nonInteractive) {
+        // Agent default: use the template if present, otherwise no body.
+        body = template ?? '';
+      } else {
+        const { wantBody } = await inquirer.prompt([
           {
-            type: 'editor',
-            name: 'prBody',
-            message: 'PR description:',
-            default: template || '',
+            type: 'confirm',
+            name: 'wantBody',
+            message: 'Add a description?',
+            default: !!template,
           },
         ]);
-        body = prBody;
+
+        if (wantBody) {
+          const { prBody } = await inquirer.prompt([
+            {
+              type: 'editor',
+              name: 'prBody',
+              message: 'PR description:',
+              default: template || '',
+            },
+          ]);
+          body = prBody;
+        }
       }
     }
 
-    // Ask about draft
+    // Ask about draft (promptSelect already honors yes/non-interactive with a safe default)
     let isDraft = options.draft;
     if (isDraft === undefined) {
       const draftChoice = await promptSelect({
@@ -314,6 +331,8 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
           { label: 'Draft PR', value: 'draft' },
         ],
         defaultValue: 'ready',
+        flag: '--draft',
+        safeDefaultForNonInteractive: true,
       });
       isDraft = draftChoice === 'draft';
     }
@@ -359,6 +378,20 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
       const prUrl = stdout.trim();
       ui.success(`PR URL: ${prUrl}`);
 
+      emitJson(
+        {
+          ok: true,
+          command: 'gh.pr.create',
+          url: prUrl,
+          title,
+          base: baseBranch,
+          draft: Boolean(isDraft),
+          reviewers: options.reviewer ?? [],
+          labels: options.label ?? [],
+        },
+        { text: () => {} }
+      );
+
       return success(prUrl);
     } catch (ghError: unknown) {
       createSpinner.fail('Failed to create pull request');
@@ -399,6 +432,20 @@ export function createPrCreateCommand(): Command {
     .option('-r, --reviewer <reviewers...>', 'request reviewers')
     .option('-l, --label <labels...>', 'add labels')
     .option('-w, --web', 'open PR in browser after creation')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Interactive wizard:
+    $ neo gh pr create
+
+  Fully-specified:
+    $ neo gh pr create --title "Add X" --body "..." --base main
+
+  Agent-friendly (auto-fills title from commit + pushes first):
+    $ neo gh pr create --yes --json
+`
+    )
     .action(async (options: unknown) => {
       let validatedOptions: GhPrCreateOptions;
       try {
@@ -410,15 +457,18 @@ export function createPrCreateCommand(): Command {
         throw error;
       }
 
-      const result = await executeGhPrCreate(validatedOptions);
-
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+      try {
+        const result = await executeGhPrCreate(validatedOptions);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        process.exit(1);
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
+        throw error;
       }
     });
 

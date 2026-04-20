@@ -2,7 +2,9 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
-import { promptSelect } from '@/utils/prompt.js';
+import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { emitJson, emitError } from '@/utils/output.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
@@ -167,21 +169,15 @@ async function handleDivergedPull(
 
   const strategy = await promptSelect({
     choices: [
-      {
-        label: 'Cancel (do nothing)',
-        value: 'cancel',
-      },
-      {
-        label: 'Merge remote into current branch (--no-ff)',
-        value: 'merge',
-      },
-      {
-        label: 'Rebase onto remote (recommended)',
-        value: 'rebase',
-      },
+      { label: 'Cancel (do nothing)', value: 'cancel' },
+      { label: 'Merge remote into current branch (--no-ff)', value: 'merge' },
+      { label: 'Rebase onto remote (recommended)', value: 'rebase' },
     ],
     defaultValue: defaultStrategy,
     message: 'Branches have diverged. Choose a pull strategy:',
+    flag: '--rebase or --no-rebase',
+    // Rebasing on divergence is the documented default behavior — safe to auto-apply.
+    safeDefaultForNonInteractive: true,
   });
 
   if (strategy === 'rebase') {
@@ -256,28 +252,19 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<Result<voi
   ui.warn(`Your local branch "${branchName}" is tracking a remote branch that has been deleted`);
   console.log('');
 
+  // Note: no safeDefaultForNonInteractive — the default ("delete branch") is
+  // destructive, so agents must explicitly opt in via a flag (future --on-deleted).
   const validatedAction = deletedBranchActionSchema.parse(
     await promptSelect({
       choices: [
-        {
-          label: 'Switch to main and delete this branch (recommended)',
-          value: 'switch_main_delete',
-        },
-        {
-          label: 'Switch to main and keep this branch',
-          value: 'switch_main_keep',
-        },
-        {
-          label: `Set a new upstream for "${branchName}"`,
-          value: 'set_upstream',
-        },
-        {
-          label: 'Cancel (no changes)',
-          value: 'cancel',
-        },
+        { label: 'Switch to main and delete this branch (recommended)', value: 'switch_main_delete' },
+        { label: 'Switch to main and keep this branch', value: 'switch_main_keep' },
+        { label: `Set a new upstream for "${branchName}"`, value: 'set_upstream' },
+        { label: 'Cancel (no changes)', value: 'cancel' },
       ],
       defaultValue: 'switch_main_delete',
       message: 'How would you like to resolve this?',
+      flag: '(no flag yet — remote branch deletion requires interactive resolution)',
     })
   );
 
@@ -320,14 +307,24 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<void>> 
       if (errorMessage.includes('not fully merged')) {
         ui.warn(`Branch "${branchName}" has unmerged changes`);
 
-        const { forceDelete } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'forceDelete',
-            message: 'Force delete anyway? (This will lose any uncommitted changes)',
-            default: false,
-          },
-        ]);
+        const rtCtx = getRuntimeContext();
+        let forceDelete: boolean;
+        if (rtCtx.nonInteractive || rtCtx.yes) {
+          // Force-delete loses work silently — never auto-approve.
+          throw new NonInteractiveError(
+            'Branch has unmerged changes; force-delete requires explicit confirmation'
+          );
+        } else {
+          const answer = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'forceDelete',
+              message: 'Force delete anyway? (This will lose any uncommitted changes)',
+              default: false,
+            },
+          ]);
+          forceDelete = Boolean(answer.forceDelete);
+        }
 
         if (forceDelete) {
           await execa('git', ['branch', '-D', branchName]);
@@ -429,8 +426,21 @@ export function createPullCommand(): Command {
     .description('Pull changes from remote repository with automatic rebase fallback')
     .option('--rebase', 'force rebase strategy')
     .option('--no-rebase', 'prevent automatic rebase fallback')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Normal pull (auto-rebases on divergence):
+    $ neo git pull
+
+  Force rebase:
+    $ neo git pull --rebase
+
+  Agent-friendly (structured output, auto-handles divergence):
+    $ neo git pull --yes --json
+`
+    )
     .action(async (options: unknown) => {
-      // Validate options
       let validatedOptions: GitPullOptions;
       try {
         validatedOptions = validate(gitPullOptionsSchema, options, 'git pull options');
@@ -441,18 +451,19 @@ export function createPullCommand(): Command {
         throw error;
       }
 
-      const result = await executePull(validatedOptions);
-
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+      try {
+        const result = await executePull(validatedOptions);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        if (result.error.context?.['error']) {
-          ui.muted(String(result.error.context['error']));
+        emitJson({ ok: true, command: 'git.pull' });
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
         }
-        process.exit(1);
+        throw error;
       }
     });
 

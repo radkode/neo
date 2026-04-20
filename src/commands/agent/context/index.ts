@@ -3,6 +3,9 @@ import inquirer from 'inquirer';
 import { ContextDB } from '@/storage/db.js';
 import { ui } from '@/utils/ui.js';
 import { validate, validateArgument, isValidationError } from '@/utils/validation.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 import {
   agentContextAddOptionsSchema,
   agentContextListOptionsSchema,
@@ -115,7 +118,6 @@ function createContextRemoveCommand(): Command {
     .action(async (rawId: string) => {
       await ensureAgentInitialized();
 
-      // Validate ID argument
       let id: ContextId;
       try {
         id = validateArgument(contextIdSchema, rawId, 'context ID');
@@ -126,7 +128,15 @@ function createContextRemoveCommand(): Command {
         throw error;
       }
 
-      await removeContext(id);
+      try {
+        await removeContext(id);
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
+        throw error;
+      }
     });
 
   return command;
@@ -156,14 +166,29 @@ async function addContext(content: ContextContent, options: AgentContextAddOptio
     db.close();
     spinner.succeed('Context added successfully');
 
-    // Display the added context
-    ui.keyValue([
-      ['ID', contextItem.id],
-      ['Content', contextItem.content],
-      ['Tags', contextItem.tags.join(', ') || 'none'],
-      ['Priority', contextItem.priority],
-      ['Created', contextItem.created_at.toLocaleString()],
-    ]);
+    emitJson(
+      {
+        ok: true,
+        command: 'agent.context.add',
+        context: {
+          id: contextItem.id,
+          content: contextItem.content,
+          tags: contextItem.tags,
+          priority: contextItem.priority,
+          created_at: contextItem.created_at.toISOString(),
+        },
+      },
+      {
+        text: () =>
+          ui.keyValue([
+            ['ID', contextItem.id],
+            ['Content', contextItem.content],
+            ['Tags', contextItem.tags.join(', ') || 'none'],
+            ['Priority', contextItem.priority],
+            ['Created', contextItem.created_at.toLocaleString()],
+          ]),
+      }
+    );
   } catch (error) {
     spinner.fail('Failed to add context');
     ui.error(error instanceof Error ? error.message : String(error));
@@ -196,13 +221,35 @@ async function listContexts(options: AgentContextListOptions): Promise<void> {
 
     spinner.succeed('Contexts loaded');
 
+    // JSON path: emit the full structured list unconditionally.
+    const rtCtx = getRuntimeContext();
+    if (rtCtx.format === 'json') {
+      emitJson({
+        ok: true,
+        command: 'agent.context.list',
+        total: stats.total,
+        filtered: contexts.length,
+        filter: {
+          tag: options.tag ?? null,
+          priority: options.priority ?? null,
+        },
+        contexts: contexts.map((c: ContextItem) => ({
+          id: c.id,
+          content: c.content,
+          tags: c.tags,
+          priority: c.priority,
+          created_at: c.created_at.toISOString(),
+        })),
+      });
+      return;
+    }
+
     if (contexts.length === 0) {
       ui.warn('No contexts found');
       ui.muted('Add your first context with: neo agent context add "Your context here"');
       return;
     }
 
-    // Display summary
     let filterSummary = `Showing ${contexts.length} of ${stats.total} contexts`;
     if (options.tag || options.priority) {
       const filters = [];
@@ -215,9 +262,8 @@ async function listContexts(options: AgentContextListOptions): Promise<void> {
     ui.muted(filterSummary);
     ui.divider();
 
-    // Prepare table data
     const tableRows = contexts.map((context: ContextItem) => [
-      context.id.slice(0, 8), // Short ID
+      context.id.slice(0, 8),
       truncateText(context.content, 50),
       context.tags.length > 0 ? context.tags.join(', ') : '—',
       formatPriority(context.priority),
@@ -270,15 +316,27 @@ async function removeContext(id: ContextId): Promise<void> {
       ['Created', context.created_at.toLocaleString()],
     ]);
 
-    // Confirm removal
-    const { confirmed } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirmed',
-        message: 'Are you sure you want to remove this context?',
-        default: false,
-      },
-    ]);
+    const rtCtx = getRuntimeContext();
+    let confirmed: boolean;
+    if (rtCtx.yes) {
+      confirmed = true;
+    } else if (rtCtx.nonInteractive) {
+      db.close();
+      throw new NonInteractiveError(
+        'Context removal requires confirmation',
+        '--yes'
+      );
+    } else {
+      const answer = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirmed',
+          message: 'Are you sure you want to remove this context?',
+          default: false,
+        },
+      ]);
+      confirmed = Boolean(answer.confirmed);
+    }
 
     if (!confirmed) {
       db.close();

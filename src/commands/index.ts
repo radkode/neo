@@ -8,6 +8,7 @@ import { createUpdateCommand } from '@/commands/update/index.js';
 import { createAliasCommand } from '@/commands/alias/index.js';
 import { createAgentCommand } from '@/commands/agent/index.js';
 import { createCompletionsCommand } from '@/commands/completions/index.js';
+import { createSchemaCommand } from '@/commands/schema/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -19,6 +20,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createUpdateCommand());
   program.addCommand(createAgentCommand());
   program.addCommand(createCompletionsCommand());
+  program.addCommand(createSchemaCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -30,3 +32,4 @@ export { createAliasCommand } from '@/commands/alias/index.js';
 export { createUpdateCommand } from '@/commands/update/index.js';
 export { createAgentCommand } from '@/commands/agent/index.js';
 export { createCompletionsCommand } from '@/commands/completions/index.js';
+export { createSchemaCommand } from '@/commands/schema/index.js';

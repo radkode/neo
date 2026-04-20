@@ -11,7 +11,16 @@ export function createAgentCommand(): Command {
   command
     .description('Manage AI agent context and configuration')
     .addCommand(createAgentInitCommand())
-    .addCommand(createAgentContextCommand());
+    .addCommand(createAgentContextCommand())
+    .addHelpText(
+      'after',
+      `
+Agent-friendly usage:
+  $ neo agent context list --json
+  $ neo agent context add "Important fact" --tag important --json
+  $ neo agent context remove <id> --yes --json
+`
+    );
 
   return command;
 }

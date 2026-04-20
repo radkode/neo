@@ -9,6 +9,48 @@ import {
   type CodeOptions,
   type StyledSpinner,
 } from './ui-types.js';
+import { getRuntimeContext } from './runtime-context.js';
+
+/** Write a diagnostic line to stderr. */
+function err(line: string): void {
+  process.stderr.write(`${line}\n`);
+}
+
+/** True when decorative output should be suppressed (agent/CI/json/quiet mode). */
+function shouldSuppressDecoration(): boolean {
+  const ctx = getRuntimeContext();
+  return ctx.quiet || ctx.format === 'json';
+}
+
+/** Returns a chainable no-op spinner for quiet/json modes. */
+function createNoopSpinner(initialText: string): StyledSpinner {
+  const spinner = {
+    text: initialText,
+    prefixText: '',
+    suffixText: '',
+    color: 'blue',
+    indent: 0,
+    spinner: { interval: 80, frames: [''] },
+    interval: 80,
+    isSpinning: false,
+    isEnabled: false,
+    isSilent: true,
+  } as unknown as StyledSpinner;
+
+  const chain = (): StyledSpinner => spinner;
+  spinner.start = chain;
+  spinner.stop = chain;
+  spinner.succeed = chain;
+  spinner.fail = chain;
+  spinner.warn = chain;
+  spinner.info = chain;
+  spinner.stopAndPersist = chain;
+  spinner.clear = chain;
+  spinner.render = chain;
+  spinner.frame = (): string => '';
+
+  return spinner;
+}
 
 /**
  * Neo CLI UI System
@@ -36,108 +78,85 @@ class UISystem implements UI {
   // Core Output Methods
   // ============================================================================
 
-  /**
-   * Display a success message with checkmark icon
-   */
   public success(message: string): void {
-    console.log(chalk.hex(Colors.success)(`${Icons.success} ${message}`));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.success)(`${Icons.success} ${message}`));
   }
 
-  /**
-   * Display an error message with error icon
-   */
   public error(message: string): void {
-    console.error(chalk.hex(Colors.error)(`${Icons.error} ${message}`));
+    // Errors always go to stderr even in json mode so users can see raw text
+    // alongside the structured error object on stdout.
+    err(chalk.hex(Colors.error)(`${Icons.error} ${message}`));
   }
 
-  /**
-   * Display a warning message with warning icon
-   */
   public warn(message: string): void {
-    console.log(chalk.hex(Colors.error)(`${Icons.warning} ${message}`));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.error)(`${Icons.warning} ${message}`));
   }
 
-  /**
-   * Display an informational message with info icon
-   */
   public info(message: string): void {
-    console.log(chalk.hex(Colors.muted)(`${Icons.info} ${message}`));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.muted)(`${Icons.info} ${message}`));
   }
 
-  /**
-   * Display a step or progress message with arrow icon
-   */
   public step(message: string): void {
-    console.log(chalk.hex(Colors.muted)(`${Icons.step} ${message}`));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.muted)(`${Icons.step} ${message}`));
   }
 
-  /**
-   * Display muted/secondary text without icon
-   */
   public muted(message: string): void {
-    console.log(chalk.hex(Colors.muted)(message));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.muted)(message));
   }
 
-  /**
-   * Display a highlighted message with diamond icon
-   */
   public highlight(message: string): void {
-    console.log(chalk.hex(Colors.primary)(`${Icons.highlight} ${message}`));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.hex(Colors.primary)(`${Icons.highlight} ${message}`));
   }
 
-  /**
-   * Display a link or URL with optional text
-   */
   public link(text: string, url?: string): void {
+    if (shouldSuppressDecoration()) return;
     if (url) {
-      console.log(`${text}: ${chalk.hex(Colors.primary).underline(url)}`);
+      err(`${text}: ${chalk.hex(Colors.primary).underline(url)}`);
     } else {
-      console.log(chalk.hex(Colors.primary).underline(text));
+      err(chalk.hex(Colors.primary).underline(text));
     }
   }
 
-  /**
-   * Display plain text without styling
-   */
   public log(message: string): void {
-    console.log(message);
+    // log() is the one channel that intentionally writes to stdout — used by
+    // commands to emit their actual payload.
+    process.stdout.write(`${message}\n`);
   }
 
   // ============================================================================
   // Structured Output Methods
   // ============================================================================
 
-  /**
-   * Display a section header with divider line
-   */
   public section(title: string): void {
-    console.log(chalk.bold.hex(Colors.primary)(title));
-    console.log(chalk.hex(Colors.muted)('─'.repeat(title.length)));
+    if (shouldSuppressDecoration()) return;
+    err(chalk.bold.hex(Colors.primary)(title));
+    err(chalk.hex(Colors.muted)('─'.repeat(title.length)));
   }
 
-  /**
-   * Display a bulleted list of items
-   */
   public list(items: string[]): void {
+    if (shouldSuppressDecoration()) return;
     items.forEach((item) => {
-      console.log(`  ${chalk.hex(Colors.muted)(Icons.bullet)} ${item}`);
+      err(`  ${chalk.hex(Colors.muted)(Icons.bullet)} ${item}`);
     });
   }
 
-  /**
-   * Display key-value pairs with aligned formatting
-   */
   public keyValue(pairs: KeyValuePair[]): void {
+    if (shouldSuppressDecoration()) return;
     if (pairs.length === 0) {
       return;
     }
 
-    // Calculate the maximum key length for alignment
     const maxKeyLength = Math.max(...pairs.map(([key]) => key.length));
 
     pairs.forEach(([key, value]) => {
       const paddedKey = key.padEnd(maxKeyLength);
-      console.log(
+      err(
         `  ${chalk.hex(Colors.muted)(paddedKey + ':')}  ${chalk.hex(Colors.primary)(value)}`
       );
     });
@@ -147,6 +166,7 @@ class UISystem implements UI {
    * Display data in a table format
    */
   public table(data: TableData): void {
+    if (shouldSuppressDecoration()) return;
     const { headers, rows } = data;
 
     if (rows.length === 0) {
@@ -183,46 +203,39 @@ class UISystem implements UI {
       return '│' + paddedCells.join('│') + '│';
     };
 
-    // Print table
-    console.log(chalk.hex(Colors.muted)(createSeparator('┌', '┬', '┐')));
+    err(chalk.hex(Colors.muted)(createSeparator('┌', '┬', '┐')));
 
-    // Print headers if provided
     if (headers && headers.length > 0) {
-      console.log(chalk.bold(createRow(headers)));
-      console.log(chalk.hex(Colors.muted)(createSeparator('├', '┼', '┤')));
+      err(chalk.bold(createRow(headers)));
+      err(chalk.hex(Colors.muted)(createSeparator('├', '┼', '┤')));
     }
 
-    // Print rows
     rows.forEach((row) => {
-      console.log(createRow(row));
+      err(createRow(row));
     });
 
-    console.log(chalk.hex(Colors.muted)(createSeparator('└', '┴', '┘')));
+    err(chalk.hex(Colors.muted)(createSeparator('└', '┴', '┘')));
   }
 
-  /**
-   * Display a code block with optional syntax highlighting
-   */
   public code(code: string, options?: CodeOptions): void {
+    if (shouldSuppressDecoration()) return;
     const lines = code.split('\n');
     const { lineNumbers = false, startLine = 1 } = options || {};
 
     lines.forEach((line, index) => {
       if (lineNumbers) {
         const lineNum = (startLine + index).toString().padStart(3);
-        console.log(`${chalk.hex(Colors.muted)(lineNum + ' │')} ${chalk.dim(line)}`);
+        err(`${chalk.hex(Colors.muted)(lineNum + ' │')} ${chalk.dim(line)}`);
       } else {
-        console.log(chalk.dim(line));
+        err(chalk.dim(line));
       }
     });
   }
 
-  /**
-   * Display a horizontal divider line
-   */
   public divider(): void {
+    if (shouldSuppressDecoration()) return;
     const width = process.stdout.columns || 80;
-    console.log(chalk.hex(Colors.muted)('─'.repeat(width)));
+    err(chalk.hex(Colors.muted)('─'.repeat(width)));
   }
 
   // ============================================================================
@@ -233,9 +246,13 @@ class UISystem implements UI {
    * Create a styled spinner with consistent appearance
    */
   public spinner(text: string): StyledSpinner {
+    if (shouldSuppressDecoration()) {
+      return createNoopSpinner(text);
+    }
     const instance = ora({
       text,
       color: 'blue',
+      stream: process.stderr,
     }) as StyledSpinner;
 
     // Override with styled versions
