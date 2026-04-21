@@ -2,8 +2,10 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
-import { promptSelect } from '@/utils/prompt.js';
+import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { emitJson, emitError } from '@/utils/output.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
   GitErrors,
@@ -19,6 +21,10 @@ interface PushOptions {
   passthrough: string[];
   remote?: string | undefined;
   branch?: string | undefined;
+  /** Skip the main-branch push confirmation prompt. */
+  forceMain?: boolean | undefined;
+  /** Resolution strategy when push is rejected non-fast-forward. */
+  onReject?: 'pull-rebase' | 'force' | 'cancel' | undefined;
 }
 
 /**
@@ -40,14 +46,29 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ui.warn('You are about to push directly to main branch');
       ui.muted('This is generally not recommended as it bypasses code review processes');
 
-      const { confirmPush } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirmPush',
-          message: 'Are you sure you want to continue?',
-          default: false,
-        },
-      ]);
+      const rtCtx = getRuntimeContext();
+      let confirmPush: boolean;
+
+      if (options.forceMain) {
+        confirmPush = true;
+      } else if (rtCtx.nonInteractive || rtCtx.yes) {
+        // Main-branch pushes are destructive — require explicit --force-main in
+        // non-interactive mode rather than quietly proceeding.
+        throw new NonInteractiveError(
+          'Pushing to main requires explicit confirmation',
+          '--force-main'
+        );
+      } else {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirmPush',
+            message: 'Are you sure you want to continue?',
+            default: false,
+          },
+        ]);
+        confirmPush = Boolean(answer.confirmPush);
+      }
 
       if (!confirmPush) {
         ui.success("Push cancelled. Here's how to push your changes safely:");
@@ -116,6 +137,13 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
+    emitJson({
+      ok: true,
+      command: 'git.push',
+      remote: remoteName,
+      branch: targetBranch,
+    });
+
     return success(undefined);
   } catch (error: unknown) {
     spinner.stop();
@@ -133,24 +161,18 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ui.error('Push was rejected because the remote has new commits.');
       ui.warn('Choose how to resolve the divergence:');
 
-      const resolution = await promptSelect({
-        choices: [
-          {
-            label: 'Pull with rebase and retry push',
-            value: 'pull-rebase',
-          },
-          {
-            label: 'Force push (overwrite remote)',
-            value: 'force',
-          },
-          {
-            label: 'Cancel for now',
-            value: 'cancel',
-          },
-        ],
-        defaultValue: 'pull-rebase',
-        message: 'Select a resolution strategy',
-      });
+      const resolution: 'pull-rebase' | 'force' | 'cancel' = options.onReject
+        ? options.onReject
+        : await promptSelect({
+            choices: [
+              { label: 'Pull with rebase and retry push', value: 'pull-rebase' as const },
+              { label: 'Force push (overwrite remote)', value: 'force' as const },
+              { label: 'Cancel for now', value: 'cancel' as const },
+            ],
+            defaultValue: 'pull-rebase',
+            message: 'Select a resolution strategy',
+            flag: '--on-reject <pull-rebase|force|cancel>',
+          });
 
       if (resolution === 'pull-rebase') {
         return handlePullRebase(branchName, pushArgs, options);
@@ -258,6 +280,25 @@ export function createPushCommand(): Command {
     .description('Push changes to remote repository (passes unknown options to git)')
     .argument('[args...]', 'git push arguments (remote, branch, and options like -u)')
     .option('--dry-run', 'show what would be pushed without actually pushing')
+    .option('--force-main', 'skip main-branch safety prompt')
+    .option(
+      '--on-reject <strategy>',
+      'resolution when push is rejected non-fast-forward (pull-rebase|force|cancel)'
+    )
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Standard push:
+    $ neo git push
+
+  Preview what would be pushed:
+    $ neo git push --dry-run
+
+  Agent push with auto-rebase on reject:
+    $ neo git push --yes --on-reject pull-rebase --json
+`
+    )
     .allowUnknownOption()
     .action(async (args: string[], opts) => {
       // Parse args to extract remote, branch, and passthrough options
@@ -284,27 +325,34 @@ export function createPushCommand(): Command {
       const remote = positionalArgs[0];
       const branch = positionalArgs[1];
 
+      const typedOpts = opts as {
+        dryRun?: boolean;
+        forceMain?: boolean;
+        onReject?: 'pull-rebase' | 'force' | 'cancel';
+      };
       const options: PushOptions = {
-        dryRun: (opts as { dryRun?: boolean }).dryRun,
+        dryRun: typedOpts.dryRun,
         passthrough,
         remote,
         branch,
+        forceMain: typedOpts.forceMain,
+        onReject: typedOpts.onReject,
       };
 
       logger.debug(`Options: ${JSON.stringify(options)}`);
 
-      const result = await executePush(options);
-
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+      try {
+        const result = await executePush(options);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        if (result.error.context?.['error']) {
-          ui.muted(String(result.error.context['error']));
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
         }
-        process.exit(1);
+        throw error;
       }
     });
 

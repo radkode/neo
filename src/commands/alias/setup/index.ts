@@ -5,6 +5,9 @@ import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { aliasSetupOptionsSchema } from '@/types/schemas.js';
 import type { AliasSetupOptions } from '@/types/schemas.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 interface AliasDefinition {
   readonly [alias: string]: string;
@@ -89,16 +92,26 @@ export function createSetupCommand(): Command {
             );
           }
 
-          const { confirm } = await inquirer.prompt<{
-            confirm: boolean;
-          }>([
-            {
-              type: 'confirm',
-              name: 'confirm',
-              message: 'Proceed with overwriting these aliases?',
-              default: false,
-            },
-          ]);
+          const rtCtx = getRuntimeContext();
+          let confirm: boolean;
+          if (rtCtx.yes) {
+            confirm = true;
+          } else if (rtCtx.nonInteractive) {
+            throw new NonInteractiveError(
+              'Existing aliases would be overwritten',
+              '--force or --yes'
+            );
+          } else {
+            const answer = await inquirer.prompt<{ confirm: boolean }>([
+              {
+                type: 'confirm',
+                name: 'confirm',
+                message: 'Proceed with overwriting these aliases?',
+                default: false,
+              },
+            ]);
+            confirm = Boolean(answer.confirm);
+          }
 
           if (!confirm) {
             ui.info('Aborted. No changes were made');
@@ -124,7 +137,18 @@ export function createSetupCommand(): Command {
         ui.list(Object.entries(ALIASES).map(([alias, value]) => `${alias}="${value}"`));
 
         ui.info('Restart your shell or run: source ~/.zshrc');
+
+        emitJson({
+          ok: true,
+          command: 'alias.setup',
+          aliases: ALIASES,
+          rcFile,
+        });
       } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
         const message = error instanceof Error ? error.message : String(error);
         ui.error(`Failed to setup aliases: ${message}`);
         process.exitCode = 1;

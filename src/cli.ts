@@ -11,6 +11,7 @@ import { pluginRegistry, commandRegistry, eventBus } from '@/core/plugins/index.
 import { CliEvents } from '@/core/interfaces/index.js';
 import type { CliStartEvent, CommandBeforeEvent, CommandAfterEvent, CliExitEvent, CliErrorEvent } from '@/core/interfaces/index.js';
 import { success } from '@/core/errors/index.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 // Track if plugins are loaded
@@ -30,9 +31,54 @@ export async function createCLI(): Promise<Command> {
     .option('-c, --config <path>', 'path to config file')
     .option('--no-color', 'disable colored output')
     .option('--no-banner', 'hide banner')
+    .option('--json', 'emit machine-readable JSON on stdout (implies --non-interactive, --quiet)')
+    .option('-y, --yes', 'auto-accept prompt defaults (agent-friendly)')
+    .option('--non-interactive', 'fail fast instead of prompting for missing input')
+    .option('-q, --quiet', 'suppress banner, spinners, and decorative output')
+    .addHelpText(
+      'after',
+      `
+Agent mode:
+  Flags   --json, --yes, --non-interactive, --quiet, --no-color, --no-banner
+  Env     NEO_JSON, NEO_YES, NEO_NON_INTERACTIVE, NEO_QUIET, NO_COLOR, CI
+  Schema  neo schema                         dump every command & option as JSON
+  Quick   neo git commit --ai --yes --json   AI commit, no prompts, JSON output
+          neo git pull --yes --json          pull + auto-rebase, structured result
+          neo gh pr create --yes --json      push + PR using inferred title
+
+Exit codes:
+  0  success
+  1  command failure
+  2  non-interactive prompt required (missing flag) — see error.flag for the fix
+
+Learn more:
+  neo <command> --help       detailed help for a command
+  neo schema --pretty        full CLI description for agents
+`
+    )
     .hook('preAction', async (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
       const commandName = actionCommand.name();
+
+      // Build the runtime context from flags + env. All downstream code
+      // (logger, prompts, banner, commands) consults this instead of re-reading flags.
+      const overrides: {
+        json: boolean;
+        yes: boolean;
+        nonInteractive: boolean;
+        quiet: boolean;
+        verbose: boolean;
+        color?: boolean;
+      } = {
+        json: Boolean(opts['json']),
+        yes: Boolean(opts['yes']),
+        nonInteractive: Boolean(opts['nonInteractive']),
+        quiet: Boolean(opts['quiet']),
+        verbose: Boolean(opts['verbose']),
+      };
+      if (opts['color'] === false) overrides.color = false;
+      const ctx = buildRuntimeContext(overrides);
+      setRuntimeContext(ctx);
 
       // Determine banner display logic
       // Priority order:
@@ -48,19 +94,26 @@ export async function createCLI(): Promise<Command> {
         process.argv.includes('--help') ||
         process.argv.includes('-h');
 
+      // Commands whose stdout is inherently machine-readable — never polute
+      // with banner or update-check, regardless of flags.
+      const isMachineOutputCommand =
+        commandName === 'schema' || commandName === 'completions';
+
       // Configure logger early
-      if (opts.verbose) {
+      if (ctx.verbose) {
         logger.setVerbose(true);
         logger.debug(`Executing command: ${commandName}`);
       }
 
-      // Disable colors if requested
-      if (opts.color === false) {
+      // Disable colors if requested or auto-detected (NO_COLOR, non-TTY, json mode)
+      if (!ctx.color) {
         chalk.level = 0;
       }
 
-      // Skip banner for help/version commands
-      if (!isHelpOrVersion && opts.banner !== false) {
+      // Skip banner for help/version, machine commands, --no-banner, or agent/json/quiet.
+      const suppressBanner =
+        ctx.quiet || ctx.format === 'json' || ctx.isAgent || ctx.isCI || isMachineOutputCommand;
+      if (!isHelpOrVersion && opts.banner !== false && !suppressBanner) {
         // Read banner preference from config
         let bannerType: BannerType = 'full'; // Default fallback
         try {
@@ -75,8 +128,9 @@ export async function createCLI(): Promise<Command> {
         displayBanner(bannerType);
       }
 
-      // Always check for updates (except help/version)
-      if (!isHelpOrVersion) {
+      // Update check: only when interactive, not in json/quiet/agent/CI mode.
+      // Under those modes we don't want background network I/O or stdout noise.
+      if (!isHelpOrVersion && !suppressBanner && !ctx.nonInteractive) {
         await notifyIfCliUpdateAvailable();
       }
 

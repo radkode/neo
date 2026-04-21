@@ -4,6 +4,9 @@ import inquirer from 'inquirer';
 import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 /**
  * Parsed stash entry information
@@ -488,7 +491,6 @@ async function handleStashSelection(stashes: StashEntry[]): Promise<Result<void>
  */
 async function interactiveStash(): Promise<Result<void>> {
   try {
-    // Verify git repository
     await execa('git', ['rev-parse', '--git-dir']);
   } catch (error) {
     if (isNotGitRepository(error)) {
@@ -504,7 +506,35 @@ async function interactiveStash(): Promise<Result<void>> {
 
   spinner.stop();
 
-  // No changes and no stashes
+  // Non-interactive mode: print state as JSON (read-only) and exit.
+  // Stash is inherently interactive; no safe default action exists.
+  const rtCtx = getRuntimeContext();
+  if (rtCtx.nonInteractive) {
+    emitJson(
+      {
+        ok: true,
+        command: 'git.stash',
+        changes: state.changes,
+        stashes: state.stashes.map((s) => ({
+          index: s.index,
+          ref: s.ref,
+          branch: s.branch,
+          message: s.message,
+          timestamp: s.timestamp.toISOString(),
+          filesChanged: s.filesChanged,
+        })),
+      },
+      {
+        text: () => {
+          if (state.hasChanges) displayChanges(state.changes);
+          if (state.hasStashes) displayStashes(state.stashes);
+          ui.info('Stash has no non-interactive actions yet — pass no flags for the wizard.');
+        },
+      }
+    );
+    return success(undefined);
+  }
+
   if (!state.hasChanges && !state.hasStashes) {
     ui.info('No uncommitted changes and no stashes.');
     ui.muted('Make some changes, then run this command again.');
@@ -573,16 +603,30 @@ export function createStashCommand(): Command {
 
   command
     .description('Interactively manage git stashes')
-    .action(async () => {
-      const result = await executeStash();
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Interactive stash wizard:
+    $ neo git stash
 
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+  List stashes as JSON (agent-friendly):
+    $ neo git stash --json
+`
+    )
+    .action(async () => {
+      try {
+        const result = await executeStash();
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        process.exit(1);
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
+        throw error;
       }
     });
 

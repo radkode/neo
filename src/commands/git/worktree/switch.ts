@@ -9,6 +9,8 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { listWorktrees, formatWorktreeStatus, copyToClipboard } from './utils.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 /**
  * Execute the worktree switch command
@@ -27,7 +29,25 @@ export async function executeWorktreeSwitch(): Promise<Result<string | null>> {
       return success(null);
     }
 
-    // Display status dashboard
+    const rtCtx = getRuntimeContext();
+    // In non-interactive mode, emit the worktree list as JSON and exit — the
+    // agent can choose one and cd itself. A CLI can't cd the parent shell anyway.
+    if (rtCtx.nonInteractive) {
+      emitJson({
+        ok: true,
+        command: 'git.worktree.switch',
+        worktrees: worktrees.map((wt) => ({
+          branch: wt.branch ?? null,
+          path: wt.path,
+          head: wt.head,
+          isDirty: wt.isDirty,
+          isLocked: wt.isLocked,
+          isMain: wt.isMain,
+        })),
+      });
+      return success(null);
+    }
+
     ui.section('Worktree Status');
     ui.table({
       headers: ['#', 'Branch', 'Path', 'Status'],
@@ -110,11 +130,7 @@ export function createWorktreeSwitchCommand(): Command {
     const result = await executeWorktreeSwitch();
 
     if (isFailure(result)) {
-      ui.error(result.error.message);
-      if (result.error.suggestions?.length) {
-        ui.warn('Suggestions:');
-        ui.list(result.error.suggestions);
-      }
+      emitError(result.error);
       process.exit(1);
     }
   });

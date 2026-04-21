@@ -9,6 +9,9 @@ import { type Result, success, failure, isFailure } from '@/core/errors/index.js
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { generateCommitMessage, isAICommitAvailable, AIErrors } from '@/services/ai/index.js';
 import type { AICommitResponse } from '@/services/ai/index.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 
 /**
  * Commit type descriptions for the interactive wizard
@@ -243,22 +246,27 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         ui.code(previewMessage);
         console.log('');
 
-        // Ask what to do
-        const { selectedAction } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'selectedAction',
-            message: 'What would you like to do?',
-            choices: [
-              { name: 'Commit with this message', value: 'commit' },
-              { name: 'Edit in wizard', value: 'edit' },
-              { name: 'Regenerate', value: 'regenerate' },
-              { name: 'Cancel', value: 'cancel' },
-            ],
-          },
-        ]);
-
-        action = selectedAction as AICommitAction;
+        // Ask what to do. In non-interactive/yes mode, accept the AI output
+        // directly — this is the behavior agents want from `--ai`.
+        const runtimeCtx = getRuntimeContext();
+        if (runtimeCtx.yes || runtimeCtx.nonInteractive) {
+          action = 'commit';
+        } else {
+          const { selectedAction } = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'selectedAction',
+              message: 'What would you like to do?',
+              choices: [
+                { name: 'Commit with this message', value: 'commit' },
+                { name: 'Edit in wizard', value: 'edit' },
+                { name: 'Regenerate', value: 'regenerate' },
+                { name: 'Cancel', value: 'cancel' },
+              ],
+            },
+          ]);
+          action = selectedAction as AICommitAction;
+        }
       }
 
       if (action === 'cancel') {
@@ -313,9 +321,20 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
       }
     }
 
-    // Check if we're in quick mode (all options provided)
+    const runtimeCtx = getRuntimeContext();
+    // Quick mode: all required fields provided OR agent mode with sensible inputs.
+    // In non-interactive/yes mode, we can't prompt — require the essentials up front.
     const quickMode =
       options.type !== undefined && options.message !== undefined;
+
+    if (!quickMode && (runtimeCtx.yes || runtimeCtx.nonInteractive)) {
+      if (!options.type || !options.message) {
+        throw new NonInteractiveError(
+          'git commit requires --type and --message in non-interactive mode',
+          '--type <type> --message <msg>'
+        );
+      }
+    }
 
     if (quickMode) {
       // Quick commit mode with CLI options
@@ -412,8 +431,8 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     ui.muted(formattedMessage);
     console.log('');
 
-    // Confirm commit
-    if (!quickMode) {
+    // Confirm commit (skip in quick/yes/non-interactive mode).
+    if (!quickMode && !runtimeCtx.yes && !runtimeCtx.nonInteractive) {
       const { confirm } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -437,9 +456,20 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
       await execa('git', ['commit', '-m', formattedMessage]);
       spinner.succeed('Commit created successfully!');
 
-      // Show commit hash
       const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
-      ui.info(`Commit: ${commitHash.trim()}`);
+      emitJson(
+        {
+          ok: true,
+          command: 'git.commit',
+          commit: commitHash.trim(),
+          type: commitType,
+          scope: commitScope ?? null,
+          message: commitMessage,
+          breaking: isBreaking,
+          files: stagedFiles,
+        },
+        { text: () => ui.info(`Commit: ${commitHash.trim()}`) }
+      );
 
       return success(undefined);
     } catch (error) {
@@ -475,8 +505,24 @@ export function createCommitCommand(): Command {
     .option('--breaking', 'mark as breaking change')
     .option('-a, --all', 'automatically stage all modified files')
     .option('--ai', 'generate commit message using AI')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Interactive wizard:
+    $ neo git commit
+
+  Quick commit (no prompts):
+    $ neo git commit --type fix --message "handle null token"
+
+  AI-drafted commit, auto-accept (agent-friendly):
+    $ neo git commit --ai --yes
+
+  Machine-readable output:
+    $ neo git commit --ai --yes --json
+`
+    )
     .action(async (options: unknown) => {
-      // Validate options
       let validatedOptions: GitCommitOptions;
       try {
         validatedOptions = validate(gitCommitOptionsSchema, options, 'git commit options');
@@ -487,18 +533,19 @@ export function createCommitCommand(): Command {
         throw error;
       }
 
-      const result = await executeCommit(validatedOptions);
+      try {
+        const result = await executeCommit(validatedOptions);
 
-      if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
+        if (isFailure(result)) {
+          emitError(result.error);
+          process.exit(1);
         }
-        if (result.error.context?.['error']) {
-          ui.muted(String(result.error.context['error']));
+      } catch (error) {
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
         }
-        process.exit(1);
+        throw error;
       }
     });
 

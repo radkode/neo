@@ -9,6 +9,9 @@ import { configManager, type NeoConfig } from '@/utils/config.js';
 import { GlobalInstaller } from '@/utils/installer.js';
 import { ZshIntegration } from '@/utils/shell.js';
 import { CompletionGenerator } from '@/utils/completions.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import { emitJson, emitError } from '@/utils/output.js';
 import { join } from 'path';
 
 export function createInitCommand(): Command {
@@ -46,18 +49,32 @@ export function createInitCommand(): Command {
           ui.info(`Neo CLI is already initialized (v${config.installation.version})`);
           ui.info(`Config location: ${configManager.getConfigFile()}`);
 
-          const { action } = await inquirer.prompt([
-            {
-              choices: [
-                { name: 'Update configuration', short: 'Update configuration', value: 'update' },
-                { name: 'Reset everything', short: 'Reset everything', value: 'reset' },
-                { name: 'Cancel', short: 'Cancel', value: 'cancel' },
-              ],
-              message: 'What would you like to do?',
-              name: 'action',
-              type: 'list',
-            },
-          ]);
+          const rtCtx = getRuntimeContext();
+          let action: 'update' | 'reset' | 'cancel';
+
+          if (rtCtx.yes) {
+            action = 'update';
+          } else if (rtCtx.nonInteractive) {
+            // Existing config + no guidance = ambiguous. Require explicit flag.
+            throw new NonInteractiveError(
+              'Neo is already initialized; pass --force to reset or run without --non-interactive',
+              '--force'
+            );
+          } else {
+            const answer = await inquirer.prompt([
+              {
+                choices: [
+                  { name: 'Update configuration', short: 'Update configuration', value: 'update' },
+                  { name: 'Reset everything', short: 'Reset everything', value: 'reset' },
+                  { name: 'Cancel', short: 'Cancel', value: 'cancel' },
+                ],
+                message: 'What would you like to do?',
+                name: 'action',
+                type: 'list',
+              },
+            ]);
+            action = answer.action as 'update' | 'reset' | 'cancel';
+          }
 
           if (action === 'cancel') {
             ui.info('Initialization cancelled');
@@ -184,12 +201,37 @@ export function createInitCommand(): Command {
           'Try: neo --help or n --help',
           'Configure settings: neo config',
         ]);
+        emitJson({
+          ok: true,
+          command: 'init',
+          version: installStatus.packageVersion ?? null,
+          configFile: configManager.getConfigFile(),
+        });
       } catch (error: unknown) {
         spinner.fail('Initialization failed');
+        if (error instanceof NonInteractiveError) {
+          emitError(error as unknown as Error);
+          process.exit(2);
+        }
         ui.error(`Error: ${error}`);
         throw error;
       }
     });
+
+  command.addHelpText(
+    'after',
+    `
+Examples:
+  Fresh install:
+    $ neo init
+
+  Force reconfigure:
+    $ neo init --force
+
+  Configuration only (no global install):
+    $ neo init --skip-install
+`
+  );
 
   return command;
 }
