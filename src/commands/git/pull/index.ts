@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger.js';
 import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
@@ -36,10 +37,17 @@ function isMultipleBranchesError(error: unknown): boolean {
 }
 
 /**
+ * Outcome of an executePull call. `cancelled` distinguishes "the user chose
+ * to abort" from "the pull completed" so the JSON emitter doesn't claim
+ * `ok: true` on a no-op.
+ */
+export type PullOutcome = { cancelled: false } | { cancelled: true; reason: string };
+
+/**
  * Execute the pull command logic
  * Returns a Result indicating success or failure
  */
-export async function executePull(options: GitPullOptions): Promise<Result<void>> {
+export async function executePull(options: GitPullOptions): Promise<Result<PullOutcome>> {
   const spinner = ui.spinner('Pulling from remote');
   let branchName = '';
 
@@ -75,7 +83,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
         ui.muted(stdout);
       }
 
-      return success(undefined);
+      return success({ cancelled: false } as const);
     }
 
     // Try normal pull first
@@ -93,7 +101,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
         ui.muted(stdout);
       }
 
-      return success(undefined);
+      return success({ cancelled: false } as const);
     } catch (error: unknown) {
       // Check for diverged branches
       if (isNonFastForwardError(error)) {
@@ -118,7 +126,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
             ui.muted(stdout);
           }
 
-          return success(undefined);
+          return success({ cancelled: false } as const);
         } catch (retryError: unknown) {
           if (isNonFastForwardError(retryError)) {
             spinner.stop();
@@ -161,7 +169,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<void>
 async function handleDivergedPull(
   branchName: string,
   options: GitPullOptions
-): Promise<Result<void>> {
+): Promise<Result<PullOutcome>> {
   ui.error('Local and remote branches have diverged.');
   ui.warn('Choose how to reconcile the branches.');
 
@@ -195,7 +203,7 @@ async function handleDivergedPull(
         ui.muted(stdout);
       }
 
-      return success(undefined);
+      return success({ cancelled: false } as const);
     } catch (error) {
       rebaseSpinner.stop();
       if (isConflictError(error)) {
@@ -229,7 +237,7 @@ async function handleDivergedPull(
         ui.muted(stdout);
       }
 
-      return success(undefined);
+      return success({ cancelled: false } as const);
     } catch (error) {
       fetchSpinner.stop();
       mergeSpinner.stop();
@@ -241,16 +249,16 @@ async function handleDivergedPull(
   }
 
   ui.info('Pull cancelled. No changes were applied.');
-  return failure(GitErrors.unknown('pull'));
+  return success({ cancelled: true, reason: 'user-cancelled-diverged' } as const);
 }
 
 /**
  * Handle deleted remote branch scenario with interactive prompt
  */
-async function handleDeletedRemoteBranch(branchName: string): Promise<Result<void>> {
+async function handleDeletedRemoteBranch(branchName: string): Promise<Result<PullOutcome>> {
   ui.error('Remote branch no longer exists!');
   ui.warn(`Your local branch "${branchName}" is tracking a remote branch that has been deleted`);
-  console.log('');
+  ui.newline();
 
   // Note: no safeDefaultForNonInteractive — the default ("delete branch") is
   // destructive, so agents must explicitly opt in via a flag (future --on-deleted).
@@ -277,14 +285,14 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<Result<voi
       return setNewUpstream(branchName);
     case 'cancel':
       ui.muted('Operation cancelled. No changes were made.');
-      return success(undefined);
+      return success({ cancelled: true, reason: 'user-cancelled-deleted-remote' } as const);
   }
 }
 
 /**
  * Switch to main branch and delete the current branch
  */
-async function switchToMainAndDelete(branchName: string): Promise<Result<void>> {
+async function switchToMainAndDelete(branchName: string): Promise<Result<PullOutcome>> {
   try {
     // First check if main branch exists
     const mainBranch = await findDefaultBranch();
@@ -339,7 +347,7 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<void>> 
       }
     }
 
-    return success(undefined);
+    return success({ cancelled: false } as const);
   } catch (error) {
     return failure(GitErrors.unknown('pull', error));
   }
@@ -348,7 +356,7 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<void>> 
 /**
  * Switch to main branch but keep the current branch
  */
-async function switchToMain(branchName: string): Promise<Result<void>> {
+async function switchToMain(branchName: string): Promise<Result<PullOutcome>> {
   try {
     // First check if main branch exists
     const mainBranch = await findDefaultBranch();
@@ -364,7 +372,7 @@ async function switchToMain(branchName: string): Promise<Result<void>> {
     ui.info(`Branch "${branchName}" was preserved`);
     ui.muted(`You can switch back with: git checkout ${branchName}`);
 
-    return success(undefined);
+    return success({ cancelled: false } as const);
   } catch (error) {
     return failure(GitErrors.unknown('pull', error));
   }
@@ -373,13 +381,15 @@ async function switchToMain(branchName: string): Promise<Result<void>> {
 /**
  * Set a new upstream for the current branch
  */
-async function setNewUpstream(branchName: string): Promise<Result<void>> {
+async function setNewUpstream(branchName: string): Promise<Result<PullOutcome>> {
   try {
     await execa('git', ['branch', '--set-upstream-to', `origin/${branchName}`, branchName]);
     ui.success(`Set upstream for "${branchName}" to origin/${branchName}`);
     ui.info('You can now try pulling again');
 
-    return success(undefined);
+    // Upstream set but no pull ran; treat as a cancelled pull so the JSON
+    // emitter doesn't claim `ok: true` for a no-op.
+    return success({ cancelled: true, reason: 'upstream-set-only' } as const);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('does not exist')) {
@@ -440,7 +450,7 @@ Examples:
     $ neo git pull --yes --json
 `
     )
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       let validatedOptions: GitPullOptions;
       try {
         validatedOptions = validate(gitPullOptionsSchema, options, 'git pull options');
@@ -451,21 +461,17 @@ Examples:
         throw error;
       }
 
-      try {
-        const result = await executePull(validatedOptions);
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-        emitJson({ ok: true, command: 'git.pull' });
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+      const result = await executePull(validatedOptions);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+      if (result.data.cancelled) {
+        emitJson({ ok: false, command: 'git.pull', cancelled: true, reason: result.data.reason });
+        return;
+      }
+      emitJson({ ok: true, command: 'git.pull' });
+    }));
 
   return command;
 }

@@ -12,6 +12,8 @@ import { CliEvents } from '@/core/interfaces/index.js';
 import type { CliStartEvent, CommandBeforeEvent, CommandAfterEvent, CliExitEvent, CliErrorEvent } from '@/core/interfaces/index.js';
 import { success } from '@/core/errors/index.js';
 import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
+import { runAction } from '@/utils/run-action.js';
+import { emitError } from '@/utils/output.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 // Track if plugins are loaded
@@ -205,22 +207,25 @@ Learn more:
           }
         }
 
-        // Add action
-        cmd.action(async (...args: unknown[]) => {
-          const opts = args[args.length - 2] as unknown;
-          const cmdArgs = args.slice(0, -2) as string[];
+        // Add action. Plugins get the same NonInteractiveError / --json
+        // guarantees as built-in commands via the shared runAction wrapper.
+        cmd.action(
+          runAction(async (...args: unknown[]) => {
+            const opts = args[args.length - 2] as unknown;
+            const cmdArgs = args.slice(0, -2) as string[];
 
-          if (command.validate && !command.validate(opts)) {
-            logger.error(`Invalid options for command "${command.name}"`);
-            process.exit(1);
-          }
+            if (command.validate && !command.validate(opts)) {
+              emitError(new Error(`Invalid options for command "${command.name}"`));
+              process.exit(1);
+            }
 
-          const result = await command.execute(opts, cmdArgs);
-          if (!result.success) {
-            logger.error(result.error.message);
-            process.exit(1);
-          }
-        });
+            const result = await command.execute(opts, cmdArgs);
+            if (!result.success) {
+              emitError(result.error as unknown as Error);
+              process.exit(1);
+            }
+          })
+        );
 
         program.addCommand(cmd);
         logger.debug(`Registered plugin command: ${command.name}`);

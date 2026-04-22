@@ -157,6 +157,8 @@ export interface UiMock {
   table: ReturnType<typeof vi.fn>;
   banner: ReturnType<typeof vi.fn>;
   spinner: ReturnType<typeof vi.fn>;
+  newline: ReturnType<typeof vi.fn>;
+  plain: ReturnType<typeof vi.fn>;
   _spinner: SpinnerMock;
 }
 
@@ -180,6 +182,8 @@ export function createUiMock(): UiMock {
     table: vi.fn(),
     banner: vi.fn(),
     spinner: vi.fn(() => spinnerMock),
+    newline: vi.fn(),
+    plain: vi.fn(),
     _spinner: spinnerMock,
   };
 }

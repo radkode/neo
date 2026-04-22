@@ -5,7 +5,8 @@ import { ui } from '@/utils/ui.js';
 import { validate, validateArgument, isValidationError } from '@/utils/validation.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import {
   agentContextAddOptionsSchema,
   agentContextListOptionsSchema,
@@ -45,7 +46,7 @@ function createContextAddCommand(): Command {
     .argument('<content>', 'context content')
     .option('--tag <tags...>', 'tags to assign')
     .option('--priority <priority>', 'priority level (low, medium, high, critical)')
-    .action(async (rawContent: string, options: unknown) => {
+    .action(runAction(async (rawContent: string, options: unknown) => {
       await ensureAgentInitialized();
 
       // Validate content argument
@@ -71,7 +72,7 @@ function createContextAddCommand(): Command {
       }
 
       await addContext(content, validatedOptions);
-    });
+    }));
 
   return command;
 }
@@ -86,7 +87,7 @@ function createContextListCommand(): Command {
     .description('List context items')
     .option('--tag <tag>', 'filter by tag')
     .option('--priority <priority>', 'filter by priority')
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       await ensureAgentInitialized();
 
       // Validate options
@@ -101,7 +102,7 @@ function createContextListCommand(): Command {
       }
 
       await listContexts(validatedOptions);
-    });
+    }));
 
   return command;
 }
@@ -115,7 +116,7 @@ function createContextRemoveCommand(): Command {
   command
     .description('Remove a context item')
     .argument('<id>', 'context ID to remove')
-    .action(async (rawId: string) => {
+    .action(runAction(async (rawId: string) => {
       await ensureAgentInitialized();
 
       let id: ContextId;
@@ -128,16 +129,8 @@ function createContextRemoveCommand(): Command {
         throw error;
       }
 
-      try {
-        await removeContext(id);
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
-      }
-    });
+      await removeContext(id);
+    }));
 
   return command;
 }
@@ -356,6 +349,9 @@ async function removeContext(id: ContextId): Promise<void> {
       spinner.fail('Failed to remove context');
     }
   } catch (error) {
+    // Let NonInteractiveError propagate so the outer runAction wrapper can
+    // emit a structured error and exit with code 2 (the agent contract).
+    if (error instanceof NonInteractiveError) throw error;
     ui.error('Failed to remove context');
     ui.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

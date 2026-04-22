@@ -13,6 +13,7 @@ import { listWorktrees } from './utils.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 interface RemoveWorktreeOptions {
   force?: boolean;
@@ -126,21 +127,13 @@ export function createWorktreeRemoveCommand(): Command {
     .description('Remove a worktree')
     .argument('<path>', 'path to the worktree to remove')
     .option('-f, --force', 'force removal even if dirty or locked')
-    .action(async (path, options) => {
-      try {
-        const result = await executeWorktreeRemove(path, options);
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+    .action(runAction(async (path, options) => {
+      const result = await executeWorktreeRemove(path, options);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

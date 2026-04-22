@@ -97,13 +97,18 @@ export async function promptSelect<T extends string>({
     }
   }
 
-  const rl = readline.createInterface({ input, output });
+  // Half-TTY edge case (stdin TTY, stdout piped) — route the prompt menu to
+  // stderr so the consumer's captured stdout stays clean.
+  const rl = readline.createInterface({ input, output: process.stderr });
+  const writeLine = (line: string): void => {
+    process.stderr.write(`${line}\n`);
+  };
 
   try {
-    console.log(message);
+    writeLine(message);
     choices.forEach(({ label }, index) => {
       const marker = index === safeDefaultIndex ? ' (default)' : '';
-      console.log(`  ${index + 1}. ${label}${marker}`);
+      writeLine(`  ${index + 1}. ${label}${marker}`);
     });
 
     let selected: T | null = null;
@@ -121,7 +126,7 @@ export async function promptSelect<T extends string>({
         break;
       }
 
-      console.log('Please enter a valid number from the list.');
+      writeLine('Please enter a valid number from the list.');
     }
 
     return selected ?? fallbackValue;
@@ -160,7 +165,13 @@ export async function promptPassword({
   return new Promise((resolve) => {
     let password = '';
 
-    output.write(`${message}: `);
+    // Prompt + keystroke echo go to stderr so a consumer piping stdout into a
+    // file (e.g. `neo ... > secrets.txt`) doesn't capture the prompt string.
+    const write = (s: string): void => {
+      process.stderr.write(s);
+    };
+
+    write(`${message}: `);
 
     if (input.isTTY) {
       input.setRawMode(true);
@@ -177,7 +188,7 @@ export async function promptPassword({
         }
         input.pause();
         input.removeListener('data', onData);
-        output.write('\n');
+        write('\n');
         resolve(password);
         return;
       }
@@ -188,20 +199,20 @@ export async function promptPassword({
         }
         input.pause();
         input.removeListener('data', onData);
-        output.write('\n');
+        write('\n');
         process.exit(1);
       }
 
       if (charCode === 127 || charCode === 8) {
         if (password.length > 0) {
           password = password.slice(0, -1);
-          output.write('\b \b');
+          write('\b \b');
         }
         return;
       }
 
       password += char;
-      output.write('*');
+      write('*');
     };
 
     input.on('data', onData);

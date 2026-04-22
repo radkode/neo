@@ -37,7 +37,6 @@ interface SchemaCommand {
   arguments: SchemaArgument[];
   options: SchemaOption[];
   subcommands: SchemaCommand[];
-  examples?: string;
 }
 
 interface SchemaRoot {

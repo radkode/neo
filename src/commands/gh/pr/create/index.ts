@@ -4,7 +4,7 @@ import inquirer from 'inquirer';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { logger } from '@/utils/logger.js';
-import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
+import { promptSelect } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
 import { validate, isValidationError } from '@/utils/validation.js';
 import { ghPrCreateOptionsSchema } from '@/types/schemas.js';
@@ -12,6 +12,7 @@ import type { GhPrCreateOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure, CommandError } from '@/core/errors/index.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 /**
  * Check if GitHub CLI is installed
@@ -446,7 +447,7 @@ Examples:
     $ neo gh pr create --yes --json
 `
     )
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       let validatedOptions: GhPrCreateOptions;
       try {
         validatedOptions = validate(ghPrCreateOptionsSchema, options, 'gh pr create options');
@@ -457,20 +458,12 @@ Examples:
         throw error;
       }
 
-      try {
-        const result = await executeGhPrCreate(validatedOptions);
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+      const result = await executeGhPrCreate(validatedOptions);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

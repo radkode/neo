@@ -5,8 +5,8 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
-import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 /**
  * Parsed stash entry information
@@ -217,7 +217,7 @@ function displayChanges(changes: FileChange[]): void {
   if (staged.length > 0) {
     ui.success('Staged:');
     for (const file of staged.slice(0, 5)) {
-      ui.log(`  ${statusIcons[file.status]}  ${file.path}`);
+      ui.plain(`  ${statusIcons[file.status]}  ${file.path}`);
     }
     if (staged.length > 5) ui.muted(`  ... and ${staged.length - 5} more`);
   }
@@ -225,7 +225,7 @@ function displayChanges(changes: FileChange[]): void {
   if (unstaged.length > 0) {
     ui.warn('Modified:');
     for (const file of unstaged.slice(0, 5)) {
-      ui.log(`  ${statusIcons[file.status]}  ${file.path}`);
+      ui.plain(`  ${statusIcons[file.status]}  ${file.path}`);
     }
     if (unstaged.length > 5) ui.muted(`  ... and ${unstaged.length - 5} more`);
   }
@@ -233,7 +233,7 @@ function displayChanges(changes: FileChange[]): void {
   if (untracked.length > 0) {
     ui.muted('Untracked:');
     for (const file of untracked.slice(0, 3)) {
-      ui.log(`  ${statusIcons[file.status]}  ${file.path}`);
+      ui.plain(`  ${statusIcons[file.status]}  ${file.path}`);
     }
     if (untracked.length > 3) ui.muted(`  ... and ${untracked.length - 3} more`);
   }
@@ -614,21 +614,13 @@ Examples:
     $ neo git stash --json
 `
     )
-    .action(async () => {
-      try {
-        const result = await executeStash();
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+    .action(runAction(async () => {
+      const result = await executeStash();
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

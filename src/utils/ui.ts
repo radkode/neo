@@ -129,6 +129,16 @@ class UISystem implements UI {
     process.stdout.write(`${message}\n`);
   }
 
+  public newline(): void {
+    if (shouldSuppressDecoration()) return;
+    err('');
+  }
+
+  public plain(message: string): void {
+    if (shouldSuppressDecoration()) return;
+    err(message);
+  }
+
   // ============================================================================
   // Structured Output Methods
   // ============================================================================

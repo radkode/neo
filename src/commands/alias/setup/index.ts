@@ -7,7 +7,8 @@ import { aliasSetupOptionsSchema } from '@/types/schemas.js';
 import type { AliasSetupOptions } from '@/types/schemas.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 interface AliasDefinition {
   readonly [alias: string]: string;
@@ -56,7 +57,7 @@ export function createSetupCommand(): Command {
   command
     .description('Setup ZSH aliases for Neo CLI. Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
-    .action(async (options: unknown): Promise<void> => {
+    .action(runAction(async (options: unknown): Promise<void> => {
       // Validate options
       let validatedOptions: AliasSetupOptions;
       try {
@@ -69,91 +70,81 @@ export function createSetupCommand(): Command {
       }
       const shell = new ZshIntegration();
 
-      try {
-        // Read current rc content and detect conflicts
-        const rcFile = shell.getRcFile();
-        const rcContent = await (async () => {
-          // ZshIntegration has a private readRc, so we access the file directly here for conflict scan
-          try {
-            const { readFile } = await import('fs/promises');
-            return await readFile(rcFile, 'utf-8');
-          } catch {
-            return '';
-          }
-        })();
+      // Read current rc content and detect conflicts
+      const rcFile = shell.getRcFile();
+      const rcContent = await (async () => {
+        // ZshIntegration has a private readRc, so we access the file directly here for conflict scan
+        try {
+          const { readFile } = await import('fs/promises');
+          return await readFile(rcFile, 'utf-8');
+        } catch {
+          return '';
+        }
+      })();
 
-        const conflicts = findConflictingAliases(rcContent, ALIASES);
+      const conflicts = findConflictingAliases(rcContent, ALIASES);
 
-        if (conflicts.length > 0 && !validatedOptions.force) {
-          ui.warn('The following aliases already exist and will be overwritten:');
-          for (const c of conflicts) {
-            ui.log(
-              `  ${c.alias}: currently ${c.current} -> new ${ALIASES[c.alias as keyof AliasDefinition]}`
-            );
-          }
-
-          const rtCtx = getRuntimeContext();
-          let confirm: boolean;
-          if (rtCtx.yes) {
-            confirm = true;
-          } else if (rtCtx.nonInteractive) {
-            throw new NonInteractiveError(
-              'Existing aliases would be overwritten',
-              '--force or --yes'
-            );
-          } else {
-            const answer = await inquirer.prompt<{ confirm: boolean }>([
-              {
-                type: 'confirm',
-                name: 'confirm',
-                message: 'Proceed with overwriting these aliases?',
-                default: false,
-              },
-            ]);
-            confirm = Boolean(answer.confirm);
-          }
-
-          if (!confirm) {
-            ui.info('Aborted. No changes were made');
-            return;
-          }
+      if (conflicts.length > 0 && !validatedOptions.force) {
+        ui.warn('The following aliases already exist and will be overwritten:');
+        for (const c of conflicts) {
+          ui.plain(
+            `  ${c.alias}: currently ${c.current} -> new ${ALIASES[c.alias as keyof AliasDefinition]}`
+          );
         }
 
-        // Backup .zshrc (timestamped)
-        const backupPath = await shell.backup();
-        if (backupPath) {
-          ui.info(`Backed up ${rcFile} to ${backupPath}`);
+        const rtCtx = getRuntimeContext();
+        let confirm: boolean;
+        if (rtCtx.yes) {
+          confirm = true;
+        } else if (rtCtx.nonInteractive) {
+          throw new NonInteractiveError(
+            'Existing aliases would be overwritten',
+            '--force or --yes'
+          );
         } else {
-          ui.warn('No existing ~/.zshrc found to back up, proceeding to create/update it');
+          const answer = await inquirer.prompt<{ confirm: boolean }>([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: 'Proceed with overwriting these aliases?',
+              default: false,
+            },
+          ]);
+          confirm = Boolean(answer.confirm);
         }
 
-        // Apply aliases using ZshIntegration (this uses markers and updates cleanly)
-        for (const [alias, value] of Object.entries(ALIASES)) {
-          await shell.addAlias(alias, value);
+        if (!confirm) {
+          ui.info('Aborted. No changes were made');
+          return;
         }
-
-        ui.success('Aliases configured successfully');
-        ui.info('Added/updated aliases:');
-        ui.list(Object.entries(ALIASES).map(([alias, value]) => `${alias}="${value}"`));
-
-        ui.info('Restart your shell or run: source ~/.zshrc');
-
-        emitJson({
-          ok: true,
-          command: 'alias.setup',
-          aliases: ALIASES,
-          rcFile,
-        });
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        ui.error(`Failed to setup aliases: ${message}`);
-        process.exitCode = 1;
       }
-    });
+
+      // Backup .zshrc (timestamped)
+      const backupPath = await shell.backup();
+      if (backupPath) {
+        ui.info(`Backed up ${rcFile} to ${backupPath}`);
+      } else {
+        ui.warn('No existing ~/.zshrc found to back up, proceeding to create/update it');
+      }
+
+      // Apply aliases using ZshIntegration (this uses markers and updates cleanly)
+      for (const [alias, value] of Object.entries(ALIASES)) {
+        await shell.addAlias(alias, value);
+      }
+
+      ui.success('Aliases configured successfully');
+      ui.info('Added/updated aliases:');
+      ui.list(Object.entries(ALIASES).map(([alias, value]) => `${alias}="${value}"`));
+
+      ui.info('Restart your shell or run: source ~/.zshrc');
+
+      emitJson({
+        ok: true,
+        command: 'alias.setup',
+        aliases: ALIASES,
+        rcFile,
+      });
+    }));
 
   return command;
 }

@@ -229,6 +229,20 @@ export interface UIOutput {
    * ```
    */
   log(message: string): void;
+
+  /**
+   * Write a blank line to stderr. Respects --quiet / --json so agent-mode
+   * stdout stays clean. Replaces bare `console.log('')` calls which would
+   * otherwise pollute stdout.
+   */
+  newline(): void;
+
+  /**
+   * Write an unstyled line to stderr for decorative output that isn't the
+   * command's payload. Unlike `log()` (which always writes to stdout), this
+   * stays out of the JSON channel.
+   */
+  plain(message: string): void;
 }
 
 /**

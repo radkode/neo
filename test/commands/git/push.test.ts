@@ -38,6 +38,8 @@ vi.mock('@/utils/ui.js', () => ({
     step: vi.fn(),
     success: vi.fn(),
     warn: vi.fn(),
+    newline: vi.fn(),
+    plain: vi.fn(),
   },
 }));
 

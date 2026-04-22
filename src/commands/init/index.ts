@@ -11,7 +11,8 @@ import { ZshIntegration } from '@/utils/shell.js';
 import { CompletionGenerator } from '@/utils/completions.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import { join } from 'path';
 
 export function createInitCommand(): Command {
@@ -21,7 +22,7 @@ export function createInitCommand(): Command {
     .description('Install and configure Neo CLI globally')
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       // Validate options
       let validatedOptions: InitOptions;
       try {
@@ -185,7 +186,7 @@ export function createInitCommand(): Command {
         shellSpinner.succeed('Shell integration configured');
 
         ui.success('Neo CLI has been successfully initialized!');
-        console.log('');
+        ui.newline();
         ui.info('What was configured:');
         ui.list([
           'Global installation: neo command available',
@@ -194,7 +195,7 @@ export function createInitCommand(): Command {
           'Shell completions: enabled',
         ]);
 
-        console.log('');
+        ui.newline();
         ui.info('Next steps:');
         ui.list([
           'Restart your terminal or run: source ~/.zshrc',
@@ -208,15 +209,14 @@ export function createInitCommand(): Command {
           configFile: configManager.getConfigFile(),
         });
       } catch (error: unknown) {
+        // A NonInteractiveError is a contract signal, not a failure — let it
+        // propagate to runAction without painting "Initialization failed" red.
+        if (error instanceof NonInteractiveError) throw error;
         spinner.fail('Initialization failed');
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
         ui.error(`Error: ${error}`);
         throw error;
       }
-    });
+    }));
 
   command.addHelpText(
     'after',

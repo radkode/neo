@@ -32,6 +32,8 @@ vi.mock('@/utils/ui.js', () => ({
     section: vi.fn(),
     list: vi.fn(),
     spinner: vi.fn(() => createSpinnerMock()),
+    newline: vi.fn(),
+    plain: vi.fn(),
   },
 }));
 

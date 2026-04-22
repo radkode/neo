@@ -12,6 +12,7 @@ import type { AICommitResponse } from '@/services/ai/index.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 /**
  * Commit type descriptions for the interactive wizard
@@ -207,7 +208,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     if (stagedFiles.length > 10) {
       ui.muted(`... and ${stagedFiles.length - 10} more files`);
     }
-    console.log('');
+    ui.newline();
 
     let commitType: CommitType;
     let commitScope: string | undefined;
@@ -234,7 +235,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         }
 
         // Show AI-generated message preview
-        console.log('');
+        ui.newline();
         ui.section('AI-Generated Commit');
         const previewMessage = formatCommitMessage(
           aiResponse.type,
@@ -244,7 +245,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
           aiResponse.breaking
         );
         ui.code(previewMessage);
-        console.log('');
+        ui.newline();
 
         // Ask what to do. In non-interactive/yes mode, accept the AI output
         // directly — this is the behavior agents want from `--ai`.
@@ -418,18 +419,18 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     );
 
     // Show preview
-    console.log('');
+    ui.newline();
     ui.section('Commit Preview');
     ui.keyValue([
       ['Type', commitType],
       ['Scope', commitScope || '(none)'],
       ['Breaking', isBreaking ? 'Yes' : 'No'],
     ]);
-    console.log('');
+    ui.newline();
     ui.highlight('Full commit message:');
-    console.log('');
+    ui.newline();
     ui.muted(formattedMessage);
-    console.log('');
+    ui.newline();
 
     // Confirm commit (skip in quick/yes/non-interactive mode).
     if (!quickMode && !runtimeCtx.yes && !runtimeCtx.nonInteractive) {
@@ -522,7 +523,7 @@ Examples:
     $ neo git commit --ai --yes --json
 `
     )
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       let validatedOptions: GitCommitOptions;
       try {
         validatedOptions = validate(gitCommitOptionsSchema, options, 'git commit options');
@@ -533,21 +534,12 @@ Examples:
         throw error;
       }
 
-      try {
-        const result = await executeCommit(validatedOptions);
-
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+      const result = await executeCommit(validatedOptions);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

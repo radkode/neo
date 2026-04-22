@@ -9,6 +9,7 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRepoName, getWorktreePath, ensureWorktreeDir, pathExists } from './utils.js';
+import { runAction } from '@/utils/run-action.js';
 
 interface AddWorktreeOptions {
   branch?: string;
@@ -69,7 +70,7 @@ export async function executeWorktreeAdd(
       ['Branch', targetBranch],
     ]);
 
-    console.log('');
+    ui.newline();
     ui.info('To switch to this worktree:');
     ui.code(`cd ${worktreePath}`);
 
@@ -107,7 +108,7 @@ export function createWorktreeAddCommand(): Command {
     .option('-f, --force', 'force creation even if branch is checked out')
     .option('--lock', 'lock the worktree after creation')
     .option('-p, --path <path>', 'custom path for worktree (default: ~/.neo/worktrees/<repo>/<branch>)')
-    .action(async (branch, options) => {
+    .action(runAction(async (branch, options) => {
       const result = await executeWorktreeAdd(branch, options);
 
       if (isFailure(result)) {
@@ -118,7 +119,7 @@ export function createWorktreeAddCommand(): Command {
         }
         process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

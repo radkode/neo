@@ -11,6 +11,7 @@ import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 /**
  * Interface for branch information
@@ -222,7 +223,7 @@ async function parseBranchLine(
  * Display a summary of the branch analysis
  */
 function displayBranchSummary(analysis: BranchAnalysis): void {
-  console.log('');
+  ui.newline();
   ui.section('Branch Analysis');
 
   ui.keyValue([
@@ -236,7 +237,7 @@ function displayBranchSummary(analysis: BranchAnalysis): void {
   ]);
 
   if (analysis.trackedBranches.length > 0) {
-    console.log('');
+    ui.newline();
     ui.info('Branches with active remote tracking:');
     const trackedList = analysis.trackedBranches.map(
       (b) => `${b.name} → ${b.remoteTrackingBranch}${b.isCurrent ? ' (current)' : ''}`
@@ -245,7 +246,7 @@ function displayBranchSummary(analysis: BranchAnalysis): void {
   }
 
   if (analysis.protectedBranches.length > 0) {
-    console.log('');
+    ui.newline();
     ui.info('Protected branches (will not be deleted):');
     const protectedList = analysis.protectedBranches.map(
       (b) => `${b.name}${b.isCurrent ? ' (current)' : ''}`
@@ -258,14 +259,14 @@ function displayBranchSummary(analysis: BranchAnalysis): void {
  * Display cleanup candidates (untracked and deleted remote branches)
  */
 function displayCleanupCandidates(analysis: BranchAnalysis): void {
-  console.log('');
+  ui.newline();
 
   if (analysis.cleanupCandidates.length === 0) {
     return;
   }
 
   ui.warn(`Found ${analysis.cleanupCandidates.length} branch(es) available for cleanup:`);
-  console.log('');
+  ui.newline();
 
   // Create a single consolidated list with clear indicators
   const cleanupList = analysis.cleanupCandidates.map((branch) => {
@@ -280,12 +281,12 @@ function displayCleanupCandidates(analysis: BranchAnalysis): void {
 
   // Show summary counts if both types exist
   if (analysis.untrackedBranches.length > 0 && analysis.deletedRemoteBranches.length > 0) {
-    console.log('');
+    ui.newline();
     ui.muted(`├─ ${analysis.untrackedBranches.length} without remote tracking`);
     ui.muted(`└─ ${analysis.deletedRemoteBranches.length} with deleted remotes`);
   }
 
-  console.log('');
+  ui.newline();
 }
 
 /**
@@ -611,7 +612,7 @@ function displayDeletionSummary(results: {
   failed: { name: string; reason: string }[];
   forceDeleted: string[];
 }): void {
-  console.log('');
+  ui.newline();
   ui.section('Cleanup Summary');
 
   const totalProcessed =
@@ -625,26 +626,26 @@ function displayDeletionSummary(results: {
   ]);
 
   if (results.deleted.length > 0) {
-    console.log('');
+    ui.newline();
     ui.success(`Successfully deleted ${results.deleted.length} branch(es):`);
     ui.list(results.deleted);
   }
 
   if (results.forceDeleted.length > 0) {
-    console.log('');
+    ui.newline();
     ui.warn(`Force deleted ${results.forceDeleted.length} branch(es) with unmerged changes:`);
     ui.list(results.forceDeleted);
   }
 
   if (results.failed.length > 0) {
-    console.log('');
+    ui.newline();
     ui.error(`Failed to delete ${results.failed.length} branch(es):`);
     const failedList = results.failed.map((f) => `${f.name}: ${f.reason}`);
     ui.list(failedList);
   }
 
   if (successCount > 0) {
-    console.log('');
+    ui.newline();
     ui.success('Branch cleanup completed!');
   }
 }
@@ -673,7 +674,7 @@ Examples:
     $ neo git branch --yes
 `
     )
-    .action(async (options: unknown) => {
+    .action(runAction(async (options: unknown) => {
       let validatedOptions: GitBranchOptions;
       try {
         validatedOptions = validate(gitBranchOptionsSchema, options, 'git branch options');
@@ -684,20 +685,12 @@ Examples:
         throw error;
       }
 
-      try {
-        const result = await executeBranch(validatedOptions);
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+      const result = await executeBranch(validatedOptions);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

@@ -11,6 +11,7 @@ import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { listWorktrees, formatWorktreeStatus, copyToClipboard } from './utils.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 /**
  * Execute the worktree switch command
@@ -59,7 +60,7 @@ export async function executeWorktreeSwitch(): Promise<Result<string | null>> {
       ]),
     });
 
-    console.log('');
+    ui.newline();
 
     // Interactive selection
     const choices = [
@@ -126,14 +127,16 @@ export async function executeWorktreeSwitch(): Promise<Result<string | null>> {
 export function createWorktreeSwitchCommand(): Command {
   const command = new Command('switch');
 
-  command.description('Interactively select and switch to a worktree').action(async () => {
-    const result = await executeWorktreeSwitch();
+  command.description('Interactively select and switch to a worktree').action(
+    runAction(async () => {
+      const result = await executeWorktreeSwitch();
 
-    if (isFailure(result)) {
-      emitError(result.error);
-      process.exit(1);
-    }
-  });
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
+      }
+    })
+  );
 
   return command;
 }

@@ -6,6 +6,7 @@ import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson, emitError } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
   GitErrors,
@@ -300,7 +301,7 @@ Examples:
 `
     )
     .allowUnknownOption()
-    .action(async (args: string[], opts) => {
+    .action(runAction(async (args: string[], opts) => {
       // Parse args to extract remote, branch, and passthrough options
       // Options start with - or --, positional args are remote and branch
       const passthrough: string[] = [];
@@ -341,20 +342,12 @@ Examples:
 
       logger.debug(`Options: ${JSON.stringify(options)}`);
 
-      try {
-        const result = await executePush(options);
-        if (isFailure(result)) {
-          emitError(result.error);
-          process.exit(1);
-        }
-      } catch (error) {
-        if (error instanceof NonInteractiveError) {
-          emitError(error as unknown as Error);
-          process.exit(2);
-        }
-        throw error;
+      const result = await executePush(options);
+      if (isFailure(result)) {
+        emitError(result.error);
+        process.exit(1);
       }
-    });
+    }));
 
   return command;
 }

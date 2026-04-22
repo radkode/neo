@@ -37,6 +37,8 @@ vi.mock('@/utils/ui.js', () => ({
     section: vi.fn(),
     list: vi.fn(),
     spinner: vi.fn(() => createSpinnerMock()),
+    newline: vi.fn(),
+    plain: vi.fn(),
   },
 }));
 
@@ -350,8 +352,12 @@ describe('createInitCommand', () => {
       const { createInitCommand } = await import('../../src/commands/init/index.js');
       const command = createInitCommand();
 
-      await expect(command.parseAsync([''], { from: 'user' })).rejects.toThrow('Unexpected error');
+      // runAction wraps the handler: it catches errors, emits them, and calls
+      // process.exit(1) rather than rethrowing. Verify those contract guarantees
+      // instead of a rejection.
+      await command.parseAsync([''], { from: 'user' });
       expect(ui.error).toHaveBeenCalled();
+      expect(exitMock).toHaveBeenCalledWith(1);
     });
   });
 });
