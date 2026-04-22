@@ -11,6 +11,7 @@ import { createCompletionsCommand } from '@/commands/completions/index.js';
 import { createSchemaCommand } from '@/commands/schema/index.js';
 import { createSyncCommand } from '@/commands/sync/index.js';
 import { createVerifyCommand } from '@/commands/verify/index.js';
+import { createChangesetCommand } from '@/commands/changeset/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -25,6 +26,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createSchemaCommand());
   program.addCommand(createSyncCommand());
   program.addCommand(createVerifyCommand());
+  program.addCommand(createChangesetCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -39,3 +41,4 @@ export { createCompletionsCommand } from '@/commands/completions/index.js';
 export { createSchemaCommand } from '@/commands/schema/index.js';
 export { createSyncCommand } from '@/commands/sync/index.js';
 export { createVerifyCommand } from '@/commands/verify/index.js';
+export { createChangesetCommand } from '@/commands/changeset/index.js';
