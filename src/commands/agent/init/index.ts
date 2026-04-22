@@ -1,7 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
 import { ContextDB } from '@/storage/db.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import { agentInitOptionsSchema, type AgentInitOptions } from '@/types/schemas.js';
 import {
   createAgentDir,
@@ -22,20 +24,15 @@ export function createAgentInitCommand(): Command {
     .description('Initialize agent context management in the current project')
     .option('--project <name>', 'project name')
     .option('--force', 'force initialization even if already initialized')
-    .action(async (options: unknown) => {
-      // Validate options
-      let validatedOptions: AgentInitOptions;
-      try {
-        validatedOptions = validate(agentInitOptionsSchema, options, 'agent init options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (options: unknown) => {
+      const validatedOptions: AgentInitOptions = validate(
+        agentInitOptionsSchema,
+        options,
+        'agent init options'
+      );
 
       await initializeAgent(validatedOptions);
-    });
+    }));
 
   return command;
 }
@@ -52,8 +49,7 @@ async function initializeAgent(options: AgentInitOptions): Promise<void> {
     const alreadyInitialized = await isAgentInitialized();
     if (alreadyInitialized && !options.force) {
       spinner.fail('Agent already initialized in this project');
-      ui.warn('Use --force to reinitialize');
-      process.exit(1);
+      throw new Error('Agent already initialized. Use --force to reinitialize.');
     }
 
     if (alreadyInitialized && options.force) {
@@ -68,7 +64,7 @@ async function initializeAgent(options: AgentInitOptions): Promise<void> {
     const dbPath = await getAgentDbPath();
     if (!dbPath) {
       spinner.fail('Failed to get database path');
-      process.exit(1);
+      throw new Error('Failed to get database path');
     }
 
     spinner.text = 'Initializing context database';
@@ -97,25 +93,37 @@ async function initializeAgent(options: AgentInitOptions): Promise<void> {
 
     spinner.succeed('Agent initialized successfully');
 
-    // Display success information
-    ui.section('Agent Context Management');
-    ui.keyValue([
-      ['Project', projectName],
-      ['Location', agentDir],
-      ['Database', 'context.db'],
-      ['Contexts', stats.total.toString()],
-    ]);
+    emitJson(
+      {
+        ok: true,
+        command: 'agent.init',
+        project: projectName,
+        location: agentDir,
+        database: 'context.db',
+        contexts: stats.total,
+      },
+      {
+        text: () => {
+          ui.section('Agent Context Management');
+          ui.keyValue([
+            ['Project', projectName],
+            ['Location', agentDir],
+            ['Database', 'context.db'],
+            ['Contexts', stats.total.toString()],
+          ]);
 
-    ui.divider();
-    ui.step('Next steps:');
-    ui.list([
-      'Add context: neo agent context add "Your context here" --tag api --priority high',
-      'List contexts: neo agent context list',
-      'Remove context: neo agent context remove <id>',
-    ]);
+          ui.divider();
+          ui.step('Next steps:');
+          ui.list([
+            'Add context: neo agent context add "Your context here" --tag api --priority high',
+            'List contexts: neo agent context list',
+            'Remove context: neo agent context remove <id>',
+          ]);
+        },
+      }
+    );
   } catch (error) {
-    spinner.fail('Failed to initialize agent');
-    ui.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    if (spinner.isSpinning) spinner.fail('Failed to initialize agent');
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }

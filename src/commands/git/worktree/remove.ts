@@ -12,7 +12,7 @@ import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { listWorktrees } from './utils.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 interface RemoveWorktreeOptions {
@@ -130,8 +130,7 @@ export function createWorktreeRemoveCommand(): Command {
     .action(runAction(async (path, options) => {
       const result = await executeWorktreeRemove(path, options);
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     }));
 

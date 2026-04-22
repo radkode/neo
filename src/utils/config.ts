@@ -81,7 +81,7 @@ const DEFAULT_CONFIG: NeoConfig = {
   activeProfile: 'default',
   ai: {
     enabled: true,
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-haiku-4-5-20251001',
   },
   autoSwitch: {},
   installation: {

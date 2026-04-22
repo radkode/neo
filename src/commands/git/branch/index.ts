@@ -3,14 +3,13 @@ import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { gitBranchOptionsSchema } from '@/types/schemas.js';
 import type { GitBranchOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitError } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -675,20 +674,15 @@ Examples:
 `
     )
     .action(runAction(async (options: unknown) => {
-      let validatedOptions: GitBranchOptions;
-      try {
-        validatedOptions = validate(gitBranchOptionsSchema, options, 'git branch options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: GitBranchOptions = validate(
+        gitBranchOptionsSchema,
+        options,
+        'git branch options'
+      );
 
       const result = await executeBranch(validatedOptions);
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     }));
 

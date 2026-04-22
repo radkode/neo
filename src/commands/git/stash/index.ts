@@ -5,7 +5,7 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -617,8 +617,7 @@ Examples:
     .action(runAction(async () => {
       const result = await executeStash();
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     }));
 

@@ -6,12 +6,12 @@ import path from 'node:path';
 import { logger } from '@/utils/logger.js';
 import { promptSelect } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { ghPrCreateOptionsSchema } from '@/types/schemas.js';
 import type { GhPrCreateOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure, CommandError } from '@/core/errors/index.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -448,20 +448,15 @@ Examples:
 `
     )
     .action(runAction(async (options: unknown) => {
-      let validatedOptions: GhPrCreateOptions;
-      try {
-        validatedOptions = validate(ghPrCreateOptionsSchema, options, 'gh pr create options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: GhPrCreateOptions = validate(
+        ghPrCreateOptionsSchema,
+        options,
+        'gh pr create options'
+      );
 
       const result = await executeGhPrCreate(validatedOptions);
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     }));
 

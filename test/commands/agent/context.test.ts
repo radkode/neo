@@ -322,7 +322,7 @@ describe('createAgentContextCommand', () => {
       const command = createAgentContextCommand();
       await command.parseAsync(['remove', 'non-existent'], { from: 'user' });
 
-      expect(ui.error).toHaveBeenCalledWith('Context not found');
+      expect(ui.error).toHaveBeenCalledWith('No context found with ID: non-existent');
       expect(exitMock).toHaveBeenCalledWith(1);
     });
 

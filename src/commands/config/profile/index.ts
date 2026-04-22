@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { writeFile } from 'fs/promises';
 import { ui } from '@/utils/ui.js';
 import { profileManager } from '@/utils/profiles.js';
-import { validateArgument, isValidationError } from '@/utils/validation.js';
+import { validate, validateArgument } from '@/utils/validation.js';
 import {
   profileNameSchema,
   profileCreateOptionsSchema,
@@ -14,7 +14,8 @@ import type {
   ProfileExportOptions,
   ProfileImportOptions,
 } from '@/types/schemas.js';
-import { validate } from '@/utils/validation.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 
 export function createProfileCommand(): Command {
   const command = new Command('profile');
@@ -38,38 +39,45 @@ export function createProfileCommand(): Command {
 function createProfileListCommand(): Command {
   const command = new Command('list');
 
-  command.description('List all configuration profiles').action(async () => {
-    try {
-      // Initialize profile system if needed
-      await profileManager.initialize();
+  command.description('List all configuration profiles').action(runAction(async () => {
+    await profileManager.initialize();
 
-      const profiles = await profileManager.list();
-      const activeProfile = await profileManager.getActive();
+    const profiles = await profileManager.list();
+    const activeProfile = await profileManager.getActive();
 
-      if (profiles.length === 0) {
-        ui.info('No profiles found');
-        return;
+    emitJson(
+      {
+        ok: true,
+        command: 'config.profile.list',
+        profiles,
+        active: activeProfile,
+        profilesDir: profileManager.getProfilesDir(),
+      },
+      {
+        text: () => {
+          if (profiles.length === 0) {
+            ui.info('No profiles found');
+            return;
+          }
+
+          ui.info('Configuration Profiles:');
+          console.log('');
+
+          for (const profile of profiles) {
+            const isActive = profile === activeProfile;
+            if (isActive) {
+              ui.highlight(`  ${profile} (active)`);
+            } else {
+              ui.muted(`  ${profile}`);
+            }
+          }
+
+          console.log('');
+          ui.muted(`Profiles directory: ${profileManager.getProfilesDir()}`);
+        },
       }
-
-      ui.info('Configuration Profiles:');
-      console.log('');
-
-      for (const profile of profiles) {
-        const isActive = profile === activeProfile;
-        if (isActive) {
-          ui.highlight(`  ${profile} (active)`);
-        } else {
-          ui.muted(`  ${profile}`);
-        }
-      }
-
-      console.log('');
-      ui.muted(`Profiles directory: ${profileManager.getProfilesDir()}`);
-    } catch (error) {
-      ui.error(`Failed to list profiles: ${error}`);
-      process.exit(1);
-    }
-  });
+    );
+  }));
 
   return command;
 }
@@ -84,49 +92,42 @@ function createProfileCreateCommand(): Command {
     .description('Create a new configuration profile')
     .argument('<name>', 'profile name')
     .option('-f, --from <profile>', 'copy configuration from existing profile')
-    .action(async (rawName: string, options: unknown) => {
-      // Validate profile name
-      let name: string;
-      try {
-        name = validateArgument(profileNameSchema, rawName, 'profile name');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
+    .action(runAction(async (rawName: string, options: unknown) => {
+      const name = validateArgument(profileNameSchema, rawName, 'profile name');
+      const validatedOptions: ProfileCreateOptions = validate(
+        profileCreateOptionsSchema,
+        options,
+        'profile create options'
+      );
+
+      await profileManager.initialize();
+
+      const copiedFrom = validatedOptions.from ?? null;
+      if (copiedFrom) {
+        await profileManager.copy(copiedFrom, name);
+      } else {
+        await profileManager.create(name);
       }
 
-      // Validate options
-      let validatedOptions: ProfileCreateOptions;
-      try {
-        validatedOptions = validate(profileCreateOptionsSchema, options, 'profile create options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
+      emitJson(
+        {
+          ok: true,
+          command: 'config.profile.create',
+          name,
+          copiedFrom,
+        },
+        {
+          text: () => {
+            ui.success(
+              copiedFrom
+                ? `Created profile '${name}' (copied from '${copiedFrom}')`
+                : `Created profile '${name}'`
+            );
+            ui.muted(`Use 'neo config profile use ${name}' to switch to this profile`);
+          },
         }
-        throw error;
-      }
-
-      try {
-        // Initialize profile system if needed
-        await profileManager.initialize();
-
-        if (validatedOptions.from) {
-          // Copy from existing profile
-          await profileManager.copy(validatedOptions.from, name);
-          ui.success(`Created profile '${name}' (copied from '${validatedOptions.from}')`);
-        } else {
-          // Create empty profile
-          await profileManager.create(name);
-          ui.success(`Created profile '${name}'`);
-        }
-
-        ui.muted(`Use 'neo config profile use ${name}' to switch to this profile`);
-      } catch (error) {
-        ui.error(`Failed to create profile: ${error}`);
-        process.exit(1);
-      }
-    });
+      );
+    }));
 
   return command;
 }
@@ -140,26 +141,22 @@ function createProfileUseCommand(): Command {
   command
     .description('Switch to a configuration profile')
     .argument('<name>', 'profile name')
-    .action(async (rawName: string) => {
-      // Validate profile name
-      let name: string;
-      try {
-        name = validateArgument(profileNameSchema, rawName, 'profile name');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (rawName: string) => {
+      const name = validateArgument(profileNameSchema, rawName, 'profile name');
 
-      try {
-        await profileManager.setActive(name);
-        ui.success(`Switched to profile '${name}'`);
-      } catch (error) {
-        ui.error(`Failed to switch profile: ${error}`);
-        process.exit(1);
-      }
-    });
+      await profileManager.setActive(name);
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.profile.use',
+          active: name,
+        },
+        {
+          text: () => ui.success(`Switched to profile '${name}'`),
+        }
+      );
+    }));
 
   return command;
 }
@@ -173,26 +170,22 @@ function createProfileDeleteCommand(): Command {
   command
     .description('Delete a configuration profile')
     .argument('<name>', 'profile name')
-    .action(async (rawName: string) => {
-      // Validate profile name
-      let name: string;
-      try {
-        name = validateArgument(profileNameSchema, rawName, 'profile name');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (rawName: string) => {
+      const name = validateArgument(profileNameSchema, rawName, 'profile name');
 
-      try {
-        await profileManager.delete(name);
-        ui.success(`Deleted profile '${name}'`);
-      } catch (error) {
-        ui.error(`Failed to delete profile: ${error}`);
-        process.exit(1);
-      }
-    });
+      await profileManager.delete(name);
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.profile.delete',
+          name,
+        },
+        {
+          text: () => ui.success(`Deleted profile '${name}'`),
+        }
+      );
+    }));
 
   return command;
 }
@@ -206,75 +199,69 @@ function createProfileShowCommand(): Command {
   command
     .description('Show profile configuration')
     .argument('[name]', 'profile name (defaults to active profile)')
-    .action(async (rawName?: string) => {
-      try {
-        // Initialize profile system if needed
-        await profileManager.initialize();
+    .action(runAction(async (rawName?: string) => {
+      await profileManager.initialize();
 
-        let name: string;
-        if (rawName) {
-          // Validate profile name
-          try {
-            name = validateArgument(profileNameSchema, rawName, 'profile name');
-          } catch (error) {
-            if (isValidationError(error)) {
-              process.exit(1);
+      const name = rawName
+        ? validateArgument(profileNameSchema, rawName, 'profile name')
+        : await profileManager.getActive();
+
+      const profileConfig = await profileManager.read(name);
+      const activeProfile = await profileManager.getActive();
+      const isActive = name === activeProfile;
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.profile.show',
+          name,
+          active: isActive,
+          config: profileConfig,
+        },
+        {
+          text: () => {
+            ui.info(`Profile: ${name}${isActive ? ' (active)' : ''}`);
+            console.log('');
+
+            ui.section('AI');
+            ui.keyValue([
+              ['enabled', profileConfig.ai.enabled ? 'yes' : 'no'],
+              ...(profileConfig.ai.model
+                ? [['model', profileConfig.ai.model] as [string, string]]
+                : []),
+            ]);
+            console.log('');
+
+            if (profileConfig.user.name || profileConfig.user.email) {
+              ui.section('User');
+              const userPairs: Array<[string, string]> = [];
+              if (profileConfig.user.name) userPairs.push(['name', profileConfig.user.name]);
+              if (profileConfig.user.email) userPairs.push(['email', profileConfig.user.email]);
+              ui.keyValue(userPairs);
+              console.log('');
             }
-            throw error;
-          }
-        } else {
-          name = await profileManager.getActive();
+
+            ui.section('Preferences');
+            const prefPairs: Array<[string, string]> = [
+              ['banner', profileConfig.preferences.banner],
+              ['theme', profileConfig.preferences.theme],
+            ];
+            if (profileConfig.preferences.editor) {
+              prefPairs.push(['editor', profileConfig.preferences.editor]);
+            }
+            prefPairs.push(['aliases.n', profileConfig.preferences.aliases.n ? 'enabled' : 'disabled']);
+            ui.keyValue(prefPairs);
+            console.log('');
+
+            ui.section('Shell');
+            ui.keyValue([
+              ['type', profileConfig.shell.type],
+              ['rcFile', profileConfig.shell.rcFile],
+            ]);
+          },
         }
-
-        const profileConfig = await profileManager.read(name);
-        const activeProfile = await profileManager.getActive();
-        const isActive = name === activeProfile;
-
-        ui.info(`Profile: ${name}${isActive ? ' (active)' : ''}`);
-        console.log('');
-
-        // AI section
-        ui.section('AI');
-        ui.keyValue([
-          ['enabled', profileConfig.ai.enabled ? 'yes' : 'no'],
-          ...(profileConfig.ai.model ? [['model', profileConfig.ai.model] as [string, string]] : []),
-        ]);
-        console.log('');
-
-        // User section
-        if (profileConfig.user.name || profileConfig.user.email) {
-          ui.section('User');
-          const userPairs: Array<[string, string]> = [];
-          if (profileConfig.user.name) userPairs.push(['name', profileConfig.user.name]);
-          if (profileConfig.user.email) userPairs.push(['email', profileConfig.user.email]);
-          ui.keyValue(userPairs);
-          console.log('');
-        }
-
-        // Preferences section
-        ui.section('Preferences');
-        const prefPairs: Array<[string, string]> = [
-          ['banner', profileConfig.preferences.banner],
-          ['theme', profileConfig.preferences.theme],
-        ];
-        if (profileConfig.preferences.editor) {
-          prefPairs.push(['editor', profileConfig.preferences.editor]);
-        }
-        prefPairs.push(['aliases.n', profileConfig.preferences.aliases.n ? 'enabled' : 'disabled']);
-        ui.keyValue(prefPairs);
-        console.log('');
-
-        // Shell section
-        ui.section('Shell');
-        ui.keyValue([
-          ['type', profileConfig.shell.type],
-          ['rcFile', profileConfig.shell.rcFile],
-        ]);
-      } catch (error) {
-        ui.error(`Failed to show profile: ${error}`);
-        process.exit(1);
-      }
-    });
+      );
+    }));
 
   return command;
 }
@@ -289,43 +276,35 @@ function createProfileExportCommand(): Command {
     .description('Export a profile to JSON')
     .argument('<name>', 'profile name')
     .option('-o, --output <file>', 'output file (defaults to stdout)')
-    .action(async (rawName: string, options: unknown) => {
-      // Validate profile name
-      let name: string;
-      try {
-        name = validateArgument(profileNameSchema, rawName, 'profile name');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (rawName: string, options: unknown) => {
+      const name = validateArgument(profileNameSchema, rawName, 'profile name');
+      const validatedOptions: ProfileExportOptions = validate(
+        profileExportOptionsSchema,
+        options,
+        'profile export options'
+      );
 
-      // Validate options
-      let validatedOptions: ProfileExportOptions;
-      try {
-        validatedOptions = validate(profileExportOptionsSchema, options, 'profile export options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const jsonContent = await profileManager.export(name);
 
-      try {
-        const jsonContent = await profileManager.export(name);
-
-        if (validatedOptions.output) {
-          await writeFile(validatedOptions.output, jsonContent, 'utf-8');
-          ui.success(`Exported profile '${name}' to ${validatedOptions.output}`);
-        } else {
-          console.log(jsonContent);
-        }
-      } catch (error) {
-        ui.error(`Failed to export profile: ${error}`);
-        process.exit(1);
+      if (validatedOptions.output) {
+        await writeFile(validatedOptions.output, jsonContent, 'utf-8');
+        emitJson(
+          {
+            ok: true,
+            command: 'config.profile.export',
+            name,
+            output: validatedOptions.output,
+          },
+          {
+            text: () => ui.success(`Exported profile '${name}' to ${validatedOptions.output}`),
+          }
+        );
+      } else {
+        // stdout: emit raw JSON regardless of mode — this command is defined
+        // to write the profile JSON to stdout when no --output is given.
+        process.stdout.write(`${jsonContent}\n`);
       }
-    });
+    }));
 
   return command;
 }
@@ -340,42 +319,36 @@ function createProfileImportCommand(): Command {
     .description('Import a profile from JSON file')
     .argument('<file>', 'JSON file to import')
     .option('-n, --name <name>', 'profile name (defaults to filename)')
-    .action(async (filePath: string, options: unknown) => {
-      // Validate options
-      let validatedOptions: ProfileImportOptions;
-      try {
-        validatedOptions = validate(profileImportOptionsSchema, options, 'profile import options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (filePath: string, options: unknown) => {
+      const validatedOptions: ProfileImportOptions = validate(
+        profileImportOptionsSchema,
+        options,
+        'profile import options'
+      );
 
-      // Validate name if provided
       if (validatedOptions.name) {
-        try {
-          validateArgument(profileNameSchema, validatedOptions.name, 'profile name');
-        } catch (error) {
-          if (isValidationError(error)) {
-            process.exit(1);
-          }
-          throw error;
+        validateArgument(profileNameSchema, validatedOptions.name, 'profile name');
+      }
+
+      await profileManager.initialize();
+
+      const importedName = await profileManager.import(filePath, validatedOptions.name);
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.profile.import',
+          name: importedName,
+          sourceFile: filePath,
+        },
+        {
+          text: () => {
+            ui.success(`Imported profile '${importedName}' from ${filePath}`);
+            ui.muted(`Use 'neo config profile use ${importedName}' to switch to this profile`);
+          },
         }
-      }
-
-      try {
-        // Initialize profile system if needed
-        await profileManager.initialize();
-
-        const importedName = await profileManager.import(filePath, validatedOptions.name);
-        ui.success(`Imported profile '${importedName}' from ${filePath}`);
-        ui.muted(`Use 'neo config profile use ${importedName}' to switch to this profile`);
-      } catch (error) {
-        ui.error(`Failed to import profile: ${error}`);
-        process.exit(1);
-      }
-    });
+      );
+    }));
 
   return command;
 }

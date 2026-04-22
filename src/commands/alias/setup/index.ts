@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
 import { ZshIntegration } from '@/utils/shell.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { aliasSetupOptionsSchema } from '@/types/schemas.js';
 import type { AliasSetupOptions } from '@/types/schemas.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
@@ -58,16 +58,11 @@ export function createSetupCommand(): Command {
     .description('Setup ZSH aliases for Neo CLI. Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
     .action(runAction(async (options: unknown): Promise<void> => {
-      // Validate options
-      let validatedOptions: AliasSetupOptions;
-      try {
-        validatedOptions = validate(aliasSetupOptionsSchema, options, 'alias setup options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: AliasSetupOptions = validate(
+        aliasSetupOptionsSchema,
+        options,
+        'alias setup options'
+      );
       const shell = new ZshIntegration();
 
       // Read current rc content and detect conflicts

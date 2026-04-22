@@ -355,7 +355,7 @@ describe('AI Service', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          body: expect.stringContaining('claude-3-haiku-20240307'),
+          body: expect.stringContaining('claude-haiku-4-5-20251001'),
         })
       );
     });

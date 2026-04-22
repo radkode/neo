@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { initOptionsSchema } from '@/types/schemas.js';
 import type { InitOptions } from '@/types/schemas.js';
 import { configManager, type NeoConfig } from '@/utils/config.js';
@@ -23,16 +23,11 @@ export function createInitCommand(): Command {
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
     .action(runAction(async (options: unknown) => {
-      // Validate options
-      let validatedOptions: InitOptions;
-      try {
-        validatedOptions = validate(initOptionsSchema, options, 'init options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: InitOptions = validate(
+        initOptionsSchema,
+        options,
+        'init options'
+      );
       const spinner = ui.spinner('Checking current setup');
       spinner.start();
 
@@ -142,7 +137,7 @@ export function createInitCommand(): Command {
         const newConfig: NeoConfig = {
           ai: {
             enabled: true,
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-haiku-4-5-20251001',
           },
           installation: {
             completionsPath: join(configManager.getConfigDir(), 'completions'),

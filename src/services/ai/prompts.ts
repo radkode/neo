@@ -67,12 +67,15 @@ function truncateDiff(diff: string): string {
 }
 
 /**
- * Build the prompt for commit message generation
+ * Structured prompt split into a stable system block and a per-request user block.
+ * The system block is identical across calls so it can be placed in a cached segment.
  */
-export function buildCommitPrompt(request: AICommitRequest): string {
-  const truncatedDiff = truncateDiff(request.diff);
+export interface StructuredCommitPrompt {
+  system: string;
+  user: string;
+}
 
-  const systemPrompt = `You are a commit message generator. Generate a conventional commit message based on the staged changes.
+const COMMIT_SYSTEM_PROMPT = `You are a commit message generator. Generate a conventional commit message based on the staged changes.
 
 Conventional commit format:
 - type(scope): message
@@ -92,26 +95,36 @@ Rules:
 Respond with ONLY a JSON object in this exact format (no markdown, no explanation):
 {"type":"feat","scope":"optional-scope","message":"lowercase imperative description","body":"optional longer explanation","breaking":false}`;
 
+export function getCommitSystemPrompt(): string {
+  return COMMIT_SYSTEM_PROMPT;
+}
+
+/**
+ * Build the prompt for commit message generation
+ */
+export function buildCommitPrompt(request: AICommitRequest): StructuredCommitPrompt {
+  const truncatedDiff = truncateDiff(request.diff);
+
   const contextParts: string[] = [];
 
-  // Add branch name for scope hints
   if (request.branchName && request.branchName !== 'main' && request.branchName !== 'master') {
     contextParts.push(`Current branch: ${request.branchName}`);
   }
 
-  // Add recent commits for style reference
   if (request.recentCommits.length > 0) {
     contextParts.push(`Recent commits (for style reference):\n${request.recentCommits.slice(0, 5).join('\n')}`);
   }
 
-  // Add staged files summary
   if (request.stagedFiles.length > 0) {
     contextParts.push(`Staged files (${request.stagedFiles.length}):\n${request.stagedFiles.slice(0, 20).join('\n')}`);
   }
 
   const context = contextParts.length > 0 ? contextParts.join('\n\n') + '\n\n' : '';
 
-  return `${systemPrompt}\n\n${context}Staged diff:\n\`\`\`\n${truncatedDiff}\n\`\`\``;
+  return {
+    system: COMMIT_SYSTEM_PROMPT,
+    user: `${context}Staged diff:\n\`\`\`\n${truncatedDiff}\n\`\`\``,
+  };
 }
 
 /**
