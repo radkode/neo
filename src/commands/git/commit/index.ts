@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import inquirer from 'inquirer';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { gitCommitOptionsSchema } from '@/types/schemas.js';
 import type { GitCommitOptions, CommitType } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
@@ -11,7 +11,7 @@ import { generateCommitMessage, isAICommitAvailable, AIErrors } from '@/services
 import type { AICommitResponse } from '@/services/ai/index.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -524,20 +524,15 @@ Examples:
 `
     )
     .action(runAction(async (options: unknown) => {
-      let validatedOptions: GitCommitOptions;
-      try {
-        validatedOptions = validate(gitCommitOptionsSchema, options, 'git commit options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: GitCommitOptions = validate(
+        gitCommitOptionsSchema,
+        options,
+        'git commit options'
+      );
 
       const result = await executeCommit(validatedOptions);
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     }));
 

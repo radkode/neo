@@ -163,14 +163,12 @@ describe('Agent utilities', () => {
       expect(exitMock).not.toHaveBeenCalled();
     });
 
-    it('should exit with error when agent is not initialized', async () => {
+    it('should throw when agent is not initialized', async () => {
       vi.mocked(findUp).mockResolvedValue(undefined);
 
-      await ensureAgentInitialized();
-
-      expect(ui.error).toHaveBeenCalledWith('Agent not initialized in this project');
-      expect(ui.warn).toHaveBeenCalledWith('Run: neo agent init');
-      expect(exitMock).toHaveBeenCalledWith(1);
+      await expect(ensureAgentInitialized()).rejects.toThrow(
+        'Agent not initialized in this project'
+      );
     });
   });
 
@@ -186,16 +184,10 @@ describe('Agent utilities', () => {
       expect(mkdir).toHaveBeenCalledWith('/path/to/project/.neo/agent', { recursive: true });
     });
 
-    it('should exit when project root not found', async () => {
+    it('should throw when project root not found', async () => {
       vi.mocked(findUp).mockResolvedValue(undefined);
 
-      // The function calls process.exit but our mock doesn't stop execution
-      // So we expect it to throw when trying to use null as path
-      await expect(createAgentDir()).rejects.toThrow();
-
-      expect(ui.error).toHaveBeenCalledWith('Not in a Neo project');
-      expect(ui.warn).toHaveBeenCalledWith('Run: neo init');
-      expect(exitMock).toHaveBeenCalledWith(1);
+      await expect(createAgentDir()).rejects.toThrow('Not in a Neo project');
     });
   });
 
@@ -261,23 +253,19 @@ describe('Agent utilities', () => {
       expect(writeFile).toHaveBeenCalled();
     });
 
-    it('should exit when agent dir not found', async () => {
+    it('should throw when agent dir not found', async () => {
       vi.mocked(findUp).mockResolvedValue(undefined);
 
-      await saveAgentConfig(config);
-
-      expect(ui.error).toHaveBeenCalledWith('Agent directory not found');
-      expect(exitMock).toHaveBeenCalledWith(1);
+      await expect(saveAgentConfig(config)).rejects.toThrow('Agent directory not found');
     });
 
-    it('should exit on write failure', async () => {
+    it('should throw on write failure', async () => {
       vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
       vi.mocked(writeFile).mockRejectedValue(new Error('Write failed'));
 
-      await saveAgentConfig(config);
-
-      expect(ui.error).toHaveBeenCalledWith('Failed to save agent configuration');
-      expect(exitMock).toHaveBeenCalledWith(1);
+      await expect(saveAgentConfig(config)).rejects.toThrow(
+        'Failed to save agent configuration'
+      );
     });
   });
 

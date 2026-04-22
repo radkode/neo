@@ -160,12 +160,104 @@ function getRootProgram(cmd: Command): Command {
   return current;
 }
 
+function renderOptionMarkdown(opt: SchemaOption): string {
+  const parts = [`- \`${opt.flags}\``];
+  if (opt.description) parts.push(`— ${opt.description}`);
+  const meta: string[] = [];
+  if (opt.required) meta.push('required');
+  if (opt.defaultValue !== undefined) meta.push(`default: \`${JSON.stringify(opt.defaultValue)}\``);
+  if (opt.choices && opt.choices.length > 0) {
+    meta.push(`choices: ${opt.choices.map((c) => `\`${c}\``).join(', ')}`);
+  }
+  if (meta.length > 0) parts.push(`(${meta.join(', ')})`);
+  return parts.join(' ');
+}
+
+function renderArgumentMarkdown(arg: SchemaArgument): string {
+  const decoration = arg.required ? '<>' : '[]';
+  const left = decoration[0]!;
+  const right = decoration[1]!;
+  const name = arg.variadic ? `${arg.name}...` : arg.name;
+  const parts = [`- \`${left}${name}${right}\``];
+  if (arg.description) parts.push(`— ${arg.description}`);
+  return parts.join(' ');
+}
+
+function renderCommandMarkdown(cmd: SchemaCommand, depth: number): string[] {
+  const heading = '#'.repeat(Math.min(depth, 6));
+  const lines: string[] = [`${heading} neo ${cmd.path}`, ''];
+  if (cmd.description) {
+    lines.push(cmd.description, '');
+  }
+  if (cmd.aliases.length > 0) {
+    lines.push(`**Aliases:** ${cmd.aliases.map((a) => `\`${a}\``).join(', ')}`, '');
+  }
+  if (cmd.arguments.length > 0) {
+    lines.push('**Arguments:**', '');
+    for (const arg of cmd.arguments) {
+      lines.push(renderArgumentMarkdown(arg));
+    }
+    lines.push('');
+  }
+  if (cmd.options.length > 0) {
+    lines.push('**Options:**', '');
+    for (const opt of cmd.options) {
+      lines.push(renderOptionMarkdown(opt));
+    }
+    lines.push('');
+  }
+  for (const sub of cmd.subcommands) {
+    lines.push(...renderCommandMarkdown(sub, depth + 1));
+  }
+  return lines;
+}
+
+function renderSchemaMarkdown(schema: SchemaRoot): string {
+  const lines: string[] = [
+    `# ${schema.name}`,
+    '',
+    `**Version:** ${schema.version}`,
+    '',
+  ];
+  if (schema.description) {
+    lines.push(schema.description, '');
+  }
+
+  if (schema.globalOptions.length > 0) {
+    lines.push('## Global options', '');
+    for (const opt of schema.globalOptions) {
+      lines.push(renderOptionMarkdown(opt));
+    }
+    lines.push('');
+  }
+
+  lines.push('## Agent notes', '');
+  lines.push(`- **Non-interactive:** ${schema.agentNotes.nonInteractive}`);
+  lines.push(`- **JSON:** ${schema.agentNotes.json}`);
+  lines.push('', '**Exit codes:**', '');
+  for (const [code, desc] of Object.entries(schema.agentNotes.exitCodes)) {
+    lines.push(`- \`${code}\` — ${desc}`);
+  }
+  lines.push('', '**Environment variables:**', '');
+  for (const [name, desc] of Object.entries(schema.agentNotes.envVars)) {
+    lines.push(`- \`${name}\` — ${desc}`);
+  }
+  lines.push('', '## Commands', '');
+
+  for (const cmd of schema.commands) {
+    lines.push(...renderCommandMarkdown(cmd, 3));
+  }
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
 export function createSchemaCommand(): Command {
   const command = new Command('schema');
 
   command
-    .description('Emit a machine-readable JSON description of every command and option')
+    .description('Emit a machine-readable description of every command and option')
     .option('--pretty', 'pretty-print the JSON')
+    .option('--markdown', 'emit markdown documentation instead of JSON')
     .addHelpText(
       'after',
       `
@@ -174,11 +266,17 @@ Agents: use this to discover commands and flags dynamically.
 Example:
   $ neo schema | jq '.commands[] | .path'
   $ neo schema --pretty > neo-schema.json
+  $ neo schema --markdown > AGENTS.md
 `
     )
-    .action(async (opts: { pretty?: boolean }) => {
+    .action(async (opts: { pretty?: boolean; markdown?: boolean }) => {
       const root = getRootProgram(command);
       const schema = await buildFullSchema(root);
+
+      if (opts.markdown) {
+        process.stdout.write(renderSchemaMarkdown(schema));
+        return;
+      }
 
       if (opts.pretty) {
         // Always write to stdout; this command exists precisely for structured output.
@@ -191,7 +289,7 @@ Example:
 
       // Non-blocking hint written to stderr when run interactively.
       if (process.stdout.isTTY) {
-        ui.muted('Tip: pipe through `jq` to filter. Use --pretty for indented output.');
+        ui.muted('Tip: pipe through `jq` to filter. Use --pretty or --markdown for human output.');
       }
     });
 

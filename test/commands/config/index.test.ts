@@ -44,6 +44,17 @@ vi.mock('@/utils/validation.js', () => ({
 
 vi.mock('@/utils/prompt.js', () => ({
   promptPassword: vi.fn(),
+  NonInteractiveError: class NonInteractiveError extends Error {
+    readonly code = 'NEO_NON_INTERACTIVE';
+    readonly flag?: string;
+    readonly prompt: string;
+    constructor(prompt: string, flag?: string) {
+      super(prompt);
+      this.name = 'NonInteractiveError';
+      this.prompt = prompt;
+      if (flag !== undefined) this.flag = flag;
+    }
+  },
 }));
 
 vi.mock('@/commands/config/profile/index.js', async () => {
@@ -223,21 +234,21 @@ describe('createConfigCommand', () => {
       vi.mocked(secretsManager.setSecret).mockResolvedValue(undefined);
 
       const command = createConfigCommand();
-      await command.parseAsync(['set', 'ai.apiKey', 'sk-test-new-key'], { from: 'user' });
+      await command.parseAsync(['set', 'ai.apiKey', 'sk-ant-test-new-key'], { from: 'user' });
 
-      expect(secretsManager.setSecret).toHaveBeenCalledWith('ai.apiKey', 'sk-test-new-key');
+      expect(secretsManager.setSecret).toHaveBeenCalledWith('ai.apiKey', 'sk-ant-test-new-key');
       expect(ui.success).toHaveBeenCalledWith(expect.stringContaining('Secret updated'));
     });
 
     it('should prompt for secret when value not provided', async () => {
-      vi.mocked(promptPassword).mockResolvedValue('sk-prompted-key');
+      vi.mocked(promptPassword).mockResolvedValue('sk-ant-prompted-key');
       vi.mocked(secretsManager.setSecret).mockResolvedValue(undefined);
 
       const command = createConfigCommand();
       await command.parseAsync(['set', 'ai.apiKey'], { from: 'user' });
 
       expect(promptPassword).toHaveBeenCalledWith({ message: 'Enter API key' });
-      expect(secretsManager.setSecret).toHaveBeenCalledWith('ai.apiKey', 'sk-prompted-key');
+      expect(secretsManager.setSecret).toHaveBeenCalledWith('ai.apiKey', 'sk-ant-prompted-key');
     });
 
     it('should error when secret is empty', async () => {

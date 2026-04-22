@@ -1,9 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
-import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { ghPrCreateOptionsSchema } from '@/types/schemas.js';
 import type { GhPrCreateOptions } from '@/types/schemas.js';
 import { isFailure } from '@/core/errors/index.js';
+import { runAction } from '@/utils/run-action.js';
 import { executeGhPrCreate } from '@/commands/gh/pr/create/index.js';
 
 export function createPrAliasCommand(): Command {
@@ -18,28 +18,19 @@ export function createPrAliasCommand(): Command {
     .option('-r, --reviewer <reviewers...>', 'request reviewers')
     .option('-l, --label <labels...>', 'add labels')
     .option('-w, --web', 'open PR in browser after creation')
-    .action(async (options: unknown) => {
-      let validatedOptions: GhPrCreateOptions;
-      try {
-        validatedOptions = validate(ghPrCreateOptionsSchema, options, 'pr options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (options: unknown) => {
+      const validatedOptions: GhPrCreateOptions = validate(
+        ghPrCreateOptionsSchema,
+        options,
+        'pr options'
+      );
 
       const result = await executeGhPrCreate(validatedOptions);
 
       if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions && result.error.suggestions.length > 0) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
-        }
-        process.exit(1);
+        throw result.error;
       }
-    });
+    }));
 
   return command;
 }

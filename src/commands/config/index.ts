@@ -2,9 +2,11 @@ import { Command } from '@commander-js/extra-typings';
 import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
 import { secretsManager, SecretsManager } from '@/utils/secrets.js';
-import { validateArgument, validateConfigValue, isValidationError } from '@/utils/validation.js';
+import { validateArgument, validateConfigValue } from '@/utils/validation.js';
 import { configKeySchema, aiApiKeySchema } from '@/types/schemas.js';
 import { promptPassword } from '@/utils/prompt.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
 import { createProfileCommand } from '@/commands/config/profile/index.js';
 import type { NeoConfig } from '@/utils/config.js';
 
@@ -37,54 +39,65 @@ function createConfigGetCommand(): Command {
   command
     .description('Get a configuration value')
     .argument('<key>', 'configuration key (supports dot notation, e.g., preferences.banner)')
-    .action(async (rawKey: string) => {
-      // Validate key
-      let key: string;
-      try {
-        key = validateArgument(configKeySchema, rawKey, 'configuration key');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (rawKey: string) => {
+      const key = validateArgument(configKeySchema, rawKey, 'configuration key');
 
-      // Handle secret keys differently
       if (SECRET_KEYS.includes(key)) {
-        try {
-          const value = await secretsManager.getSecret(key);
-          if (value) {
-            ui.keyValue([[key, `${SecretsManager.maskSecret(value)} (configured)`]]);
-          } else {
-            ui.keyValue([[key, 'not configured']]);
+        const value = await secretsManager.getSecret(key);
+        const configured = Boolean(value);
+        const masked = value ? SecretsManager.maskSecret(value) : null;
+
+        emitJson(
+          {
+            ok: true,
+            command: 'config.get',
+            key,
+            secret: true,
+            configured,
+            value: masked,
+          },
+          {
+            text: () => {
+              ui.keyValue([[key, configured ? `${masked} (configured)` : 'not configured']]);
+            },
           }
-          return;
-        } catch (error) {
-          ui.error(`Failed to read secret: ${error}`);
-          process.exit(1);
-        }
+        );
+        return;
       }
 
+      let config;
       try {
-        const config = await configManager.read();
-        const value = getNestedValue(config, key);
-
-        if (value === undefined) {
-          ui.error(`Configuration key not found: ${key}`);
-          process.exit(1);
-        }
-
-        if (typeof value === 'object' && value !== null) {
-          ui.info(`${key}:`);
-          console.log(JSON.stringify(value, null, 2));
-        } else {
-          ui.keyValue([[key, String(value)]]);
-        }
+        config = await configManager.read();
       } catch (error) {
-        ui.error(`Failed to read configuration: ${error}`);
-        process.exit(1);
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to read configuration: ${msg}`);
       }
-    });
+      const value = getNestedValue(config, key);
+
+      if (value === undefined) {
+        throw new Error(`Configuration key not found: ${key}`);
+      }
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.get',
+          key,
+          secret: false,
+          value,
+        },
+        {
+          text: () => {
+            if (typeof value === 'object' && value !== null) {
+              ui.info(`${key}:`);
+              console.log(JSON.stringify(value, null, 2));
+            } else {
+              ui.keyValue([[key, String(value)]]);
+            }
+          },
+        }
+      );
+    }));
 
   return command;
 }
@@ -101,77 +114,71 @@ function createConfigSetCommand(): Command {
     .description('Set a configuration value')
     .argument('<key>', 'configuration key (supports dot notation, e.g., preferences.banner)')
     .argument('[value]', 'configuration value (omit for secrets to use masked input)')
-    .action(async (rawKey: string, rawValue?: string) => {
-      // Validate key
-      let key: string;
-      try {
-        key = validateArgument(configKeySchema, rawKey, 'configuration key');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+    .action(runAction(async (rawKey: string, rawValue?: string) => {
+      const key = validateArgument(configKeySchema, rawKey, 'configuration key');
 
-      // Handle secret keys differently
       if (SECRET_KEYS.includes(key)) {
-        try {
-          let secretValue = rawValue;
+        let secretValue = rawValue;
 
-          // If no value provided, prompt for masked input
-          if (!secretValue) {
-            secretValue = await promptPassword({ message: 'Enter API key' });
-          }
-
-          if (!secretValue || secretValue.trim() === '') {
-            ui.error('API key cannot be empty');
-            process.exit(1);
-          }
-
-          // Validate API key format
-          const parseResult = aiApiKeySchema.safeParse(secretValue);
-          if (!parseResult.success) {
-            ui.error(`Invalid API key format: ${parseResult.error.issues[0]?.message}`);
-            process.exit(1);
-          }
-
-          await secretsManager.setSecret(key, secretValue);
-          ui.success(`Secret updated: ${key} = ${SecretsManager.maskSecret(secretValue)}`);
-          return;
-        } catch (error) {
-          ui.error(`Failed to set secret: ${error}`);
-          process.exit(1);
+        if (!secretValue) {
+          secretValue = await promptPassword({ message: 'Enter API key' });
         }
+
+        if (!secretValue || secretValue.trim() === '') {
+          throw new Error('API key cannot be empty');
+        }
+
+        const parseResult = aiApiKeySchema.safeParse(secretValue);
+        if (!parseResult.success) {
+          throw new Error(`Invalid API key format: ${parseResult.error.issues[0]?.message}`);
+        }
+
+        await secretsManager.setSecret(key, secretValue);
+        const masked = SecretsManager.maskSecret(secretValue);
+
+        emitJson(
+          {
+            ok: true,
+            command: 'config.set',
+            key,
+            secret: true,
+            value: masked,
+          },
+          {
+            text: () => ui.success(`Secret updated: ${key} = ${masked}`),
+          }
+        );
+        return;
       }
 
-      // Regular config keys require a value
       if (!rawValue) {
-        ui.error('Value is required for non-secret configuration keys');
-        process.exit(1);
+        throw new Error('Value is required for non-secret configuration keys');
       }
 
-      // Validate and parse value
-      let value: string | number | boolean;
-      try {
-        value = await validateConfigValue(key, rawValue);
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const value = await validateConfigValue(key, rawValue);
 
       try {
         const config = await configManager.read();
         const updated = setNestedValue(config, key, value);
         await configManager.write(updated);
-
-        ui.success(`Configuration updated: ${key} = ${value}`);
       } catch (error) {
-        ui.error(`Failed to set configuration: ${error}`);
-        process.exit(1);
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to set configuration: ${msg}`);
       }
-    });
+
+      emitJson(
+        {
+          ok: true,
+          command: 'config.set',
+          key,
+          secret: false,
+          value,
+        },
+        {
+          text: () => ui.success(`Configuration updated: ${key} = ${value}`),
+        }
+      );
+    }));
 
   return command;
 }
@@ -218,84 +225,105 @@ function setNestedValue(obj: NeoConfig, path: string, value: unknown): NeoConfig
 function createConfigListCommand(): Command {
   const command = new Command('list');
 
-  command.description('List all configuration values').action(async () => {
+  command.description('List all configuration values').action(runAction(async () => {
+    let config;
     try {
-      const config = await configManager.read();
-      const apiKeyConfigured = await secretsManager.isConfigured('ai.apiKey');
-
-      ui.info('Current Neo CLI Configuration');
-
-      // Show active profile if set
-      if (config.activeProfile) {
-        ui.muted(`Active profile: ${config.activeProfile}`);
-      }
-      console.log('');
-
-      // AI section
-      ui.section('AI');
-      const aiPairs: Array<[string, string]> = [
-        ['enabled', config.ai.enabled ? 'yes' : 'no'],
-        ['apiKey', apiKeyConfigured ? 'configured' : 'not configured'],
-      ];
-      if (config.ai.model) {
-        aiPairs.push(['model', config.ai.model]);
-      }
-      ui.keyValue(aiPairs);
-      console.log('');
-
-      if (config.user.name || config.user.email) {
-        ui.section('User');
-        const userPairs: Array<[string, string]> = [];
-        if (config.user.name) userPairs.push(['user.name', config.user.name]);
-        if (config.user.email) userPairs.push(['user.email', config.user.email]);
-        ui.keyValue(userPairs);
-        console.log('');
-      }
-
-      ui.section('Preferences');
-      const prefPairs: Array<[string, string]> = [
-        ['banner', config.preferences.banner],
-        ['theme', config.preferences.theme],
-      ];
-      if (config.preferences.editor) {
-        prefPairs.push(['editor', config.preferences.editor]);
-      }
-      prefPairs.push(['aliases.n', config.preferences.aliases.n ? 'enabled' : 'disabled']);
-      ui.keyValue(prefPairs);
-      console.log('');
-
-      ui.section('Shell');
-      ui.keyValue([
-        ['type', config.shell.type],
-        ['rcFile', config.shell.rcFile],
-      ]);
-      console.log('');
-
-      ui.section('Installation');
-      const installPairs: Array<[string, string]> = [
-        ['version', config.installation.version],
-        ['installedAt', config.installation.installedAt],
-      ];
-      if (config.installation.globalPath) {
-        installPairs.push(['globalPath', config.installation.globalPath]);
-      }
-      if (config.installation.completionsPath) {
-        installPairs.push(['completionsPath', config.installation.completionsPath]);
-      }
-      ui.keyValue(installPairs);
-      console.log('');
-
-      ui.divider();
-      ui.muted(`Config file: ${configManager.getConfigFile()}`);
-      ui.muted(`Secrets file: ${secretsManager.getSecretsFile()}`);
-      ui.muted(
-        `\nUse these full keys with 'neo config get <key>' or 'neo config set <key> <value>'`
-      );
+      config = await configManager.read();
     } catch (error) {
-      ui.error(`Failed to read configuration: ${error}`);
-      process.exit(1);
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to read configuration: ${msg}`);
     }
-  });
+    const apiKeyConfigured = await secretsManager.isConfigured('ai.apiKey');
+
+    emitJson(
+      {
+        ok: true,
+        command: 'config.list',
+        activeProfile: config.activeProfile ?? null,
+        ai: {
+          enabled: config.ai.enabled,
+          model: config.ai.model ?? null,
+          apiKeyConfigured,
+        },
+        user: config.user,
+        preferences: config.preferences,
+        shell: config.shell,
+        installation: config.installation,
+        configFile: configManager.getConfigFile(),
+        secretsFile: secretsManager.getSecretsFile(),
+      },
+      {
+        text: () => {
+          ui.info('Current Neo CLI Configuration');
+
+          if (config.activeProfile) {
+            ui.muted(`Active profile: ${config.activeProfile}`);
+          }
+          console.log('');
+
+          ui.section('AI');
+          const aiPairs: Array<[string, string]> = [
+            ['enabled', config.ai.enabled ? 'yes' : 'no'],
+            ['apiKey', apiKeyConfigured ? 'configured' : 'not configured'],
+          ];
+          if (config.ai.model) {
+            aiPairs.push(['model', config.ai.model]);
+          }
+          ui.keyValue(aiPairs);
+          console.log('');
+
+          if (config.user.name || config.user.email) {
+            ui.section('User');
+            const userPairs: Array<[string, string]> = [];
+            if (config.user.name) userPairs.push(['user.name', config.user.name]);
+            if (config.user.email) userPairs.push(['user.email', config.user.email]);
+            ui.keyValue(userPairs);
+            console.log('');
+          }
+
+          ui.section('Preferences');
+          const prefPairs: Array<[string, string]> = [
+            ['banner', config.preferences.banner],
+            ['theme', config.preferences.theme],
+          ];
+          if (config.preferences.editor) {
+            prefPairs.push(['editor', config.preferences.editor]);
+          }
+          prefPairs.push(['aliases.n', config.preferences.aliases.n ? 'enabled' : 'disabled']);
+          ui.keyValue(prefPairs);
+          console.log('');
+
+          ui.section('Shell');
+          ui.keyValue([
+            ['type', config.shell.type],
+            ['rcFile', config.shell.rcFile],
+          ]);
+          console.log('');
+
+          ui.section('Installation');
+          const installPairs: Array<[string, string]> = [
+            ['version', config.installation.version],
+            ['installedAt', config.installation.installedAt],
+          ];
+          if (config.installation.globalPath) {
+            installPairs.push(['globalPath', config.installation.globalPath]);
+          }
+          if (config.installation.completionsPath) {
+            installPairs.push(['completionsPath', config.installation.completionsPath]);
+          }
+          ui.keyValue(installPairs);
+          console.log('');
+
+          ui.divider();
+          ui.muted(`Config file: ${configManager.getConfigFile()}`);
+          ui.muted(`Secrets file: ${secretsManager.getSecretsFile()}`);
+          ui.muted(
+            `\nUse these full keys with 'neo config get <key>' or 'neo config set <key> <value>'`
+          );
+        },
+      }
+    );
+  }));
 
   return command;
 }

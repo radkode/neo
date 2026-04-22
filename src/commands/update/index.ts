@@ -4,7 +4,7 @@ import inquirer from 'inquirer';
 import packageJson from '../../../package.json' with { type: 'json' };
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { updateOptionsSchema } from '@/types/schemas.js';
 import type { UpdateOptions } from '@/types/schemas.js';
 import type { PackageManager } from '@/types/index.js';
@@ -96,16 +96,11 @@ export function createUpdateCommand(): Command {
     .option('--check-only', 'only check for updates without installing')
     .option('--force', 'force update even if already on latest version')
     .action(runAction(async (options: unknown) => {
-      // Validate options
-      let validatedOptions: UpdateOptions;
-      try {
-        validatedOptions = validate(updateOptionsSchema, options, 'update options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: UpdateOptions = validate(
+        updateOptionsSchema,
+        options,
+        'update options'
+      );
 
       const currentVersion = getCurrentVersion();
       logger.debug(`Current version: ${currentVersion}`);
@@ -118,8 +113,9 @@ export function createUpdateCommand(): Command {
         latestVersion = await getLatestVersion();
       } catch {
         spinner.fail('Failed to check for updates');
-        ui.error('Could not connect to npm registry. Please check your internet connection');
-        process.exit(1);
+        throw new Error(
+          'Could not connect to npm registry. Please check your internet connection.'
+        );
       }
 
       logger.debug(`Latest version: ${latestVersion}`);
@@ -240,19 +236,14 @@ export function createUpdateCommand(): Command {
         updateSpinner.fail('Update failed');
 
         const errorMessage = error instanceof Error ? error.message : String(error);
+        const installCmd = `${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`;
 
         if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
-          ui.error('Permission denied. Try running with sudo:');
-          ui.muted(
-            `  sudo ${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`
-          );
-        } else {
-          ui.error(`Update failed: ${errorMessage}`);
-          ui.muted(
-            `Try updating manually: ${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`
-          );
+          throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`);
         }
-        process.exit(1);
+        throw new Error(
+          `Update failed: ${errorMessage}. Try updating manually: ${installCmd}`
+        );
       }
     }));
 

@@ -13,6 +13,7 @@ import {
   getDiffSize,
   type AICommitRequest,
   type AICommitResponse,
+  type StructuredCommitPrompt,
 } from './prompts.js';
 
 // Re-export types for convenience
@@ -45,7 +46,7 @@ async function getApiKey(): Promise<string | undefined> {
  */
 async function getModel(): Promise<string> {
   const config = await configManager.read();
-  return config.ai.model || 'claude-3-haiku-20240307';
+  return config.ai.model || 'claude-haiku-4-5-20251001';
 }
 
 /**
@@ -78,9 +79,18 @@ interface AnthropicErrorResponse {
 }
 
 /**
- * Call the Anthropic API with retry logic
+ * Call the Anthropic API with retry logic.
+ *
+ * The system prompt is sent as a cacheable block (`cache_control: ephemeral`)
+ * so repeat invocations only re-send the per-request user content. Note: the
+ * minimum cacheable prefix on Haiku is ~4096 tokens — below that, the marker
+ * is harmless but caching won't actually kick in. Adding it now means it works
+ * automatically if the system prompt grows.
  */
-async function callAnthropicAPI(prompt: string, retries = 3): Promise<Result<string>> {
+async function callAnthropicAPI(
+  prompt: StructuredCommitPrompt,
+  retries = 3
+): Promise<Result<string>> {
   const apiKey = await getApiKey();
   if (!apiKey) {
     return failure(AIErrors.missingApiKey());
@@ -101,10 +111,17 @@ async function callAnthropicAPI(prompt: string, retries = 3): Promise<Result<str
         body: JSON.stringify({
           model,
           max_tokens: MAX_TOKENS,
+          system: [
+            {
+              type: 'text',
+              text: prompt.system,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
           messages: [
             {
               role: 'user',
-              content: prompt,
+              content: prompt.user,
             },
           ],
         }),

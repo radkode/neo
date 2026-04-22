@@ -74,14 +74,26 @@ neo git stash pop         # Pop latest stash
 neo git stash list        # List stashes
 ```
 
-### `neo config`
+### `neo git commit`
 
-Key-value configuration with secure secrets storage.
+Conventional commits with optional AI-drafted messages.
 
 ```bash
-neo config set key value  # Set a value
-neo config get key        # Get a value
-neo config list           # List all values
+neo git commit            # Interactive conventional commit
+neo git commit --ai       # Draft a message from the staged diff (Anthropic API)
+```
+
+The AI path uses `claude-haiku-4-5` by default and caches the system prompt. Set your key with `neo config set ai.apiKey` or `ANTHROPIC_API_KEY`.
+
+### `neo config`
+
+Key-value configuration with secure secrets storage and profiles.
+
+```bash
+neo config set key value         # Set a value
+neo config get key               # Get a value
+neo config list                  # List all values
+neo config profile create work   # Create/switch profiles
 ```
 
 ### `neo update`
@@ -93,14 +105,74 @@ neo update                # Update to latest
 neo update --check-only   # Check for updates
 ```
 
+## Agent mode
+
+Neo is built to be scripted and driven by AI coding agents (Claude Code, Cursor, Aider, etc.). Every command returns structured output on demand, has deterministic exit codes, and can skip prompts — no screen-scraping required.
+
+### Flags
+
+| Flag | What it does |
+|------|--------------|
+| `--json` | Emit a single JSON payload on stdout. Implies `--non-interactive` and `--quiet`. Errors come back as `{"error": {...}}`. |
+| `-y, --yes` | Auto-accept prompt defaults. Safe for idempotent operations; destructive actions still require an explicit flag like `--force`. |
+| `--non-interactive` | Fail fast with exit code `2` instead of prompting. Pair with `--yes` or the prompt-specific flag. |
+| `-q, --quiet` | Suppress banner, spinners, and decorative output. |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Command failure (see stderr/JSON error for details) |
+| `2` | Non-interactive prompt required — pass the missing flag |
+
+### Environment markers
+
+Neo auto-detects agent environments and switches to agent defaults (no banner, no color, non-interactive):
+
+- `CLAUDECODE=1` — Claude Code
+- `CURSOR_AGENT=1` — Cursor agent
+- `AIDER=1` — Aider
+- `NEO_AGENT=1` — any other agent
+
+Override flags: `NEO_JSON`, `NEO_YES`, `NEO_NON_INTERACTIVE`, `NEO_QUIET`. `NO_COLOR` and `CI` are also respected.
+
+### Discover the command tree
+
+Rather than relying on training data, agents should query Neo's schema directly:
+
+```bash
+neo schema                     # Compact JSON on stdout
+neo schema --pretty            # Pretty-printed JSON
+neo schema --markdown          # Human-readable docs
+neo schema | jq '.commands[] | .path'
+```
+
+The schema follows an OpenCLI-lite shape: every command, option, argument, and global flag is enumerated with types and descriptions.
+
+### Example: create a PR from an agent
+
+```bash
+neo git push --yes --json \
+  && neo gh pr create --title "Add X" --body "…" --yes --json \
+  | jq -r '.url'
+```
+
+If a required prompt can't be answered non-interactively you'll get exit code `2` and a structured error telling you which flag was missing.
+
 ## Global Options
 
 ```
--v, --verbose     Verbose output
---no-color        Disable colors
---no-banner       Hide banner
--h, --help        Show help
--V, --version     Show version
+-v, --verbose            Verbose output
+-c, --config <path>      Path to config file
+--no-color               Disable colors
+--no-banner              Hide banner
+--json                   Machine-readable JSON on stdout (implies --non-interactive, --quiet)
+-y, --yes                Auto-accept prompt defaults
+--non-interactive        Fail fast instead of prompting
+-q, --quiet              Suppress banner and decorative output
+-h, --help               Show help
+-V, --version            Show version
 ```
 
 ## Development

@@ -89,9 +89,7 @@ export async function isAgentInitialized(): Promise<boolean> {
 export async function ensureAgentInitialized(): Promise<void> {
   const initialized = await isAgentInitialized();
   if (!initialized) {
-    ui.error('Agent not initialized in this project');
-    ui.warn('Run: neo agent init');
-    process.exit(1);
+    throw new Error('Agent not initialized in this project. Run: neo agent init');
   }
 }
 
@@ -101,9 +99,7 @@ export async function ensureAgentInitialized(): Promise<void> {
 export async function createAgentDir(): Promise<string> {
   const projectRoot = await getProjectRoot();
   if (!projectRoot) {
-    ui.error('Not in a Neo project');
-    ui.warn('Run: neo init');
-    process.exit(1);
+    throw new Error('Not in a Neo project. Run: neo init');
   }
 
   const neoDir = join(projectRoot, '.neo');
@@ -151,8 +147,7 @@ export async function loadAgentConfig(): Promise<AgentConfig | null> {
 export async function saveAgentConfig(config: AgentConfig): Promise<void> {
   const configPath = await getAgentConfigPath();
   if (!configPath) {
-    ui.error('Agent directory not found');
-    process.exit(1);
+    throw new Error('Agent directory not found');
   }
 
   const rawConfig: RawAgentConfig = {
@@ -163,9 +158,8 @@ export async function saveAgentConfig(config: AgentConfig): Promise<void> {
   try {
     await writeFile(configPath, JSON.stringify(rawConfig, null, 2), 'utf-8');
   } catch (error) {
-    ui.error('Failed to save agent configuration');
-    ui.muted(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to save agent configuration: ${msg}`);
   }
 }
 

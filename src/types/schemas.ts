@@ -156,12 +156,9 @@ export const aiApiKeySchema = z
 /**
  * Valid AI model values
  */
-export const aiModelSchema = z.enum(
-  ['claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
-  {
-    message: 'Model must be a valid Claude model identifier',
-  }
-);
+export const aiModelSchema = z
+  .string()
+  .regex(/^claude-/, 'Model must be a valid Claude model identifier (e.g., claude-haiku-4-5-20251001)');
 
 /**
  * Alias setup options schema

@@ -10,7 +10,7 @@ import { type Result, success, failure, isFailure } from '@/core/errors/index.js
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { listWorktrees, formatWorktreeStatus, copyToClipboard } from './utils.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -130,10 +130,8 @@ export function createWorktreeSwitchCommand(): Command {
   command.description('Interactively select and switch to a worktree').action(
     runAction(async () => {
       const result = await executeWorktreeSwitch();
-
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
     })
   );

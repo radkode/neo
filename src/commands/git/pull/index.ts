@@ -4,10 +4,10 @@ import inquirer from 'inquirer';
 import { logger } from '@/utils/logger.js';
 import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
-import { emitJson, emitError } from '@/utils/output.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 import { ui } from '@/utils/ui.js';
-import { validate, isValidationError } from '@/utils/validation.js';
+import { validate } from '@/utils/validation.js';
 import { gitPullOptionsSchema, deletedBranchActionSchema } from '@/types/schemas.js';
 import type { GitPullOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
@@ -451,20 +451,15 @@ Examples:
 `
     )
     .action(runAction(async (options: unknown) => {
-      let validatedOptions: GitPullOptions;
-      try {
-        validatedOptions = validate(gitPullOptionsSchema, options, 'git pull options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: GitPullOptions = validate(
+        gitPullOptionsSchema,
+        options,
+        'git pull options'
+      );
 
       const result = await executePull(validatedOptions);
       if (isFailure(result)) {
-        emitError(result.error);
-        process.exit(1);
+        throw result.error;
       }
       if (result.data.cancelled) {
         emitJson({ ok: false, command: 'git.pull', cancelled: true, reason: result.data.reason });

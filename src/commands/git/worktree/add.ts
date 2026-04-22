@@ -9,6 +9,7 @@ import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
 import { getRepoName, getWorktreePath, ensureWorktreeDir, pathExists } from './utils.js';
+import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
 interface AddWorktreeOptions {
@@ -65,14 +66,25 @@ export async function executeWorktreeAdd(
 
     spinner.succeed(`Created worktree at ${worktreePath}`);
 
-    ui.keyValue([
-      ['Path', worktreePath],
-      ['Branch', targetBranch],
-    ]);
-
-    ui.newline();
-    ui.info('To switch to this worktree:');
-    ui.code(`cd ${worktreePath}`);
+    emitJson(
+      {
+        ok: true,
+        command: 'git.worktree.add',
+        path: worktreePath,
+        branch: targetBranch,
+      },
+      {
+        text: () => {
+          ui.keyValue([
+            ['Path', worktreePath],
+            ['Branch', targetBranch],
+          ]);
+          ui.newline();
+          ui.info('To switch to this worktree:');
+          ui.code(`cd ${worktreePath}`);
+        },
+      }
+    );
 
     return success(worktreePath);
   } catch (error) {
@@ -110,14 +122,8 @@ export function createWorktreeAddCommand(): Command {
     .option('-p, --path <path>', 'custom path for worktree (default: ~/.neo/worktrees/<repo>/<branch>)')
     .action(runAction(async (branch, options) => {
       const result = await executeWorktreeAdd(branch, options);
-
       if (isFailure(result)) {
-        ui.error(result.error.message);
-        if (result.error.suggestions?.length) {
-          ui.warn('Suggestions:');
-          ui.list(result.error.suggestions);
-        }
-        process.exit(1);
+        throw result.error;
       }
     }));
 

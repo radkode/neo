@@ -3,7 +3,7 @@ import { buildCommitPrompt, parseCommitResponse, isDiffTooLarge, getDiffSize } f
 
 describe('AI commit prompts', () => {
   describe('buildCommitPrompt', () => {
-    it('should build a prompt with diff content', () => {
+    it('returns a structured prompt with system + user parts', () => {
       const request = {
         diff: 'diff --git a/file.ts b/file.ts\n+console.log("hello");',
         recentCommits: [],
@@ -13,9 +13,9 @@ describe('AI commit prompts', () => {
 
       const prompt = buildCommitPrompt(request);
 
-      expect(prompt).toContain('diff --git');
-      expect(prompt).toContain('console.log');
-      expect(prompt).toContain('conventional commit');
+      expect(prompt.user).toContain('diff --git');
+      expect(prompt.user).toContain('console.log');
+      expect(prompt.system).toContain('conventional commit');
     });
 
     it('should include recent commits for context', () => {
@@ -28,8 +28,8 @@ describe('AI commit prompts', () => {
 
       const prompt = buildCommitPrompt(request);
 
-      expect(prompt).toContain('abc123 feat: add feature');
-      expect(prompt).toContain('def456 fix: fix bug');
+      expect(prompt.user).toContain('abc123 feat: add feature');
+      expect(prompt.user).toContain('def456 fix: fix bug');
     });
 
     it('should include branch name for scope hints', () => {
@@ -42,7 +42,7 @@ describe('AI commit prompts', () => {
 
       const prompt = buildCommitPrompt(request);
 
-      expect(prompt).toContain('feature/auth-login');
+      expect(prompt.user).toContain('feature/auth-login');
     });
 
     it('should not include main/master branch in prompt', () => {
@@ -55,7 +55,7 @@ describe('AI commit prompts', () => {
 
       const prompt = buildCommitPrompt(request);
 
-      expect(prompt).not.toContain('Current branch: main');
+      expect(prompt.user).not.toContain('Current branch: main');
     });
 
     it('should include staged files summary', () => {
@@ -68,9 +68,21 @@ describe('AI commit prompts', () => {
 
       const prompt = buildCommitPrompt(request);
 
-      expect(prompt).toContain('src/auth.ts');
-      expect(prompt).toContain('src/login.ts');
-      expect(prompt).toContain('test/auth.test.ts');
+      expect(prompt.user).toContain('src/auth.ts');
+      expect(prompt.user).toContain('src/login.ts');
+      expect(prompt.user).toContain('test/auth.test.ts');
+    });
+
+    it('keeps the system prompt stable for prompt caching', () => {
+      const base = {
+        diff: 'diff A',
+        recentCommits: [],
+        branchName: 'main',
+        stagedFiles: ['a.ts'],
+      };
+      const other = { ...base, diff: 'diff B', stagedFiles: ['b.ts'] };
+
+      expect(buildCommitPrompt(base).system).toBe(buildCommitPrompt(other).system);
     });
   });
 

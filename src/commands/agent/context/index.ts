@@ -2,7 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import inquirer from 'inquirer';
 import { ContextDB } from '@/storage/db.js';
 import { ui } from '@/utils/ui.js';
-import { validate, validateArgument, isValidationError } from '@/utils/validation.js';
+import { validate, validateArgument } from '@/utils/validation.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson } from '@/utils/output.js';
@@ -49,27 +49,17 @@ function createContextAddCommand(): Command {
     .action(runAction(async (rawContent: string, options: unknown) => {
       await ensureAgentInitialized();
 
-      // Validate content argument
-      let content: ContextContent;
-      try {
-        content = validateArgument(contextContentSchema, rawContent, 'context content');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const content: ContextContent = validateArgument(
+        contextContentSchema,
+        rawContent,
+        'context content'
+      );
 
-      // Validate options
-      let validatedOptions: AgentContextAddOptions;
-      try {
-        validatedOptions = validate(agentContextAddOptionsSchema, options, 'context add options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: AgentContextAddOptions = validate(
+        agentContextAddOptionsSchema,
+        options,
+        'context add options'
+      );
 
       await addContext(content, validatedOptions);
     }));
@@ -90,16 +80,11 @@ function createContextListCommand(): Command {
     .action(runAction(async (options: unknown) => {
       await ensureAgentInitialized();
 
-      // Validate options
-      let validatedOptions: AgentContextListOptions;
-      try {
-        validatedOptions = validate(agentContextListOptionsSchema, options, 'context list options');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const validatedOptions: AgentContextListOptions = validate(
+        agentContextListOptionsSchema,
+        options,
+        'context list options'
+      );
 
       await listContexts(validatedOptions);
     }));
@@ -119,15 +104,7 @@ function createContextRemoveCommand(): Command {
     .action(runAction(async (rawId: string) => {
       await ensureAgentInitialized();
 
-      let id: ContextId;
-      try {
-        id = validateArgument(contextIdSchema, rawId, 'context ID');
-      } catch (error) {
-        if (isValidationError(error)) {
-          process.exit(1);
-        }
-        throw error;
-      }
+      const id: ContextId = validateArgument(contextIdSchema, rawId, 'context ID');
 
       await removeContext(id);
     }));
@@ -141,8 +118,7 @@ function createContextRemoveCommand(): Command {
 async function addContext(content: ContextContent, options: AgentContextAddOptions): Promise<void> {
   const dbPath = await getAgentDbPath();
   if (!dbPath) {
-    ui.error('Failed to get database path');
-    process.exit(1);
+    throw new Error('Failed to get database path');
   }
 
   const spinner = ui.spinner('Adding context');
@@ -184,8 +160,7 @@ async function addContext(content: ContextContent, options: AgentContextAddOptio
     );
   } catch (error) {
     spinner.fail('Failed to add context');
-    ui.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
@@ -195,8 +170,7 @@ async function addContext(content: ContextContent, options: AgentContextAddOptio
 async function listContexts(options: AgentContextListOptions): Promise<void> {
   const dbPath = await getAgentDbPath();
   if (!dbPath) {
-    ui.error('Failed to get database path');
-    process.exit(1);
+    throw new Error('Failed to get database path');
   }
 
   const spinner = ui.spinner('Loading contexts');
@@ -272,8 +246,7 @@ async function listContexts(options: AgentContextListOptions): Promise<void> {
     ui.muted('Use "neo agent context remove <id>" to remove a context');
   } catch (error) {
     spinner.fail('Failed to load contexts');
-    ui.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
@@ -283,8 +256,7 @@ async function listContexts(options: AgentContextListOptions): Promise<void> {
 async function removeContext(id: ContextId): Promise<void> {
   const dbPath = await getAgentDbPath();
   if (!dbPath) {
-    ui.error('Failed to get database path');
-    process.exit(1);
+    throw new Error('Failed to get database path');
   }
 
   try {
@@ -294,9 +266,7 @@ async function removeContext(id: ContextId): Promise<void> {
     const context = db.getContext(id);
     if (!context) {
       db.close();
-      ui.error('Context not found');
-      ui.muted(`No context found with ID: ${id}`);
-      process.exit(1);
+      throw new Error(`No context found with ID: ${id}`);
     }
 
     // Show context details
@@ -349,12 +319,8 @@ async function removeContext(id: ContextId): Promise<void> {
       spinner.fail('Failed to remove context');
     }
   } catch (error) {
-    // Let NonInteractiveError propagate so the outer runAction wrapper can
-    // emit a structured error and exit with code 2 (the agent contract).
     if (error instanceof NonInteractiveError) throw error;
-    ui.error('Failed to remove context');
-    ui.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
