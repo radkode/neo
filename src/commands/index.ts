@@ -10,6 +10,7 @@ import { createAgentCommand } from '@/commands/agent/index.js';
 import { createCompletionsCommand } from '@/commands/completions/index.js';
 import { createSchemaCommand } from '@/commands/schema/index.js';
 import { createSyncCommand } from '@/commands/sync/index.js';
+import { createVerifyCommand } from '@/commands/verify/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -23,6 +24,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createCompletionsCommand());
   program.addCommand(createSchemaCommand());
   program.addCommand(createSyncCommand());
+  program.addCommand(createVerifyCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -36,3 +38,4 @@ export { createAgentCommand } from '@/commands/agent/index.js';
 export { createCompletionsCommand } from '@/commands/completions/index.js';
 export { createSchemaCommand } from '@/commands/schema/index.js';
 export { createSyncCommand } from '@/commands/sync/index.js';
+export { createVerifyCommand } from '@/commands/verify/index.js';
