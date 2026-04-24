@@ -13,6 +13,7 @@ import { createSyncCommand } from '@/commands/sync/index.js';
 import { createVerifyCommand } from '@/commands/verify/index.js';
 import { createChangesetCommand } from '@/commands/changeset/index.js';
 import { createDoctorCommand } from '@/commands/doctor/index.js';
+import { createAiCommand } from '@/commands/ai/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -29,6 +30,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createVerifyCommand());
   program.addCommand(createChangesetCommand());
   program.addCommand(createDoctorCommand());
+  program.addCommand(createAiCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -45,3 +47,4 @@ export { createSyncCommand } from '@/commands/sync/index.js';
 export { createVerifyCommand } from '@/commands/verify/index.js';
 export { createChangesetCommand } from '@/commands/changeset/index.js';
 export { createDoctorCommand } from '@/commands/doctor/index.js';
+export { createAiCommand } from '@/commands/ai/index.js';

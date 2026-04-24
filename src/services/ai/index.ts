@@ -13,11 +13,20 @@ import {
   getDiffSize,
   type AICommitRequest,
   type AICommitResponse,
-  type StructuredCommitPrompt,
+  type StructuredPrompt,
 } from './prompts.js';
+import {
+  buildPrPrompt,
+  parsePrResponse,
+  isCommitListTooLarge,
+  type AIPrRequest,
+  type AIPrResponse,
+} from './pr-prompts.js';
 
 // Re-export types for convenience
 export type { AICommitRequest, AICommitResponse } from './prompts.js';
+export type { StructuredPrompt } from './prompts.js';
+export type { AIPrRequest, AIPrResponse } from './pr-prompts.js';
 export { AIError, AIErrors } from './errors.js';
 
 /**
@@ -25,7 +34,7 @@ export { AIError, AIErrors } from './errors.js';
  */
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
-const MAX_TOKENS = 500;
+const DEFAULT_MAX_TOKENS = 500;
 
 /**
  * Get the API key from secrets file, falling back to environment variable
@@ -87,10 +96,12 @@ interface AnthropicErrorResponse {
  * is harmless but caching won't actually kick in. Adding it now means it works
  * automatically if the system prompt grows.
  */
-async function callAnthropicAPI(
-  prompt: StructuredCommitPrompt,
-  retries = 3
+export async function callAnthropicAPI(
+  prompt: StructuredPrompt,
+  options: { maxTokens?: number; retries?: number } = {}
 ): Promise<Result<string>> {
+  const retries = options.retries ?? 3;
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
   const apiKey = await getApiKey();
   if (!apiKey) {
     return failure(AIErrors.missingApiKey());
@@ -110,7 +121,7 @@ async function callAnthropicAPI(
         },
         body: JSON.stringify({
           model,
-          max_tokens: MAX_TOKENS,
+          max_tokens: maxTokens,
           system: [
             {
               type: 'text',
@@ -230,4 +241,31 @@ export async function generateCommitMessage(request: AICommitRequest): Promise<R
 export async function isAICommitAvailable(): Promise<boolean> {
   const apiKey = await getApiKey();
   return Boolean(apiKey);
+}
+
+const PR_MAX_TOKENS = 2000;
+
+/**
+ * Generate a PR title + body from branch metadata (commits, diff stat, diff).
+ * Returns a Result so callers can distinguish missing-key / network / parse
+ * errors without throwing.
+ */
+export async function generatePrDescription(
+  request: AIPrRequest
+): Promise<Result<AIPrResponse>> {
+  if (isCommitListTooLarge(request.commits, request.diff)) {
+    return failure(AIErrors.tokenLimitExceeded(request.diff.length));
+  }
+
+  const prompt = buildPrPrompt(request);
+  const apiResult = await callAnthropicAPI(prompt, { maxTokens: PR_MAX_TOKENS });
+  if (!apiResult.success) {
+    return apiResult;
+  }
+
+  try {
+    return success(parsePrResponse(apiResult.data));
+  } catch {
+    return failure(AIErrors.invalidResponse(apiResult.data));
+  }
 }
