@@ -1,0 +1,421 @@
+import { Command } from '@commander-js/extra-typings';
+import { execa } from 'execa';
+import { access, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { ui } from '@/utils/ui.js';
+import { emitJson } from '@/utils/output.js';
+import { runAction } from '@/utils/run-action.js';
+import { getRuntimeContext } from '@/utils/runtime-context.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
+import {
+  GitErrors,
+  isNotGitRepository,
+  isAuthenticationError,
+  isNetworkError,
+} from '@/utils/git-errors.js';
+import { executeVerify } from '@/commands/verify/index.js';
+import { executeChangeset } from '@/commands/changeset/index.js';
+import { executeAiPr } from '@/commands/ai/pr/index.js';
+import { isAICommitAvailable } from '@/services/ai/index.js';
+
+interface WorkShipOptions {
+  base?: string;
+  verify?: boolean;
+  changeset?: boolean;
+  aiPr?: boolean;
+  draft?: boolean;
+  bump?: string;
+  summary?: string;
+  package?: string;
+}
+
+interface WorkShipResult {
+  branch: string;
+  base: string;
+  verified: boolean;
+  verifyDurationMs?: number;
+  pushed: boolean;
+  prUrl?: string;
+  prCreated: boolean;
+  changesetPath?: string;
+  changesetExisting: boolean;
+  commits: number;
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function detectDefaultBranch(): Promise<string> {
+  try {
+    const { stdout } = await execa('git', ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+    return stdout.replace('refs/remotes/origin/', '').trim();
+  } catch {
+    for (const name of ['main', 'master']) {
+      try {
+        await execa('git', ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`]);
+        return name;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(
+      'Could not detect default branch. Pass --base <name>, or run `git remote set-head origin --auto`.'
+    );
+  }
+}
+
+async function getCurrentBranch(): Promise<string> {
+  const { stdout } = await execa('git', ['branch', '--show-current']);
+  return stdout.trim();
+}
+
+async function hasUncommittedChanges(): Promise<boolean> {
+  const { stdout } = await execa('git', ['status', '--porcelain']);
+  return stdout.trim().length > 0;
+}
+
+async function countCommitsAhead(base: string): Promise<number> {
+  try {
+    const { stdout } = await execa('git', ['rev-list', '--count', `origin/${base}..HEAD`]);
+    return parseInt(stdout.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function hasUpstream(branch: string): Promise<boolean> {
+  try {
+    await execa('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function existingPrUrl(): Promise<string | null> {
+  try {
+    const { stdout } = await execa('gh', ['pr', 'view', '--json', 'url', '-q', '.url'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const url = stdout.trim();
+    return url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ghInstalled(): Promise<boolean> {
+  try {
+    await execa('gh', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasPendingChangeset(cwd: string): Promise<string | null> {
+  const dir = join(cwd, '.changeset');
+  if (!(await pathExists(dir))) return null;
+  try {
+    const entries = await readdir(dir);
+    const match = entries.find(
+      (name) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md'
+    );
+    return match ? join(dir, match) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getProjectRoot(): Promise<string> {
+  const { stdout } = await execa('git', ['rev-parse', '--show-toplevel']);
+  return stdout.trim();
+}
+
+function inferPrTitle(branch: string, commits: string[]): string {
+  const firstCommit = commits[0]?.trim();
+  if (firstCommit && firstCommit.length > 0) return firstCommit;
+  // Fall back to the branch's last path segment, un-slugified.
+  const lastSegment = branch.split('/').pop() ?? branch;
+  return lastSegment.replace(/[-_]+/g, ' ');
+}
+
+async function getCommitSubjects(base: string): Promise<string[]> {
+  const { stdout } = await execa('git', [
+    'log',
+    `origin/${base}..HEAD`,
+    '--pretty=format:%s',
+    '--reverse',
+  ]);
+  return stdout.split('\n').filter((line) => line.trim().length > 0);
+}
+
+function inferPrBody(commits: string[]): string {
+  const lines: string[] = ['## Summary'];
+  if (commits.length <= 3) {
+    for (const c of commits) lines.push(`- ${c}`);
+  } else {
+    for (const c of commits.slice(0, 3)) lines.push(`- ${c}`);
+    lines.push(`- ... and ${commits.length - 3} more commit(s)`);
+  }
+  lines.push('', '## Test plan', '- [ ] Verify locally');
+  return lines.join('\n');
+}
+
+export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShipResult> {
+  try {
+    await execa('git', ['rev-parse', '--is-inside-work-tree']);
+  } catch (error) {
+    if (isNotGitRepository(error)) throw GitErrors.notARepository('work ship');
+    throw GitErrors.unknown('work ship', error);
+  }
+
+  const ctx = getRuntimeContext();
+  const cwd = await getProjectRoot();
+  const branch = await getCurrentBranch();
+
+  if (!branch) {
+    throw new Error('Detached HEAD — check out a branch before running `neo work ship`.');
+  }
+
+  const base = options.base ?? (await detectDefaultBranch());
+  if (branch === base) {
+    throw new Error(
+      `Already on base branch "${base}" — start a feature branch with \`neo work start <name>\`.`
+    );
+  }
+
+  if (await hasUncommittedChanges()) {
+    throw new Error(
+      'You have uncommitted changes. Commit them first (`neo git commit --ai`), then re-run.'
+    );
+  }
+
+  // Fetch base so our ahead-count and PR diff are against the fresh tip.
+  const fetchSpinner = ui.spinner(`Fetching origin/${base}`);
+  fetchSpinner.start();
+  try {
+    await execa('git', ['fetch', 'origin', base]);
+    fetchSpinner.succeed(`Fetched origin/${base}`);
+  } catch (error) {
+    fetchSpinner.fail(`Fetch failed for origin/${base}`);
+    if (isAuthenticationError(error)) throw GitErrors.authenticationFailed('work ship');
+    if (isNetworkError(error)) throw GitErrors.networkError('work ship');
+    throw GitErrors.unknown('work ship', error);
+  }
+
+  const commitsAhead = await countCommitsAhead(base);
+  if (commitsAhead === 0) {
+    throw new Error(
+      `Nothing to ship — ${branch} has no commits ahead of origin/${base}. Commit your changes first.`
+    );
+  }
+
+  // Verify
+  let verified = false;
+  let verifyDurationMs: number | undefined;
+  if (options.verify !== false) {
+    const vr = await executeVerify(cwd, {});
+    verifyDurationMs = vr.totalDurationMs;
+    if (!vr.ok) {
+      throw new Error('Verify failed — fix the failing scripts before shipping.');
+    }
+    verified = true;
+  }
+
+  // Changeset
+  let changesetPath: string | undefined;
+  let changesetExisting = false;
+  if (options.changeset !== false) {
+    const existing = await hasPendingChangeset(cwd);
+    if (existing) {
+      changesetPath = existing;
+      changesetExisting = true;
+      ui.muted(`Using existing changeset: ${existing}`);
+    } else {
+      // Fall into changeset creation. executeChangeset handles non-interactive
+      // enforcement via NonInteractiveError when --bump/--summary are missing.
+      const cs = await executeChangeset(cwd, {
+        ...(options.bump !== undefined ? { bump: options.bump } : {}),
+        ...(options.summary !== undefined ? { summary: options.summary } : {}),
+        ...(options.package !== undefined ? { package: options.package } : {}),
+      });
+      changesetPath = cs.path;
+      // Stage and amend so the changeset travels with the branch tip. If
+      // there's nothing to amend onto (bare branch), fall back to a new commit.
+      await execa('git', ['add', cs.path]);
+      try {
+        await execa('git', ['commit', '--amend', '--no-edit', '-n']);
+      } catch {
+        await execa('git', ['commit', '-n', '-m', 'chore: add changeset']);
+      }
+    }
+  }
+
+  // Push
+  let pushed = false;
+  const pushSpinner = ui.spinner(`Pushing ${branch} to origin`);
+  pushSpinner.start();
+  try {
+    const pushArgs = (await hasUpstream(branch))
+      ? ['push', '--force-with-lease', 'origin', branch]
+      : ['push', '-u', 'origin', branch];
+    await execa('git', pushArgs);
+    pushSpinner.succeed(`Pushed ${branch}`);
+    pushed = true;
+  } catch (error) {
+    pushSpinner.fail('Push failed');
+    if (isAuthenticationError(error)) throw GitErrors.authenticationFailed('work ship');
+    if (isNetworkError(error)) throw GitErrors.networkError('work ship');
+    throw GitErrors.unknown('work ship', error);
+  }
+
+  // PR
+  let prUrl: string | undefined;
+  let prCreated = false;
+
+  if (!(await ghInstalled())) {
+    ui.warn('gh CLI not found — skipping PR creation. Install from https://cli.github.com.');
+  } else {
+    const existing = await existingPrUrl();
+    if (existing) {
+      prUrl = existing;
+      ui.muted(`PR already exists: ${existing}`);
+    } else {
+      const wantAiPr = options.aiPr !== false && (await isAICommitAvailable());
+      if (wantAiPr) {
+        // Delegate to `neo ai pr`. In non-interactive / agent mode, it'll
+        // error unless --yes, so we bounce the relevant context flags through.
+        if (ctx.nonInteractive && !ctx.yes) {
+          throw new NonInteractiveError(
+            'PR creation needs confirmation (neo work ship)',
+            '--yes (or --no-ai-pr to skip AI generation)'
+          );
+        }
+        const pr = await executeAiPr({
+          base,
+          create: true,
+          ...(options.draft ? { draft: true } : {}),
+        });
+        prUrl = pr.prUrl;
+        prCreated = pr.created;
+      } else {
+        // Minimal inferred PR — no AI, no body generation.
+        const commitSubjects = await getCommitSubjects(base);
+        const title = inferPrTitle(branch, commitSubjects);
+        const body = inferPrBody(commitSubjects);
+        const createSpinner = ui.spinner('Creating PR (inferred title + body)');
+        createSpinner.start();
+        try {
+          const args = ['pr', 'create', '--base', base, '--title', title, '--body', body];
+          if (options.draft) args.push('--draft');
+          const { stdout } = await execa('gh', args);
+          const url = stdout.trim().split('\n').pop() ?? '';
+          createSpinner.succeed(`Created PR: ${url}`);
+          prUrl = url;
+          prCreated = true;
+        } catch (error) {
+          createSpinner.fail('Failed to create PR');
+          const stderr = (error as { stderr?: string }).stderr ?? '';
+          if (stderr) ui.muted(stderr.trim().split('\n').slice(-10).join('\n'));
+          throw new Error('gh pr create failed. Fix the issue and re-run, or open the PR manually.');
+        }
+      }
+    }
+  }
+
+  const result: WorkShipResult = {
+    branch,
+    base,
+    verified,
+    pushed,
+    prCreated,
+    changesetExisting,
+    commits: commitsAhead,
+  };
+  if (verifyDurationMs !== undefined) result.verifyDurationMs = verifyDurationMs;
+  if (prUrl !== undefined) result.prUrl = prUrl;
+  if (changesetPath !== undefined) result.changesetPath = changesetPath;
+  return result;
+}
+
+export function createWorkShipCommand(): Command {
+  const command = new Command('ship');
+
+  command
+    .description('Ship the current branch: verify → ensure changeset → push → open PR')
+    .option('--base <branch>', 'base branch (default: origin HEAD)')
+    .option('--no-verify', 'skip the verify step')
+    .option('--no-changeset', 'skip changeset creation')
+    .option('--no-ai-pr', 'do not use AI for PR description (inferred title + minimal body)')
+    .option('--draft', 'open the PR as a draft')
+    .option('--bump <level>', 'changeset bump level (major|minor|patch|empty)')
+    .option('--summary <text>', 'changeset summary')
+    .option('--package <names>', 'comma-separated package names (monorepos)')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Ship the current branch interactively:
+    $ neo work ship
+
+  Skip verify (iterating fast):
+    $ neo work ship --no-verify
+
+  Agent-friendly (non-AI PR, minor bump changeset):
+    $ neo work ship --yes --no-ai-pr --bump minor --summary "Add foo" --json
+
+  Draft PR:
+    $ neo work ship --draft
+`
+    )
+    .action(
+      runAction(async (options: WorkShipOptions) => {
+        const result = await executeWorkShip(options);
+        emitJson(
+          {
+            ok: true,
+            command: 'work ship',
+            branch: result.branch,
+            base: result.base,
+            verified: result.verified,
+            verifyDurationMs: result.verifyDurationMs,
+            pushed: result.pushed,
+            commits: result.commits,
+            prUrl: result.prUrl,
+            prCreated: result.prCreated,
+            changesetPath: result.changesetPath,
+            changesetExisting: result.changesetExisting,
+          },
+          {
+            text: () => {
+              ui.newline();
+              if (result.prUrl) {
+                ui.success(
+                  result.prCreated
+                    ? `Shipped ${result.branch} → PR opened: ${result.prUrl}`
+                    : `Shipped ${result.branch} → existing PR: ${result.prUrl}`
+                );
+              } else {
+                ui.success(`Shipped ${result.branch} (no PR created — gh unavailable)`);
+              }
+              if (result.changesetPath) {
+                const tag = result.changesetExisting ? 'kept' : 'added';
+                ui.muted(`Changeset ${tag}: ${result.changesetPath}`);
+              }
+            },
+          }
+        );
+      })
+    );
+
+  return command;
+}
