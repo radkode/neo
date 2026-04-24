@@ -70,10 +70,13 @@ function truncateDiff(diff: string): string {
  * Structured prompt split into a stable system block and a per-request user block.
  * The system block is identical across calls so it can be placed in a cached segment.
  */
-export interface StructuredCommitPrompt {
+export interface StructuredPrompt {
   system: string;
   user: string;
 }
+
+/** @deprecated Use StructuredPrompt. */
+export type StructuredCommitPrompt = StructuredPrompt;
 
 const COMMIT_SYSTEM_PROMPT = `You are a commit message generator. Generate a conventional commit message based on the staged changes.
 
@@ -102,7 +105,7 @@ export function getCommitSystemPrompt(): string {
 /**
  * Build the prompt for commit message generation
  */
-export function buildCommitPrompt(request: AICommitRequest): StructuredCommitPrompt {
+export function buildCommitPrompt(request: AICommitRequest): StructuredPrompt {
   const truncatedDiff = truncateDiff(request.diff);
 
   const contextParts: string[] = [];
