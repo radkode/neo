@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 1.5.0
+
+### Minor Changes
+
+- [#17](https://github.com/radkode/neo/pull/17) [`7c14aca`](https://github.com/radkode/neo/commit/7c14aca85cd303e5f724c5943411cfa92a2d872e) Thanks [@jacekradko](https://github.com/jacekradko)! - Add `neo doctor` — read-only diagnostic that checks node version (against engines.node), package managers on PATH, git identity, gh auth, Neo config file integrity, ~/.config/neo writability, and Anthropic API key presence. Exits 1 only on failures — warnings don't fail CI.
+
+- [#19](https://github.com/radkode/neo/pull/19) [`8d5cb15`](https://github.com/radkode/neo/commit/8d5cb153a8fe937f49617a1739c37f420e93d902) Thanks [@jacekradko](https://github.com/jacekradko)! - Add `neo ai pr` — generate PR title + body from the current branch using Claude, preview, and (optionally) create via gh. Service layer refactor: `callAnthropicAPI` is now exported with configurable `maxTokens`, so new AI commands share the API/retry/cache logic.
+
 ## 1.4.0
 
 ### Minor Changes
