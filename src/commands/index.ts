@@ -12,6 +12,7 @@ import { createSchemaCommand } from '@/commands/schema/index.js';
 import { createSyncCommand } from '@/commands/sync/index.js';
 import { createVerifyCommand } from '@/commands/verify/index.js';
 import { createChangesetCommand } from '@/commands/changeset/index.js';
+import { createDoctorCommand } from '@/commands/doctor/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -27,6 +28,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createSyncCommand());
   program.addCommand(createVerifyCommand());
   program.addCommand(createChangesetCommand());
+  program.addCommand(createDoctorCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -42,3 +44,4 @@ export { createSchemaCommand } from '@/commands/schema/index.js';
 export { createSyncCommand } from '@/commands/sync/index.js';
 export { createVerifyCommand } from '@/commands/verify/index.js';
 export { createChangesetCommand } from '@/commands/changeset/index.js';
+export { createDoctorCommand } from '@/commands/doctor/index.js';
