@@ -1,6 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { createWorkStartCommand } from '@/commands/work/start/index.js';
 import { createWorkShipCommand } from '@/commands/work/ship/index.js';
+import { createWorkFinishCommand } from '@/commands/work/finish/index.js';
 
 export function createWorkCommand(): Command {
   const command = new Command('work');
@@ -11,8 +12,9 @@ export function createWorkCommand(): Command {
       'after',
       `
 Subcommands:
-  start <name>   Create a new prefixed branch (optionally in a worktree)
-  ship           Verify + ensure changeset + push + open PR for the current branch
+  start <name>    Create a new prefixed branch (optionally in a worktree)
+  ship            Verify + ensure changeset + push + open PR for the current branch
+  finish [branch] After merge: switch to base, pull, delete the local branch + worktree
 
 Examples:
   Start a new change:
@@ -23,11 +25,15 @@ Examples:
 
   Ship the current branch:
     $ neo work ship
+
+  After the PR merged:
+    $ neo work finish
 `
     );
 
   command.addCommand(createWorkStartCommand());
   command.addCommand(createWorkShipCommand());
+  command.addCommand(createWorkFinishCommand());
 
   return command;
 }
