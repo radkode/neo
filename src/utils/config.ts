@@ -30,25 +30,6 @@ export interface NeoConfig {
     installedAt: string;
     version: string;
   };
-  /**
-   * Plugin system configuration
-   */
-  plugins?: {
-    /**
-     * Whether the plugin system is enabled
-     * @default true
-     */
-    enabled?: boolean;
-    /**
-     * Custom plugins directory path
-     * @default ~/.config/neo/plugins
-     */
-    directory?: string;
-    /**
-     * List of plugin names to disable
-     */
-    disabled?: string[];
-  };
   preferences: {
     aliases: {
       n: boolean;
@@ -87,9 +68,6 @@ const DEFAULT_CONFIG: NeoConfig = {
   installation: {
     installedAt: new Date().toISOString(),
     version: '0.1.0', // This should be read from package.json in real implementation
-  },
-  plugins: {
-    enabled: true,
   },
   preferences: {
     aliases: {
@@ -166,7 +144,6 @@ export class ConfigManager {
         ai: { ...DEFAULT_CONFIG.ai, ...config.ai },
         autoSwitch: { ...DEFAULT_CONFIG.autoSwitch, ...config.autoSwitch },
         installation: { ...DEFAULT_CONFIG.installation, ...config.installation },
-        plugins: { ...DEFAULT_CONFIG.plugins, ...config.plugins },
         preferences: {
           ...DEFAULT_CONFIG.preferences,
           ...config.preferences,
@@ -209,7 +186,6 @@ export class ConfigManager {
       ai: { ...current.ai, ...updates.ai },
       autoSwitch: { ...current.autoSwitch, ...updates.autoSwitch },
       installation: { ...current.installation, ...updates.installation },
-      plugins: { ...current.plugins, ...updates.plugins },
       preferences: {
         ...current.preferences,
         ...updates.preferences,
@@ -242,13 +218,6 @@ export class ConfigManager {
    */
   getProfilesDir(): string {
     return this.profilesDir;
-  }
-
-  /**
-   * Gets the plugins directory path
-   */
-  getPluginsDir(): string {
-    return join(this.configDir, 'plugins');
   }
 
   /**

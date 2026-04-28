@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { logger } from '../../src/utils/logger.js';
-import { LogLevel } from '../../src/core/interfaces/index.js';
+import { logger, LogLevel } from '../../src/utils/logger.js';
 
 // Diagnostic output (info/success/warn/error/debug) goes to stderr; only
 // logger.log() writes to stdout. This matches agent-friendly stream separation.

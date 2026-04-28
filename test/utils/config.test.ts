@@ -65,13 +65,6 @@ describe('ConfigManager', () => {
     });
   });
 
-  describe('getPluginsDir', () => {
-    it('should return the plugins directory path', () => {
-      const pluginsDir = configManager.getPluginsDir();
-      expect(pluginsDir).toBe(join(tempDir, '.config', 'neo', 'plugins'));
-    });
-  });
-
   describe('isInitialized', () => {
     it('should return false when config does not exist', async () => {
       const result = await configManager.isInitialized();
