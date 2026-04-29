@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { Command } from '@commander-js/extra-typings';
 
-// Mock dependencies before importing
 vi.mock('@/utils/banner.js', () => ({
   displayBanner: vi.fn(),
 }));
@@ -20,7 +19,6 @@ vi.mock('@/utils/config.js', () => ({
   configManager: {
     read: vi.fn().mockResolvedValue({
       preferences: { banner: 'full' },
-      plugins: { enabled: false, disabled: [] },
     }),
   },
 }));
@@ -29,38 +27,17 @@ vi.mock('@/utils/update-check.js', () => ({
   notifyIfCliUpdateAvailable: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/core/plugins/index.js', () => ({
-  pluginRegistry: {
-    loadPlugins: vi.fn(),
-    executeBeforeCommand: vi.fn(),
-    executeAfterCommand: vi.fn(),
-    executeOnExit: vi.fn(),
-    disposeAll: vi.fn(),
-    size: 0,
-  },
-  commandRegistry: {
-    getAll: vi.fn().mockReturnValue([]),
-  },
-}));
-
 import { createCLI } from '../src/cli.js';
-import { displayBanner } from '@/utils/banner.js';
-import { logger } from '@/utils/logger.js';
 import { configManager } from '@/utils/config.js';
-import { notifyIfCliUpdateAvailable } from '@/utils/update-check.js';
-import { pluginRegistry, commandRegistry } from '@/core/plugins/index.js';
 
 describe('CLI', () => {
   let program: Command;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    // Reset mock implementations
     vi.mocked(configManager.read).mockResolvedValue({
       preferences: { banner: 'full', theme: 'auto' },
-      plugins: { enabled: false, disabled: [] },
     } as never);
-    vi.mocked(commandRegistry.getAll).mockReturnValue([]);
     program = await createCLI();
   });
 
@@ -140,115 +117,4 @@ describe('CLI', () => {
     });
   });
 
-  describe('plugin loading', () => {
-    it('should not load plugins when disabled in config', async () => {
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: false, disabled: [] },
-      } as never);
-
-      await createCLI();
-
-      expect(pluginRegistry.loadPlugins).not.toHaveBeenCalled();
-    });
-
-    it('should load plugins when enabled in config', async () => {
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: true, disabled: ['disabled-plugin'] },
-      } as never);
-
-      await createCLI();
-
-      expect(pluginRegistry.loadPlugins).toHaveBeenCalledWith(['disabled-plugin']);
-    });
-
-    it('should handle plugin loading errors gracefully', async () => {
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: true, disabled: [] },
-      } as never);
-      vi.mocked(pluginRegistry.loadPlugins).mockRejectedValueOnce(new Error('Plugin error'));
-
-      // Should not throw
-      const cli = await createCLI();
-      expect(cli).toBeDefined();
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Plugin loading failed'));
-    });
-
-    it('should register plugin commands', async () => {
-      const mockCommand = {
-        name: 'test-cmd',
-        description: 'Test command',
-        options: [{ flags: '-t, --test', description: 'Test option', required: false }],
-        arguments: [{ name: 'arg1', description: 'Test arg', required: true }],
-        execute: vi.fn().mockResolvedValue({ success: true }),
-      };
-
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: true, disabled: [] },
-      } as never);
-      vi.mocked(commandRegistry.getAll).mockReturnValue([mockCommand]);
-
-      const cli = await createCLI();
-      const registeredCmd = cli.commands.find((cmd) => cmd.name() === 'test-cmd');
-      expect(registeredCmd).toBeDefined();
-      expect(registeredCmd?.description()).toBe('Test command');
-    });
-
-    it('should register plugin commands with required options', async () => {
-      const mockCommand = {
-        name: 'required-opt-cmd',
-        description: 'Command with required option',
-        options: [{ flags: '-r, --required <value>', description: 'Required option', required: true }],
-        execute: vi.fn().mockResolvedValue({ success: true }),
-      };
-
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: true, disabled: [] },
-      } as never);
-      vi.mocked(commandRegistry.getAll).mockReturnValue([mockCommand]);
-
-      const cli = await createCLI();
-      const registeredCmd = cli.commands.find((cmd) => cmd.name() === 'required-opt-cmd');
-      expect(registeredCmd).toBeDefined();
-    });
-
-    it('should register plugin commands with optional arguments', async () => {
-      const mockCommand = {
-        name: 'opt-arg-cmd',
-        description: 'Command with optional argument',
-        arguments: [{ name: 'optArg', description: 'Optional arg', required: false }],
-        execute: vi.fn().mockResolvedValue({ success: true }),
-      };
-
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-        plugins: { enabled: true, disabled: [] },
-      } as never);
-      vi.mocked(commandRegistry.getAll).mockReturnValue([mockCommand]);
-
-      const cli = await createCLI();
-      const registeredCmd = cli.commands.find((cmd) => cmd.name() === 'opt-arg-cmd');
-      expect(registeredCmd).toBeDefined();
-    });
-  });
-
-  describe('config reading', () => {
-    it('should read config for banner preference', async () => {
-      await createCLI();
-      expect(configManager.read).toHaveBeenCalled();
-    });
-
-    it('should handle missing plugins config', async () => {
-      vi.mocked(configManager.read).mockResolvedValue({
-        preferences: { banner: 'full', theme: 'auto' },
-      } as never);
-
-      const cli = await createCLI();
-      expect(cli).toBeDefined();
-    });
-  });
 });

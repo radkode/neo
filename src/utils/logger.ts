@@ -1,9 +1,16 @@
 import chalk from 'chalk';
 import { Colors } from './ui-types.js';
-import { type ILogger, LogLevel } from '@/core/interfaces/index.js';
 import { getRuntimeContext } from './runtime-context.js';
 
-class Logger implements ILogger {
+export enum LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3,
+  NONE = 4,
+}
+
+class Logger {
   private level: LogLevel = LogLevel.INFO;
 
   setLevel(level: LogLevel): void {
