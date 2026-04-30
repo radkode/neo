@@ -1,5 +1,25 @@
 # @radkode/neo
 
+## 1.6.0
+
+### Minor Changes
+
+- [#26](https://github.com/radkode/neo/pull/26) [`79c4cb5`](https://github.com/radkode/neo/commit/79c4cb537ef8cc3c05d202eb954e5a05c8cca339) Thanks [@jacekradko](https://github.com/jacekradko)! - Replace SQLite-backed agent context store with a JSON file. Drops the `better-sqlite3` and `@types/better-sqlite3` dependencies (and the `pnpm.onlyBuiltDependencies` native-build allowance), making `npm install` faster and friendlier on locked-down machines. The public `ContextDB` surface (`addContext`, `listContexts`, `getContext`, `removeContext`, `updateContext`, `getStats`, `close`) is unchanged. Storage moves from `.neo/agent/context.db` to `.neo/agent/contexts.json` — re-run `neo agent init` to recreate the store if you have existing data.
+
+- [#22](https://github.com/radkode/neo/pull/22) [`3365808`](https://github.com/radkode/neo/commit/3365808c50d2e469987bea49e56a468df6853241) Thanks [@jacekradko](https://github.com/jacekradko)! - Add neo work finish: after PR merge, switch to base, pull, delete local branch and worktree, mark the agent DB work item as done
+
+- [#24](https://github.com/radkode/neo/pull/24) [`66c325f`](https://github.com/radkode/neo/commit/66c325f13238dada35971f8f2dbb0bcaf2b5a33f) Thanks [@jacekradko](https://github.com/jacekradko)! - Remove unused plugin system, DI container, and event bus infrastructure. The plugin loader never discovered any plugins in production, the container had zero call sites, and the event bus had no subscribers. Also drops `config.plugins` and `getPluginsDir()` from the config schema, and removes the stale WARP.md and ARCHITECTURE_ANALYSIS docs that documented the removed architecture.
+
+- [#25](https://github.com/radkode/neo/pull/25) [`36f75b5`](https://github.com/radkode/neo/commit/36f75b59be4f6badf5711266d5f8388eb2a4133b) Thanks [@jacekradko](https://github.com/jacekradko)! - Round 2 cleanup: drop `ui-examples.ts` (no importers), delete stale `docs/DX_IMPROVEMENTS_ROADMAP.md`, consolidate prompt libraries by removing `@inquirer/select` and routing `promptSelect` through the existing `inquirer` package, and trim `src/core/errors` to only the surface the codebase actually consumes (`AppError`, `CommandError`, `Result<T>`, `success`/`failure`/`isFailure`). Removes `ValidationError`, `FileSystemError`, `NetworkError`, `PluginError`, `AuthenticationError`, `PermissionError`, `ConfigurationError`, `RetryStrategy`, `ErrorHandler`, `errorHandler`, `isSuccess`, `handleCommandResult*`, and unused `getUserMessage`/`getDetailedReport`/`toJSON` methods.
+
+- [#20](https://github.com/radkode/neo/pull/20) [`9a74b89`](https://github.com/radkode/neo/commit/9a74b89694ee4b875500bf255bea8cdf7a7c7804) Thanks [@jacekradko](https://github.com/jacekradko)! - Add neo work start: create a prefixed branch (optionally in a worktree) and record the work item in the agent context DB
+
+- [#21](https://github.com/radkode/neo/pull/21) [`549df9e`](https://github.com/radkode/neo/commit/549df9e0f7af2be50b5b80856c9db63523f80588) Thanks [@jacekradko](https://github.com/jacekradko)! - Add neo work ship: verify + changeset + push + PR for the current branch
+
+### Patch Changes
+
+- [#27](https://github.com/radkode/neo/pull/27) [`fe6c1ec`](https://github.com/radkode/neo/commit/fe6c1ec3bfcba6fcbd0be17eea8aae78a5a24e19) Thanks [@jacekradko](https://github.com/jacekradko)! - Add unit/orchestration tests for `neo work start`, `neo work ship`, `neo work finish` (29 tests). Also fix a stale success-message reference to `.neo/agent/context.db` in `work start` — the path is now `.neo/agent/contexts.json`.
+
 ## 1.5.0
 
 ### Minor Changes
