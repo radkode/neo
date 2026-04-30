@@ -16,9 +16,9 @@ const AGENT_DIR = 'agent';
 const CONFIG_FILE = 'config.json';
 
 /**
- * Database file name
+ * Context store file name (JSON-backed; see src/storage/db.ts).
  */
-const DB_FILE = 'context.db';
+const DB_FILE = 'contexts.json';
 
 /**
  * Find the project root by looking for .neo directory

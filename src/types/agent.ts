@@ -26,18 +26,6 @@ export interface ContextItem {
 }
 
 /**
- * Raw context item as stored in SQLite (with JSON strings)
- */
-export interface RawContextItem {
-  id: string;
-  content: string;
-  tags: string; // JSON string
-  priority: ContextPriority;
-  created_at: string; // ISO string
-  updated_at: string; // ISO string
-}
-
-/**
  * Agent project configuration
  */
 export interface AgentConfig {

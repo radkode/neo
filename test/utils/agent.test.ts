@@ -95,7 +95,7 @@ describe('Agent utilities', () => {
 
       const result = await getAgentDbPath();
 
-      expect(result).toBe('/path/to/project/.neo/agent/context.db');
+      expect(result).toBe('/path/to/project/.neo/agent/contexts.json');
     });
 
     it('should return null when agent dir not found', async () => {
