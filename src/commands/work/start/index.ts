@@ -299,7 +299,7 @@ Examples:
                 ui.success(`On branch ${result.branch} (from ${result.base})`);
               }
               if (result.contextRecorded) {
-                ui.muted('Recorded work item in .neo/agent/context.db');
+                ui.muted('Recorded work item in .neo/agent/contexts.json');
               }
             },
           }
