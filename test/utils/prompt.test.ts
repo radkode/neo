@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@inquirer/select', () => ({
-  default: vi.fn(),
+vi.mock('inquirer', () => ({
+  default: { prompt: vi.fn() },
 }));
 
-import selectPrompt from '@inquirer/select';
+import inquirer from 'inquirer';
 import {
   NonInteractiveError,
   promptSelect,
@@ -16,7 +16,7 @@ import {
   setRuntimeContext,
 } from '@/utils/runtime-context.js';
 
-const selectMock = vi.mocked(selectPrompt);
+const promptMock = vi.mocked(inquirer.prompt);
 
 describe('NonInteractiveError', () => {
   it('carries a stable code and embeds the prompt + flag hint', () => {
@@ -59,7 +59,7 @@ describe('promptSelect', () => {
       message: 'pick',
     });
     expect(result).toBe('b');
-    expect(selectMock).not.toHaveBeenCalled();
+    expect(promptMock).not.toHaveBeenCalled();
   });
 
   it('throws NonInteractiveError in non-interactive mode without safe default', async () => {
