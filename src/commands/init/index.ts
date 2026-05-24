@@ -9,6 +9,7 @@ import { configManager, type NeoConfig } from '@/utils/config.js';
 import { GlobalInstaller } from '@/utils/installer.js';
 import { ZshIntegration } from '@/utils/shell.js';
 import { CompletionGenerator } from '@/utils/completions.js';
+import { installClaudeSkill } from '@/utils/skill-installer.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson } from '@/utils/output.js';
@@ -22,6 +23,7 @@ export function createInitCommand(): Command {
     .description('Install and configure Neo CLI globally')
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
+    .option('--no-skill', 'skip installing the bundled Claude Code skill')
     .action(runAction(async (options: unknown) => {
       const validatedOptions: InitOptions = validate(
         initOptionsSchema,
@@ -179,6 +181,33 @@ export function createInitCommand(): Command {
         await shell.applyConfig(newConfig);
 
         shellSpinner.succeed('Shell integration configured');
+
+        if (validatedOptions.skill !== false) {
+          const skillSpinner = ui.spinner('Installing Claude Code skill');
+          skillSpinner.start();
+          try {
+            const result = await installClaudeSkill(
+              validatedOptions.force ? { force: true } : {}
+            );
+            if (result === null) {
+              skillSpinner.stop();
+              logger.debug('Claude Code not detected; skipped skill install');
+            } else if (result.status === 'installed') {
+              skillSpinner.succeed(`Claude Code skill installed at ${result.destination}`);
+            } else if (result.status === 'updated') {
+              skillSpinner.succeed(`Claude Code skill updated at ${result.destination}`);
+            } else if (result.status === 'unchanged') {
+              skillSpinner.succeed('Claude Code skill already up to date');
+            } else {
+              skillSpinner.warn(
+                `Claude Code skill at ${result.destination} differs from bundled copy; pass --force to overwrite`
+              );
+            }
+          } catch (err) {
+            skillSpinner.fail('Failed to install Claude Code skill');
+            ui.warn(`Skill install error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
 
         ui.success('Neo CLI has been successfully initialized!');
         ui.newline();

@@ -16,6 +16,7 @@ export const baseOptionsSchema = z.object({
 export const initOptionsSchema = baseOptionsSchema.extend({
   force: z.boolean().optional(),
   skipInstall: z.boolean().optional(),
+  skill: z.boolean().optional(),
 });
 
 /**

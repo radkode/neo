@@ -85,6 +85,10 @@ vi.mock('@/utils/completions.js', () => ({
   },
 }));
 
+vi.mock('@/utils/skill-installer.js', () => ({
+  installClaudeSkill: vi.fn().mockResolvedValue(null),
+}));
+
 import inquirer from 'inquirer';
 import { configManager } from '@/utils/config.js';
 import { CompletionGenerator } from '@/utils/completions.js';
