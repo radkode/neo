@@ -50,20 +50,22 @@ Learn more:
       const opts = thisCommand.opts();
       const commandName = actionCommand.name();
 
+      // Only set overrides for flags the user actually passed. Unset flags must
+      // remain undefined so buildRuntimeContext's nullish-coalescing falls back
+      // to env vars and TTY/agent auto-detection.
       const overrides: {
-        json: boolean;
-        yes: boolean;
-        nonInteractive: boolean;
-        quiet: boolean;
-        verbose: boolean;
+        json?: boolean;
+        yes?: boolean;
+        nonInteractive?: boolean;
+        quiet?: boolean;
+        verbose?: boolean;
         color?: boolean;
-      } = {
-        json: Boolean(opts['json']),
-        yes: Boolean(opts['yes']),
-        nonInteractive: Boolean(opts['nonInteractive']),
-        quiet: Boolean(opts['quiet']),
-        verbose: Boolean(opts['verbose']),
-      };
+      } = {};
+      if (opts['json'] === true) overrides.json = true;
+      if (opts['yes'] === true) overrides.yes = true;
+      if (opts['nonInteractive'] === true) overrides.nonInteractive = true;
+      if (opts['quiet'] === true) overrides.quiet = true;
+      if (opts['verbose'] === true) overrides.verbose = true;
       if (opts['color'] === false) overrides.color = false;
       const ctx = buildRuntimeContext(overrides);
       setRuntimeContext(ctx);
