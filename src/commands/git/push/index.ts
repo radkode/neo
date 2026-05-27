@@ -149,6 +149,12 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
   } catch (error: unknown) {
     spinner.stop();
 
+    // NonInteractiveError is a contract signal — let runAction handle it
+    // (exit code 2, structured JSON) rather than masking as a generic git error.
+    if (error instanceof NonInteractiveError) {
+      throw error;
+    }
+
     // Use shared git error detection
     if (isNotGitRepository(error)) {
       return failure(GitErrors.notARepository('push'));

@@ -14,9 +14,10 @@ vi.mock('execa', () => {
   return { execa };
 });
 
-vi.mock('@/utils/prompt.js', () => {
+vi.mock('@/utils/prompt.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/prompt.js')>();
   const promptSelect = vi.fn();
-  return { promptSelect };
+  return { ...actual, promptSelect };
 });
 
 vi.mock('@/utils/logger.js', () => ({
