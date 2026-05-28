@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.7.0
+
+### Minor Changes
+
+- [#30](https://github.com/radkode/neo/pull/30) [`0e2d388`](https://github.com/radkode/neo/commit/0e2d388869c0aae4258dca169ee40d708d184810) Thanks [@jacekradko](https://github.com/jacekradko)! - Require Node.js >= 22.13. The toolchain (pnpm 11, vitest 4) no longer supports Node 20, so the engines field and CI now target Node 22.
+
 ## 1.6.0
 
 ### Minor Changes
