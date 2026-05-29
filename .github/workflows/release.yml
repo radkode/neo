@@ -63,7 +63,3 @@ jobs:
           else
             echo "Version $CURRENT_VERSION already published, skipping"
           fi
-
-      - name: Send a Slack notification if a publish happens
-        if: steps.changesets.outputs.published == 'true'
-        run: echo "🎉 Package published successfully!"
