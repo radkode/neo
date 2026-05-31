@@ -11,10 +11,8 @@ const mockShellBackup = vi.fn();
 const mockShellApplyConfig = vi.fn();
 
 // Mock all dependencies
-vi.mock('inquirer', () => ({
-  default: {
-    prompt: vi.fn(),
-  },
+vi.mock('@inquirer/prompts', () => ({
+  select: vi.fn(),
 }));
 
 vi.mock('@/utils/logger.js', () => ({
@@ -89,7 +87,7 @@ vi.mock('@/utils/skill-installer.js', () => ({
   installClaudeSkill: vi.fn().mockResolvedValue(null),
 }));
 
-import inquirer from 'inquirer';
+import { select } from '@inquirer/prompts';
 import { configManager } from '@/utils/config.js';
 import { CompletionGenerator } from '@/utils/completions.js';
 import { ui } from '@/utils/ui.js';
@@ -233,19 +231,19 @@ describe('createInitCommand', () => {
     });
 
     it('should prompt when already initialized', async () => {
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'cancel' });
+      vi.mocked(select).mockResolvedValueOnce('cancel');
 
       const { createInitCommand } = await import('../../src/commands/init/index.js');
       const command = createInitCommand();
 
       await command.parseAsync([''], { from: 'user' });
 
-      expect(inquirer.prompt).toHaveBeenCalled();
+      expect(select).toHaveBeenCalled();
       expect(ui.info).toHaveBeenCalledWith('Initialization cancelled');
     });
 
     it('should update configuration when selected', async () => {
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'update' });
+      vi.mocked(select).mockResolvedValueOnce('update');
       mockGetStatus.mockResolvedValue({
         pnpmInstalled: true,
         pnpmVersion: '9.0.0',
@@ -263,7 +261,7 @@ describe('createInitCommand', () => {
     });
 
     it('should handle update failure', async () => {
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'update' });
+      vi.mocked(select).mockResolvedValueOnce('update');
       mockGetStatus.mockResolvedValue({
         pnpmInstalled: true,
         pnpmVersion: '9.0.0',
@@ -284,7 +282,7 @@ describe('createInitCommand', () => {
     });
 
     it('should reset everything when selected', async () => {
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'reset' });
+      vi.mocked(select).mockResolvedValueOnce('reset');
       vi.mocked(configManager.backup).mockResolvedValue('/backup/config.json');
 
       const { createInitCommand } = await import('../../src/commands/init/index.js');
@@ -303,7 +301,7 @@ describe('createInitCommand', () => {
 
       await command.parseAsync(['--force'], { from: 'user' });
 
-      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(select).not.toHaveBeenCalled();
     });
   });
 

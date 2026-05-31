@@ -1,4 +1,4 @@
-import inquirer from 'inquirer';
+import { select } from '@inquirer/prompts';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { getRuntimeContext } from './runtime-context.js';
@@ -81,20 +81,13 @@ export async function promptSelect<T extends string>({
   }
 
   if (input.isTTY && output.isTTY) {
-    const interactiveResult = await inquirer
-      .prompt<{ selected: T }>([
-        {
-          type: 'list',
-          name: 'selected',
-          message,
-          choices: choices.map(({ label, value }) => ({ name: label, value })),
-          default: defaultValue ?? fallbackValue,
-          loop: false,
-          pageSize: Math.max(choices.length, 4),
-        },
-      ])
-      .then((answers) => answers.selected)
-      .catch(() => undefined);
+    const interactiveResult = await select<T>({
+      message,
+      choices: choices.map(({ label, value }) => ({ name: label, value })),
+      default: defaultValue ?? fallbackValue,
+      loop: false,
+      pageSize: Math.max(choices.length, 4),
+    }).catch(() => undefined);
 
     if (interactiveResult !== undefined) {
       return interactiveResult;

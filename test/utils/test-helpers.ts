@@ -293,43 +293,28 @@ export function createSequentialExecaMock(responses: (ExecaResponse | Error)[]) 
 }
 
 // ============================================================================
-// Inquirer Mock Factory
+// Prompt Mock Factory (@inquirer/prompts)
 // ============================================================================
 
 /**
- * Creates a mock for inquirer prompts.
+ * Creates vi mocks for the @inquirer/prompts functions, each resolving to the
+ * provided value. Unlike the legacy inquirer API (which returned an object
+ * keyed by `name`), the modern prompt functions return the selected value
+ * directly, so each mock resolves to a bare value.
  *
  * @example
- * const inquirerMock = createInquirerMock({ confirm: true, choice: 'option1' });
- * vi.mock('inquirer', () => ({ default: { prompt: inquirerMock.prompt } }));
+ * vi.mock('@inquirer/prompts', () => createPromptsMock({ select: 'delete', confirm: true }));
  */
-export function createInquirerMock(answers: Record<string, unknown> = {}) {
+export function createPromptsMock(
+  values: Partial<Record<'select' | 'confirm' | 'input' | 'checkbox' | 'number', unknown>> = {}
+) {
   return {
-    prompt: vi.fn().mockImplementation(async (questions: Array<{ name: string }>) => {
-      const result: Record<string, unknown> = {};
-      for (const q of questions) {
-        result[q.name] = answers[q.name] ?? null;
-      }
-      return result;
-    }),
-  };
-}
-
-/**
- * Creates a sequential inquirer mock for multi-prompt flows.
- *
- * @example
- * const inquirerMock = createSequentialInquirerMock([
- *   { confirm: true },
- *   { choice: 'delete' },
- * ]);
- */
-export function createSequentialInquirerMock(answersList: Array<Record<string, unknown>>) {
-  let index = 0;
-  return {
-    prompt: vi.fn().mockImplementation(async () => {
-      return answersList[index++] ?? {};
-    }),
+    select: vi.fn().mockResolvedValue(values.select ?? null),
+    confirm: vi.fn().mockResolvedValue(values.confirm ?? false),
+    input: vi.fn().mockResolvedValue(values.input ?? ''),
+    checkbox: vi.fn().mockResolvedValue(values.checkbox ?? []),
+    number: vi.fn().mockResolvedValue(values.number ?? null),
+    Separator: class {},
   };
 }
 

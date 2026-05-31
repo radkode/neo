@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { select, checkbox, confirm as confirmPrompt } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
@@ -308,30 +308,23 @@ async function interactiveBranchCleanup(
     );
   }
 
-  const { action } = await inquirer.prompt([
-    {
-      choices: [
-        {
-          name: `Delete all ${cleanupCandidates.length} cleanup candidates`,
-          short: `Delete all ${cleanupCandidates.length} cleanup candidates`,
-          value: 'delete_all',
-        },
-        {
-          name: 'Select specific branches to delete',
-          short: 'Select specific branches to delete',
-          value: 'delete_selected',
-        },
-        {
-          name: 'Cancel (no changes)',
-          short: 'Cancel (no changes)',
-          value: 'cancel',
-        },
-      ],
-      message: 'What would you like to do with these branches?',
-      name: 'action',
-      type: 'list',
-    },
-  ]);
+  const action = await select({
+    choices: [
+      {
+        name: `Delete all ${cleanupCandidates.length} cleanup candidates`,
+        value: 'delete_all',
+      },
+      {
+        name: 'Select specific branches to delete',
+        value: 'delete_selected',
+      },
+      {
+        name: 'Cancel (no changes)',
+        value: 'cancel',
+      },
+    ],
+    message: 'What would you like to do with these branches?',
+  });
 
   switch (action) {
     case 'delete_all':
@@ -342,8 +335,6 @@ async function interactiveBranchCleanup(
       ui.muted('Operation cancelled. No branches were deleted.');
       return success(undefined);
   }
-
-  return success(undefined);
 }
 
 /**
@@ -353,17 +344,14 @@ async function selectAndDeleteBranches(
   cleanupCandidates: BranchInfo[],
   forceMode: boolean
 ): Promise<Result<void>> {
-  const { selectedBranches } = await inquirer.prompt({
+  const selectedBranches = await checkbox({
     choices: cleanupCandidates.map((b) => ({
       name: `${b.name}${b.isRemoteDeleted ? ' (deleted remote)' : ' (no remote)'}`,
-      short: `${b.name}${b.isRemoteDeleted ? ' (deleted remote)' : ' (no remote)'}`,
       value: b.name,
     })),
     message: 'Select branches to delete:',
-    name: 'selectedBranches',
-    type: 'checkbox',
-    validate: (choices: readonly { value: unknown }[]) => {
-      if (!choices || choices.length === 0) {
+    validate: (selected) => {
+      if (!selected || selected.length === 0) {
         return 'Please select at least one branch';
       }
       return true;
@@ -386,16 +374,12 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
   // Final confirmation unless in force/yes mode
   const rtCtx = getRuntimeContext();
   if (!forceMode && !rtCtx.yes && !rtCtx.nonInteractive) {
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: `Are you sure you want to delete ${branches.length} branch(es)?`,
-        default: false,
-      },
-    ]);
+    const confirmed = await confirmPrompt({
+      message: `Are you sure you want to delete ${branches.length} branch(es)?`,
+      default: false,
+    });
 
-    if (!confirm) {
+    if (!confirmed) {
       ui.muted('Operation cancelled. No branches were deleted.');
       return success(undefined);
     }
@@ -441,15 +425,10 @@ async function deleteBranches(branches: BranchInfo[], forceMode: boolean): Promi
                 // Unmerged force-delete loses data silently — require --force on command.
                 forceDelete = false;
               } else {
-                const answer = await inquirer.prompt([
-                  {
-                    type: 'confirm',
-                    name: 'forceDelete',
-                    message: `Branch "${branch.name}" has unmerged changes. Force delete?`,
-                    default: false,
-                  },
-                ]);
-                forceDelete = Boolean(answer.forceDelete);
+                forceDelete = await confirmPrompt({
+                  message: `Branch "${branch.name}" has unmerged changes. Force delete?`,
+                  default: false,
+                });
               }
 
               if (forceDelete) {

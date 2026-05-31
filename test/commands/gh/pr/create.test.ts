@@ -1,7 +1,7 @@
 import { execa } from 'execa';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promptSelect } from '@/utils/prompt.js';
-import inquirer from 'inquirer';
+import { confirm, input } from '@inquirer/prompts';
 
 const spinnerMock = {
   start: vi.fn(),
@@ -21,10 +21,11 @@ vi.mock('@/utils/prompt.js', () => {
   return { promptSelect };
 });
 
-vi.mock('inquirer', () => {
-  const inquirer = { prompt: vi.fn() };
-  return { default: inquirer };
-});
+vi.mock('@inquirer/prompts', () => ({
+  confirm: vi.fn(),
+  input: vi.fn(),
+  editor: vi.fn(),
+}));
 
 vi.mock('@/utils/logger.js', () => ({
   logger: {
@@ -53,7 +54,8 @@ vi.mock('@/utils/ui.js', () => ({
 describe('gh pr create command', () => {
   const execaMock = vi.mocked(execa);
   const promptSelectMock = vi.mocked(promptSelect);
-  const inquirerMock = vi.mocked(inquirer);
+  const confirmMock = vi.mocked(confirm);
+  const inputMock = vi.mocked(input);
   let exitMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -186,10 +188,9 @@ describe('gh pr create command', () => {
       return { stdout: '' };
     });
 
-    // Mock inquirer prompts
-    inquirerMock.prompt
-      .mockResolvedValueOnce({ prTitle: 'My custom title' }) // title prompt
-      .mockResolvedValueOnce({ wantBody: false }); // body prompt
+    // Mock prompts
+    inputMock.mockResolvedValueOnce('My custom title'); // title prompt
+    confirmMock.mockResolvedValueOnce(false); // body (wantBody) prompt
 
     // Mock draft selection
     promptSelectMock.mockResolvedValueOnce('ready');
@@ -197,7 +198,7 @@ describe('gh pr create command', () => {
     const result = await executeGhPrCreate({});
 
     expect(result.success).toBe(true);
-    expect(inquirerMock.prompt).toHaveBeenCalled();
+    expect(inputMock).toHaveBeenCalled();
   });
 
   it('should prompt to push when there are unpushed commits', async () => {
@@ -234,11 +235,11 @@ describe('gh pr create command', () => {
       return { stdout: '' };
     });
 
-    // Mock inquirer prompts
-    inquirerMock.prompt
-      .mockResolvedValueOnce({ shouldPush: true }) // push confirmation
-      .mockResolvedValueOnce({ prTitle: 'Test PR' }) // title
-      .mockResolvedValueOnce({ wantBody: false }); // body
+    // Mock prompts: confirm fires for push (1st) then wantBody (2nd)
+    confirmMock
+      .mockResolvedValueOnce(true) // push confirmation
+      .mockResolvedValueOnce(false); // body (wantBody)
+    inputMock.mockResolvedValueOnce('Test PR'); // title
 
     promptSelectMock.mockResolvedValueOnce('ready');
 

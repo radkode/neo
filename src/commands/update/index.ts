@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import packageJson from '../../../package.json' with { type: 'json' };
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
@@ -145,14 +145,10 @@ export function createUpdateCommand(): Command {
               '--force'
             );
           }
-          const { shouldDowngrade } = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'shouldDowngrade',
-              message: 'Do you want to downgrade to the latest stable version?',
-              default: false,
-            },
-          ]);
+          const shouldDowngrade = await confirmPrompt({
+            message: 'Do you want to downgrade to the latest stable version?',
+            default: false,
+          });
 
           if (!shouldDowngrade) {
             ui.muted('Update cancelled');
@@ -195,15 +191,10 @@ export function createUpdateCommand(): Command {
             '--yes'
           );
         } else {
-          const answer = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'confirm',
-              message: `Update to version ${latestVersion}?`,
-              default: true,
-            },
-          ]);
-          confirm = Boolean(answer.confirm);
+          confirm = await confirmPrompt({
+            message: `Update to version ${latestVersion}?`,
+            default: true,
+          });
         }
 
         if (!confirm) {

@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import inquirer from 'inquirer';
+import { checkbox, input } from '@inquirer/prompts';
 import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ui } from '@/utils/ui.js';
@@ -230,16 +230,11 @@ export async function executeChangeset(
           '--package <name>[,<name>...]'
         );
       }
-      const { selected } = await inquirer.prompt<{ selected: string[] }>([
-        {
-          type: 'checkbox',
-          name: 'selected',
-          message: 'Which packages are affected?',
-          choices: discovered.map((name) => ({ name, value: name })),
-          validate: (choices: readonly string[]) =>
-            choices.length > 0 ? true : 'Pick at least one package.',
-        },
-      ]);
+      const selected = await checkbox({
+        message: 'Which packages are affected?',
+        choices: discovered.map((name) => ({ name, value: name })),
+        validate: (choices) => (choices.length > 0 ? true : 'Pick at least one package.'),
+      });
       packages = selected;
     }
   }
@@ -249,15 +244,11 @@ export async function executeChangeset(
     if (ctx.yes || ctx.nonInteractive) {
       throw new NonInteractiveError('Changeset summary', '--summary "<text>"');
     }
-    const answer = await inquirer.prompt<{ summary: string }>([
-      {
-        type: 'input',
-        name: 'summary',
-        message: 'One-line summary (shown in the changelog):',
-        validate: (input: string) => (input.trim() ? true : 'Summary cannot be empty.'),
-      },
-    ]);
-    summary = answer.summary.trim();
+    const answer = await input({
+      message: 'One-line summary (shown in the changelog):',
+      validate: (value: string) => (value.trim() ? true : 'Summary cannot be empty.'),
+    });
+    summary = answer.trim();
   }
 
   const path = await ensureUniquePath(cwd);

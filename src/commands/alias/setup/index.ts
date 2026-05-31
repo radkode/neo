@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import { ZshIntegration } from '@/utils/shell.js';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
@@ -97,15 +97,10 @@ export function createSetupCommand(): Command {
             '--force or --yes'
           );
         } else {
-          const answer = await inquirer.prompt<{ confirm: boolean }>([
-            {
-              type: 'confirm',
-              name: 'confirm',
-              message: 'Proceed with overwriting these aliases?',
-              default: false,
-            },
-          ]);
-          confirm = Boolean(answer.confirm);
+          confirm = await confirmPrompt({
+            message: 'Proceed with overwriting these aliases?',
+            default: false,
+          });
         }
 
         if (!confirm) {

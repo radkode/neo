@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('inquirer', () => ({
-  default: { prompt: vi.fn() },
+vi.mock('@inquirer/prompts', () => ({
+  select: vi.fn(),
 }));
 
-import inquirer from 'inquirer';
+import { select } from '@inquirer/prompts';
 import {
   NonInteractiveError,
   promptSelect,
@@ -16,7 +16,7 @@ import {
   setRuntimeContext,
 } from '@/utils/runtime-context.js';
 
-const promptMock = vi.mocked(inquirer.prompt);
+const promptMock = vi.mocked(select);
 
 describe('NonInteractiveError', () => {
   it('carries a stable code and embeds the prompt + flag hint', () => {

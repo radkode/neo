@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import inquirer from 'inquirer';
+import { select } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
@@ -59,19 +59,14 @@ export function createInitCommand(): Command {
               '--force'
             );
           } else {
-            const answer = await inquirer.prompt([
-              {
-                choices: [
-                  { name: 'Update configuration', short: 'Update configuration', value: 'update' },
-                  { name: 'Reset everything', short: 'Reset everything', value: 'reset' },
-                  { name: 'Cancel', short: 'Cancel', value: 'cancel' },
-                ],
-                message: 'What would you like to do?',
-                name: 'action',
-                type: 'list',
-              },
-            ]);
-            action = answer.action as 'update' | 'reset' | 'cancel';
+            action = (await select({
+              choices: [
+                { name: 'Update configuration', value: 'update' },
+                { name: 'Reset everything', value: 'reset' },
+                { name: 'Cancel', value: 'cancel' },
+              ],
+              message: 'What would you like to do?',
+            })) as 'update' | 'reset' | 'cancel';
           }
 
           if (action === 'cancel') {

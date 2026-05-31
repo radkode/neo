@@ -6,10 +6,8 @@ vi.mock('execa', () => ({
   execa: vi.fn(),
 }));
 
-vi.mock('inquirer', () => ({
-  default: {
-    prompt: vi.fn(),
-  },
+vi.mock('@inquirer/prompts', () => ({
+  confirm: vi.fn(),
 }));
 
 vi.mock('@/utils/logger.js', () => ({
@@ -48,7 +46,7 @@ vi.mock('@/utils/update-check.js', () => ({
 }));
 
 import { execa, type ExecaReturnValue } from 'execa';
-import inquirer from 'inquirer';
+import { confirm } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { fetchLatestCliVersion, compareVersions } from '@/utils/update-check.js';
 
@@ -112,7 +110,7 @@ describe('createUpdateCommand', () => {
     it('should show update available when newer version exists', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: false });
+      vi.mocked(confirm).mockResolvedValue(false);
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
@@ -125,7 +123,7 @@ describe('createUpdateCommand', () => {
     it('should not update when user cancels', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: false });
+      vi.mocked(confirm).mockResolvedValue(false);
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
@@ -165,7 +163,7 @@ describe('createUpdateCommand', () => {
     it('should detect pnpm as package manager', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockResolvedValueOnce({} as ExecaReturnValue<string>) // ls pnpm-lock.yaml succeeds
         .mockResolvedValueOnce({} as ExecaReturnValue<string>); // pnpm add
@@ -181,7 +179,7 @@ describe('createUpdateCommand', () => {
     it('should detect yarn as package manager', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found')) // ls pnpm-lock.yaml fails
         .mockResolvedValueOnce({} as ExecaReturnValue<string>) // ls yarn.lock succeeds
@@ -198,7 +196,7 @@ describe('createUpdateCommand', () => {
     it('should default to npm as package manager', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found')) // ls pnpm-lock.yaml fails
         .mockRejectedValueOnce(new Error('not found')) // ls yarn.lock fails
@@ -232,7 +230,7 @@ describe('createUpdateCommand', () => {
     it('should handle permission errors', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found'))
         .mockRejectedValueOnce(new Error('not found'))
@@ -250,7 +248,7 @@ describe('createUpdateCommand', () => {
     it('should handle generic update errors', async () => {
       vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
       vi.mocked(compareVersions).mockReturnValue(1);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirm: true });
+      vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found'))
         .mockRejectedValueOnce(new Error('not found'))
@@ -277,7 +275,7 @@ describe('createUpdateCommand', () => {
       await command.parseAsync(['--check-only'], { from: 'user' });
 
       // With check-only, no prompts should happen when on newer version
-      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(confirm).not.toHaveBeenCalled();
     });
   });
 });

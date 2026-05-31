@@ -5,7 +5,7 @@
 
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
@@ -51,14 +51,10 @@ export async function executeWorktreeRemove(
           '--force'
         );
       }
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: `Worktree at ${worktree.path} has uncommitted changes. Remove anyway?`,
-          default: false,
-        },
-      ]);
+      const confirm = await confirmPrompt({
+        message: `Worktree at ${worktree.path} has uncommitted changes. Remove anyway?`,
+        default: false,
+      });
 
       if (!confirm) {
         ui.muted('Cancelled. Worktree not removed.');
@@ -74,14 +70,10 @@ export async function executeWorktreeRemove(
           '--force'
         );
       }
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Force remove locked worktree?',
-          default: false,
-        },
-      ]);
+      const confirm = await confirmPrompt({
+        message: 'Force remove locked worktree?',
+        default: false,
+      });
 
       if (!confirm) {
         ui.muted('Cancelled. Worktree not removed.');

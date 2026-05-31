@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
@@ -260,8 +260,12 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<Result<Pul
   ui.warn(`Your local branch "${branchName}" is tracking a remote branch that has been deleted`);
   ui.newline();
 
-  // Note: no safeDefaultForNonInteractive — the default ("delete branch") is
-  // destructive, so agents must explicitly opt in via a flag (future --on-deleted).
+  // In non-interactive / agent mode there's no one to pick an option, so don't
+  // stop and wait — auto-apply the recommended default (switch to main and
+  // delete the now-merged branch). The delete uses `git branch -d` (safe
+  // delete), which refuses branches with unmerged commits; that unmerged case
+  // still escalates to a force-delete confirmation that throws rather than
+  // silently dropping work. So auto-defaulting here can't lose commits.
   const validatedAction = deletedBranchActionSchema.parse(
     await promptSelect({
       choices: [
@@ -273,6 +277,7 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<Result<Pul
       defaultValue: 'switch_main_delete',
       message: 'How would you like to resolve this?',
       flag: '(no flag yet — remote branch deletion requires interactive resolution)',
+      safeDefaultForNonInteractive: true,
     })
   );
 
@@ -323,15 +328,10 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<PullOut
             'Branch has unmerged changes; force-delete requires explicit confirmation'
           );
         } else {
-          const answer = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'forceDelete',
-              message: 'Force delete anyway? (This will lose any uncommitted changes)',
-              default: false,
-            },
-          ]);
-          forceDelete = Boolean(answer.forceDelete);
+          forceDelete = await confirmPrompt({
+            message: 'Force delete anyway? (This will lose any uncommitted changes)',
+            default: false,
+          });
         }
 
         if (forceDelete) {
