@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 1.7.1
+
+### Patch Changes
+
+- [#40](https://github.com/radkode/neo/pull/40) [`f85efee`](https://github.com/radkode/neo/commit/f85efeec99c1fe1ed0a3ab08db9ede45948ebedb) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix interactive prompts not responding to arrow keys. Migrated every prompt off the legacy `inquirer` rxjs API to the modern `@inquirer/prompts` (`select`, `confirm`, `input`, `checkbox`). The legacy list prompt in inquirer v13 ignored arrow-key navigation, so menus like the `git pull` merged-branch resolver and the `git branch`/`git stash` selectors were stuck on the default option. `inquirer` (and its rxjs/run-async dependencies) is dropped in favor of the lighter, actively maintained packages.
+
+- [#40](https://github.com/radkode/neo/pull/40) [`f85efee`](https://github.com/radkode/neo/commit/f85efeec99c1fe1ed0a3ab08db9ede45948ebedb) Thanks [@jacekradko](https://github.com/jacekradko)! - `git pull`: auto-apply the recommended default when a merged branch's remote was deleted, instead of blocking on a prompt in non-interactive/agent environments. The deleted-remote-branch resolution now passes through `safeDefaultForNonInteractive`, matching the diverged-branch path, so agent runs switch to main and safe-delete the branch rather than stopping for input that can't be given.
+
 ## 1.7.0
 
 ### Minor Changes
