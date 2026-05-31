@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm, input, editor } from '@inquirer/prompts';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { logger } from '@/utils/logger.js';
@@ -218,15 +218,10 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
         // Default "yes" — pushing is the expected prelude to creating a PR.
         shouldPush = true;
       } else {
-        const answer = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'shouldPush',
-            message: 'Push changes to remote before creating PR?',
-            default: true,
-          },
-        ]);
-        shouldPush = Boolean(answer.shouldPush);
+        shouldPush = await confirm({
+          message: 'Push changes to remote before creating PR?',
+          default: true,
+        });
       }
 
       if (shouldPush) {
@@ -271,19 +266,14 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
       if (rtCtxForInputs.yes || rtCtxForInputs.nonInteractive) {
         title = titleSuggestion;
       } else {
-        const { prTitle } = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'prTitle',
-            message: 'PR title:',
-            default: titleSuggestion,
-            validate: (input: string) => {
-              if (!input.trim()) return 'PR title cannot be empty';
-              return true;
-            },
+        title = await input({
+          message: 'PR title:',
+          default: titleSuggestion,
+          validate: (value: string) => {
+            if (!value.trim()) return 'PR title cannot be empty';
+            return true;
           },
-        ]);
-        title = prTitle;
+        });
       }
     }
 
@@ -299,25 +289,16 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
         // Agent default: use the template if present, otherwise no body.
         body = template ?? '';
       } else {
-        const { wantBody } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'wantBody',
-            message: 'Add a description?',
-            default: !!template,
-          },
-        ]);
+        const wantBody = await confirm({
+          message: 'Add a description?',
+          default: !!template,
+        });
 
         if (wantBody) {
-          const { prBody } = await inquirer.prompt([
-            {
-              type: 'editor',
-              name: 'prBody',
-              message: 'PR description:',
-              default: template || '',
-            },
-          ]);
-          body = prBody;
+          body = await editor({
+            message: 'PR description:',
+            default: template || '',
+          });
         }
       }
     }

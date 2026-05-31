@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { ui } from '@/utils/ui.js';
@@ -60,15 +60,10 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
           '--force-main'
         );
       } else {
-        const answer = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'confirmPush',
-            message: 'Are you sure you want to continue?',
-            default: false,
-          },
-        ]);
-        confirmPush = Boolean(answer.confirmPush);
+        confirmPush = await confirm({
+          message: 'Are you sure you want to continue?',
+          default: false,
+        });
       }
 
       if (!confirmPush) {

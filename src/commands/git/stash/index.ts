@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { select, input, confirm as confirmPrompt, Separator } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
@@ -312,28 +312,20 @@ async function handleCreateStash(changes: FileChange[]): Promise<Result<void>> {
     { name: 'Cancel', value: 'cancel' },
   ];
 
-  const { stashType } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'stashType',
-      message: 'What would you like to stash?',
-      choices: stashChoices,
-    },
-  ]);
+  const stashType = await select({
+    message: 'What would you like to stash?',
+    choices: stashChoices,
+  });
 
   if (stashType === 'cancel') {
     return success(undefined);
   }
 
   // Get message
-  const { message } = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'message',
-      message: 'Stash message (optional):',
-      default: '',
-    },
-  ]);
+  const message = await input({
+    message: 'Stash message (optional):',
+    default: '',
+  });
 
   // Build command
   const args = ['stash', 'push'];
@@ -367,21 +359,17 @@ async function handleStashAction(stash: StashEntry): Promise<Result<'back' | 'do
     ['Changes', `+${stats.additions} / -${stats.deletions}`],
   ]);
 
-  const { action } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'action',
-      message: 'What would you like to do?',
-      choices: [
-        { name: 'Apply (keep stash)', value: 'apply' },
-        { name: 'Pop (apply & remove)', value: 'pop' },
-        { name: 'View diff', value: 'diff' },
-        { name: 'Drop (delete)', value: 'drop' },
-        new inquirer.Separator(),
-        { name: '← Back', value: 'back' },
-      ],
-    },
-  ]);
+  const action = await select({
+    message: 'What would you like to do?',
+    choices: [
+      { name: 'Apply (keep stash)', value: 'apply' },
+      { name: 'Pop (apply & remove)', value: 'pop' },
+      { name: 'View diff', value: 'diff' },
+      { name: 'Drop (delete)', value: 'drop' },
+      new Separator(),
+      { name: '← Back', value: 'back' },
+    ],
+  });
 
   if (action === 'back') {
     return success('back');
@@ -399,16 +387,12 @@ async function handleStashAction(stash: StashEntry): Promise<Result<'back' | 'do
   }
 
   if (action === 'drop') {
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: 'Are you sure? This cannot be undone.',
-        default: false,
-      },
-    ]);
+    const confirmed = await confirmPrompt({
+      message: 'Are you sure? This cannot be undone.',
+      default: false,
+    });
 
-    if (!confirm) {
+    if (!confirmed) {
       return handleStashAction(stash);
     }
 
@@ -448,21 +432,16 @@ async function handleStashSelection(stashes: StashEntry[]): Promise<Result<void>
     ...stashes.map((s) => ({
       name: `${s.message} (${s.branch}, ${formatRelativeTime(s.timestamp)})`,
       value: s.index,
-      short: s.message,
     })),
-    new inquirer.Separator(),
+    new Separator(),
     { name: '✕ Cancel', value: -1 },
   ];
 
-  const { selectedIndex } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'selectedIndex',
-      message: 'Select a stash:',
-      choices,
-      pageSize: 10,
-    },
-  ]);
+  const selectedIndex = await select({
+    message: 'Select a stash:',
+    choices,
+    pageSize: 10,
+  });
 
   if (selectedIndex === -1) {
     return success(undefined);
@@ -564,14 +543,10 @@ async function interactiveStash(): Promise<Result<void>> {
 
   menuChoices.push({ name: 'Cancel', value: 'cancel' });
 
-  const { action } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'action',
-      message: 'What would you like to do?',
-      choices: menuChoices,
-    },
-  ]);
+  const action = await select({
+    message: 'What would you like to do?',
+    choices: menuChoices,
+  });
 
   if (action === 'cancel') {
     return success(undefined);

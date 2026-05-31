@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import inquirer from 'inquirer';
+import { confirm } from '@inquirer/prompts';
 import { ContextDB } from '@/storage/db.js';
 import { ui } from '@/utils/ui.js';
 import { validate, validateArgument } from '@/utils/validation.js';
@@ -290,15 +290,10 @@ async function removeContext(id: ContextId): Promise<void> {
         '--yes'
       );
     } else {
-      const answer = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirmed',
-          message: 'Are you sure you want to remove this context?',
-          default: false,
-        },
-      ]);
-      confirmed = Boolean(answer.confirmed);
+      confirmed = await confirm({
+        message: 'Are you sure you want to remove this context?',
+        default: false,
+      });
     }
 
     if (!confirmed) {

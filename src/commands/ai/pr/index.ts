@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -166,15 +166,11 @@ export async function executeAiPr(options: AiPrOptions): Promise<AiPrResult> {
     ui.muted(body);
     ui.newline();
 
-    const { confirm } = await inquirer.prompt<{ confirm: boolean }>([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: 'Create PR?',
-        default: true,
-      },
-    ]);
-    if (!confirm) {
+    const confirmed = await confirmPrompt({
+      message: 'Create PR?',
+      default: true,
+    });
+    if (!confirmed) {
       ui.muted('Skipped PR creation.');
       return created;
     }

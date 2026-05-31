@@ -6,10 +6,10 @@ vi.mock('execa', () => ({
   execa: vi.fn(),
 }));
 
-vi.mock('inquirer', () => ({
-  default: {
-    prompt: vi.fn(),
-  },
+vi.mock('@inquirer/prompts', () => ({
+  select: vi.fn(),
+  checkbox: vi.fn(),
+  confirm: vi.fn(),
 }));
 
 vi.mock('@/utils/logger.js', () => ({
@@ -43,7 +43,7 @@ vi.mock('@/utils/validation.js', () => ({
 }));
 
 import { execa, type ExecaReturnValue } from 'execa';
-import inquirer from 'inquirer';
+import { select, checkbox, confirm } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 
 describe('git branch command', () => {
@@ -171,7 +171,7 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock user cancels
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'cancel' });
+      vi.mocked(select).mockResolvedValueOnce('cancel');
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -190,9 +190,8 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock user selects delete all
-      vi.mocked(inquirer.prompt)
-        .mockResolvedValueOnce({ action: 'delete_all' })
-        .mockResolvedValueOnce({ confirm: true });
+      vi.mocked(select).mockResolvedValueOnce('delete_all');
+      vi.mocked(confirm).mockResolvedValueOnce(true);
 
       // Mock successful branch deletion
       vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
@@ -214,10 +213,9 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock user selects specific branches
-      vi.mocked(inquirer.prompt)
-        .mockResolvedValueOnce({ action: 'delete_selected' })
-        .mockResolvedValueOnce({ selectedBranches: ['feat-a'] })
-        .mockResolvedValueOnce({ confirm: true });
+      vi.mocked(select).mockResolvedValueOnce('delete_selected');
+      vi.mocked(checkbox).mockResolvedValueOnce(['feat-a']);
+      vi.mocked(confirm).mockResolvedValueOnce(true);
 
       // Mock successful branch deletion
       vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
@@ -252,7 +250,7 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock user cancels
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'cancel' });
+      vi.mocked(select).mockResolvedValueOnce('cancel');
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -292,7 +290,7 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock delete all action
-      vi.mocked(inquirer.prompt).mockResolvedValueOnce({ action: 'delete_all' });
+      vi.mocked(select).mockResolvedValueOnce('delete_all');
 
       // Mock successful branch deletion
       vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
@@ -302,7 +300,8 @@ describe('git branch command', () => {
 
       expect(result.success).toBe(true);
       // Should not have been asked to confirm
-      expect(inquirer.prompt).toHaveBeenCalledTimes(1);
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(confirm).not.toHaveBeenCalled();
     });
 
     it('should handle unmerged branch with squash merge detection', async () => {
@@ -315,9 +314,8 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock delete all action and confirmation
-      vi.mocked(inquirer.prompt)
-        .mockResolvedValueOnce({ action: 'delete_all' })
-        .mockResolvedValueOnce({ confirm: true });
+      vi.mocked(select).mockResolvedValueOnce('delete_all');
+      vi.mocked(confirm).mockResolvedValueOnce(true);
 
       // Mock branch deletion fails with "not fully merged"
       const unmergedError = new Error('not fully merged');

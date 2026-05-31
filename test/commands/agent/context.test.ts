@@ -35,17 +35,15 @@ vi.mock('@/utils/validation.js', () => ({
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('inquirer', () => ({
-  default: {
-    prompt: vi.fn(),
-  },
+vi.mock('@inquirer/prompts', () => ({
+  confirm: vi.fn(),
 }));
 
 import { ui } from '@/utils/ui.js';
 import { ensureAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 import { ContextDB } from '@/storage/db.js';
 import { validateArgument } from '@/utils/validation.js';
-import inquirer from 'inquirer';
+import { confirm } from '@inquirer/prompts';
 
 describe('createAgentContextCommand', () => {
   let exitMock: ReturnType<typeof mockProcessExit>;
@@ -276,7 +274,7 @@ describe('createAgentContextCommand', () => {
       };
       vi.mocked(getAgentDbPath).mockResolvedValue('/test/path/agent.db');
       vi.mocked(ContextDB.create).mockResolvedValue(mockDb as never);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirmed: true });
+      vi.mocked(confirm).mockResolvedValue(true);
 
       const command = createAgentContextCommand();
       await command.parseAsync(['remove', 'ctx-123'], { from: 'user' });
@@ -302,7 +300,7 @@ describe('createAgentContextCommand', () => {
       };
       vi.mocked(getAgentDbPath).mockResolvedValue('/test/path/agent.db');
       vi.mocked(ContextDB.create).mockResolvedValue(mockDb as never);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirmed: false });
+      vi.mocked(confirm).mockResolvedValue(false);
 
       const command = createAgentContextCommand();
       await command.parseAsync(['remove', 'ctx-123'], { from: 'user' });
@@ -351,7 +349,7 @@ describe('createAgentContextCommand', () => {
       };
       vi.mocked(getAgentDbPath).mockResolvedValue('/test/path/agent.db');
       vi.mocked(ContextDB.create).mockResolvedValue(mockDb as never);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ confirmed: true });
+      vi.mocked(confirm).mockResolvedValue(true);
 
       const command = createAgentContextCommand();
       await command.parseAsync(['remove', 'ctx-123'], { from: 'user' });

@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { select, input, confirm as confirmPrompt } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
 import { gitCommitOptionsSchema } from '@/types/schemas.js';
@@ -253,19 +253,15 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         if (runtimeCtx.yes || runtimeCtx.nonInteractive) {
           action = 'commit';
         } else {
-          const { selectedAction } = await inquirer.prompt([
-            {
-              type: 'list',
-              name: 'selectedAction',
-              message: 'What would you like to do?',
-              choices: [
-                { name: 'Commit with this message', value: 'commit' },
-                { name: 'Edit in wizard', value: 'edit' },
-                { name: 'Regenerate', value: 'regenerate' },
-                { name: 'Cancel', value: 'cancel' },
-              ],
-            },
-          ]);
+          const selectedAction = await select({
+            message: 'What would you like to do?',
+            choices: [
+              { name: 'Commit with this message', value: 'commit' },
+              { name: 'Edit in wizard', value: 'edit' },
+              { name: 'Regenerate', value: 'regenerate' },
+              { name: 'Cancel', value: 'cancel' },
+            ],
+          });
           action = selectedAction as AICommitAction;
         }
       }
@@ -348,65 +344,52 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
       // Interactive mode
       ui.section('Conventional Commit Wizard');
 
-      const answers = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'type',
-          message: 'Select the type of change:',
-          choices: Object.entries(COMMIT_TYPE_DESCRIPTIONS).map(([value, description]) => ({
-            name: `${value.padEnd(10)} - ${description}`,
-            value,
-            short: value,
-          })),
-          default: options.type,
+      const typeAnswer = await select({
+        message: 'Select the type of change:',
+        choices: Object.entries(COMMIT_TYPE_DESCRIPTIONS).map(([value, description]) => ({
+          name: `${value.padEnd(10)} - ${description}`,
+          value,
+        })),
+        default: options.type,
+      });
+      const scopeAnswer = await input({
+        message: 'Scope of the change (optional, lowercase):',
+        default: options.scope,
+        validate: (value: string) => {
+          if (!value) return true; // Optional
+          if (!/^[a-z][a-z0-9-]*$/.test(value)) {
+            return 'Scope must be lowercase and alphanumeric with hyphens';
+          }
+          return true;
         },
-        {
-          type: 'input',
-          name: 'scope',
-          message: 'Scope of the change (optional, lowercase):',
-          default: options.scope,
-          validate: (input: string) => {
-            if (!input) return true; // Optional
-            if (!/^[a-z][a-z0-9-]*$/.test(input)) {
-              return 'Scope must be lowercase and alphanumeric with hyphens';
-            }
-            return true;
-          },
+      });
+      const messageAnswer = await input({
+        message: 'Short description (max 100 chars):',
+        default: options.message,
+        validate: (value: string) => {
+          if (!value || value.trim().length === 0) {
+            return 'Message is required';
+          }
+          if (value.length > 100) {
+            return 'Message too long (max 100 characters)';
+          }
+          return true;
         },
-        {
-          type: 'input',
-          name: 'message',
-          message: 'Short description (max 100 chars):',
-          default: options.message,
-          validate: (input: string) => {
-            if (!input || input.trim().length === 0) {
-              return 'Message is required';
-            }
-            if (input.length > 100) {
-              return 'Message too long (max 100 characters)';
-            }
-            return true;
-          },
-        },
-        {
-          type: 'input',
-          name: 'body',
-          message: 'Longer description (optional, press Enter to skip):',
-          default: options.body,
-        },
-        {
-          type: 'confirm',
-          name: 'breaking',
-          message: 'Is this a breaking change?',
-          default: options.breaking || false,
-        },
-      ]);
+      });
+      const bodyAnswer = await input({
+        message: 'Longer description (optional, press Enter to skip):',
+        default: options.body,
+      });
+      const breakingAnswer = await confirmPrompt({
+        message: 'Is this a breaking change?',
+        default: options.breaking || false,
+      });
 
-      commitType = answers.type as CommitType;
-      commitScope = answers.scope || undefined;
-      commitMessage = answers.message;
-      commitBody = answers.body || undefined;
-      isBreaking = answers.breaking;
+      commitType = typeAnswer as CommitType;
+      commitScope = scopeAnswer || undefined;
+      commitMessage = messageAnswer;
+      commitBody = bodyAnswer || undefined;
+      isBreaking = breakingAnswer;
     }
 
     // Format the commit message
@@ -434,16 +417,12 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
 
     // Confirm commit (skip in quick/yes/non-interactive mode).
     if (!quickMode && !runtimeCtx.yes && !runtimeCtx.nonInteractive) {
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Create this commit?',
-          default: true,
-        },
-      ]);
+      const confirmed = await confirmPrompt({
+        message: 'Create this commit?',
+        default: true,
+      });
 
-      if (!confirm) {
+      if (!confirmed) {
         ui.warn('Commit cancelled');
         return success(undefined);
       }

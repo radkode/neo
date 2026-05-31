@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import inquirer from 'inquirer';
+import { confirm as confirmPrompt } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { promptSelect, NonInteractiveError } from '@/utils/prompt.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
@@ -328,15 +328,10 @@ async function switchToMainAndDelete(branchName: string): Promise<Result<PullOut
             'Branch has unmerged changes; force-delete requires explicit confirmation'
           );
         } else {
-          const answer = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'forceDelete',
-              message: 'Force delete anyway? (This will lose any uncommitted changes)',
-              default: false,
-            },
-          ]);
-          forceDelete = Boolean(answer.forceDelete);
+          forceDelete = await confirmPrompt({
+            message: 'Force delete anyway? (This will lose any uncommitted changes)',
+            default: false,
+          });
         }
 
         if (forceDelete) {

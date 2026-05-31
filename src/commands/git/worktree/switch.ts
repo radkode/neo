@@ -4,7 +4,7 @@
  */
 
 import { Command } from '@commander-js/extra-typings';
-import inquirer from 'inquirer';
+import { select, Separator } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
@@ -67,21 +67,16 @@ export async function executeWorktreeSwitch(): Promise<Result<string | null>> {
       ...worktrees.map((wt, index) => ({
         name: `${wt.branch || wt.head.substring(0, 8)} - ${wt.path}${wt.isDirty ? ' (dirty)' : ''}`,
         value: index,
-        short: wt.branch || wt.head.substring(0, 8),
       })),
-      new inquirer.Separator(),
-      { name: 'Cancel', value: -1, short: 'Cancel' },
+      new Separator(),
+      { name: 'Cancel', value: -1 },
     ];
 
-    const { selected } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'selected',
-        message: 'Select a worktree to switch to:',
-        choices,
-        pageSize: 10,
-      },
-    ]);
+    const selected = await select({
+      message: 'Select a worktree to switch to:',
+      choices,
+      pageSize: 10,
+    });
 
     if (selected === -1) {
       ui.muted('Cancelled.');
