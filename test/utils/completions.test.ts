@@ -373,7 +373,7 @@ describe('generateBashCompletions', () => {
 
   it('should include dynamic completions for commit type', () => {
     const output = generateBashCompletions(root);
-    expect(output).toContain('feat fix docs style refactor test chore');
+    expect(output).toContain('feat fix docs style refactor perf test build ci chore revert');
   });
 
   it('should include dynamic completion helpers', () => {

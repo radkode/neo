@@ -1,6 +1,7 @@
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { logger } from '@/utils/logger.js';
+import { COMMIT_TYPES } from '@/types/schemas.js';
 import type { Command } from '@commander-js/extra-typings';
 
 // === Intermediate Representation ===
@@ -57,8 +58,6 @@ const DYNAMIC_COMPLETIONS = {
     description: 'Git remote names',
   },
 } as const satisfies Record<string, DynamicCompletion>;
-
-const COMMIT_TYPES = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'];
 
 const CONFIG_KEYS = [
   'preferences.banner',

@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import { select, input, confirm as confirmPrompt } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
-import { gitCommitOptionsSchema } from '@/types/schemas.js';
+import { gitCommitOptionsSchema, COMMIT_TYPES } from '@/types/schemas.js';
 import type { GitCommitOptions, CommitType } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
@@ -23,8 +23,12 @@ const COMMIT_TYPE_DESCRIPTIONS: Record<CommitType, string> = {
   docs: 'Documentation changes',
   style: 'Code style changes (formatting, semicolons, etc)',
   refactor: 'Code refactoring (no feature or bug fix)',
+  perf: 'A code change that improves performance',
   test: 'Adding or updating tests',
+  build: 'Changes to the build system or dependencies',
+  ci: 'Changes to CI configuration or workflows',
   chore: 'Build process, tooling, or dependencies',
+  revert: 'Reverts a previous commit',
 };
 
 /**
@@ -478,7 +482,7 @@ export function createCommitCommand(): Command {
 
   command
     .description('Create a conventional commit with interactive wizard')
-    .option('-t, --type <type>', 'commit type (feat, fix, docs, style, refactor, test, chore)')
+    .option('-t, --type <type>', `commit type (${COMMIT_TYPES.join(', ')})`)
     .option('-s, --scope <scope>', 'commit scope (optional)')
     .option('-m, --message <message>', 'commit message description')
     .option('-b, --body <body>', 'commit body (optional)')

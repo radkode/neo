@@ -2,6 +2,7 @@
  * Prompt templates for AI-powered commit message generation
  */
 
+import { COMMIT_TYPES } from '@/types/schemas.js';
 import type { CommitType } from '@/types/schemas.js';
 
 /**
@@ -82,7 +83,7 @@ const COMMIT_SYSTEM_PROMPT = `You are a commit message generator. Generate a con
 
 Conventional commit format:
 - type(scope): message
-- Types: feat, fix, docs, style, refactor, test, chore
+- Types: ${COMMIT_TYPES.join(', ')}
 - Scope is optional but helpful (e.g., the component or area affected)
 - Message should be lowercase, imperative, and under 72 characters
 - Body is optional - only add if the change needs explanation
@@ -158,8 +159,7 @@ export function parseCommitResponse(response: string): AICommitResponse {
   }
 
   // Validate commit type
-  const validTypes = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'];
-  if (!validTypes.includes(parsed.type)) {
+  if (!COMMIT_TYPES.includes(parsed.type)) {
     throw new Error(`Invalid commit type: ${parsed.type}`);
   }
 

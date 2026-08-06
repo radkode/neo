@@ -72,7 +72,19 @@ describe('git commit command', () => {
     it('should accept all valid commit types', async () => {
       const { commitTypeSchema } = await import('../../../src/types/schemas.js');
 
-      const validTypes = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'];
+      const validTypes = [
+        'feat',
+        'fix',
+        'docs',
+        'style',
+        'refactor',
+        'perf',
+        'test',
+        'build',
+        'ci',
+        'chore',
+        'revert',
+      ];
 
       for (const type of validTypes) {
         expect(commitTypeSchema.parse(type)).toBe(type);
@@ -211,7 +223,19 @@ describe('git commit command', () => {
       const validTypes = commitTypeSchema.options;
 
       // All types should be defined
-      expect(validTypes).toEqual(['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore']);
+      expect(validTypes).toEqual([
+        'feat',
+        'fix',
+        'docs',
+        'style',
+        'refactor',
+        'perf',
+        'test',
+        'build',
+        'ci',
+        'chore',
+        'revert',
+      ]);
     });
   });
 });
