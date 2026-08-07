@@ -29,6 +29,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
+    "types": ["node"],
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
@@ -39,8 +40,6 @@
     "sourceMap": true,
     "noEmit": false,
     "removeComments": true,
-    "importHelpers": true,
-    "downlevelIteration": true,
 
     /* Code Quality */
     "noUnusedLocals": true,
@@ -49,21 +48,20 @@
     "allowUnreachableCode": false,
 
     /* Path Aliases */
-    "baseUrl": ".",
     "paths": {
-      "@/core/*": ["src/core/*"],
-      "@/application/*": ["src/application/*"],
-      "@/infrastructure/*": ["src/infrastructure/*"],
-      "@/presentation/*": ["src/presentation/*"],
-      "@/commands/*": ["src/commands/*"],
-      "@/utils/*": ["src/utils/*"],
-      "@/types/*": ["src/types/*"],
-      "@/storage/*": ["src/storage/*"],
-      "@/services/*": ["src/services/*"],
-      "@/config/*": ["src/config/*"],
-      "@/test/*": ["test/*"],
-      "@/cli": ["src/cli.js"],
-      "@/index": ["src/index.js"]
+      "@/core/*": ["./src/core/*"],
+      "@/application/*": ["./src/application/*"],
+      "@/infrastructure/*": ["./src/infrastructure/*"],
+      "@/presentation/*": ["./src/presentation/*"],
+      "@/commands/*": ["./src/commands/*"],
+      "@/utils/*": ["./src/utils/*"],
+      "@/types/*": ["./src/types/*"],
+      "@/storage/*": ["./src/storage/*"],
+      "@/services/*": ["./src/services/*"],
+      "@/config/*": ["./src/config/*"],
+      "@/test/*": ["./test/*"],
+      "@/cli": ["./src/cli.js"],
+      "@/index": ["./src/index.js"]
     }
   },
   "include": ["src/**/*"],
