@@ -1,5 +1,15 @@
 # @radkode/neo
 
+## 1.8.1
+
+### Patch Changes
+
+- [#47](https://github.com/radkode/neo/pull/47) [`111f2d2`](https://github.com/radkode/neo/commit/111f2d22f28230538c895e5723b2996b213bb762) Thanks [@jacekradko](https://github.com/jacekradko)! - Attach the originating error as `cause` at nine sites that previously rethrew a wrapped error without it, so the underlying failure is now recoverable from the thrown error. User-facing messages are unchanged. Surfaced by upgrading to eslint 10.
+
+- [#51](https://github.com/radkode/neo/pull/51) [`830b6c4`](https://github.com/radkode/neo/commit/830b6c45f53104969a739d83f1d5637a09eab6eb) Thanks [@jacekradko](https://github.com/jacekradko)! - Update commander, @commander-js/extra-typings, execa and chalk to their next major versions. No behavior change: the breaking changes in each are Node-version floor bumps already satisfied by `engines.node`, or APIs this package does not use.
+
+- [#45](https://github.com/radkode/neo/pull/45) [`dfc0ab6`](https://github.com/radkode/neo/commit/dfc0ab6fb3e7091ed54c9330e891e36c969ba389) Thanks [@jacekradko](https://github.com/jacekradko)! - Update 12 in-range dependencies to their latest semver-compatible versions
+
 ## 1.8.0
 
 ### Minor Changes
