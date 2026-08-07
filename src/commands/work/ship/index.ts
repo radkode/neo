@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import { access, readdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
@@ -121,15 +121,30 @@ async function ghInstalled(): Promise<boolean> {
   }
 }
 
-async function hasPendingChangeset(cwd: string): Promise<string | null> {
+/**
+ * Find a changeset this branch *adds* relative to its base.
+ *
+ * Only added files count. A changeset inherited from the base is already
+ * accounted for there, and `changeset status --since=origin/<base>`, which is
+ * what CI runs, would still report this branch as having none.
+ */
+async function hasPendingChangeset(cwd: string, base: string): Promise<string | null> {
   const dir = join(cwd, '.changeset');
   if (!(await pathExists(dir))) return null;
   try {
-    const entries = await readdir(dir);
-    const match = entries.find(
-      (name) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md'
-    );
-    return match ? join(dir, match) : null;
+    const { stdout } = await execa('git', [
+      'diff',
+      '--name-only',
+      '--diff-filter=A',
+      `origin/${base}...HEAD`,
+      '--',
+      '.changeset',
+    ]);
+    const match = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .find((p) => p.endsWith('.md') && !p.toLowerCase().endsWith('readme.md'));
+    return match ? join(cwd, match) : null;
   } catch {
     return null;
   }
@@ -193,6 +208,17 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
     );
   }
 
+  // GitHub closes a PR when its base branch is deleted, rather than retargeting
+  // it, so a stacked PR dies the moment its parent is merged with branch delete.
+  if (options.base) {
+    const defaultBranch = await detectDefaultBranch().catch(() => null);
+    if (defaultBranch && options.base !== defaultBranch) {
+      ui.warn(
+        `Base is ${options.base}, not ${defaultBranch}. If ${options.base} is merged and its branch deleted, GitHub will close this PR instead of retargeting it.`
+      );
+    }
+  }
+
   if (await hasUncommittedChanges()) {
     throw new Error(
       'You have uncommitted changes. Commit them first (`neo git commit --ai`), then re-run.'
@@ -235,7 +261,7 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
   let changesetPath: string | undefined;
   let changesetExisting = false;
   if (options.changeset !== false) {
-    const existing = await hasPendingChangeset(cwd);
+    const existing = await hasPendingChangeset(cwd, base);
     if (existing) {
       changesetPath = existing;
       changesetExisting = true;
