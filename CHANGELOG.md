@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.8.2
+
+### Patch Changes
+
+- [#52](https://github.com/radkode/neo/pull/52) [`118ae60`](https://github.com/radkode/neo/commit/118ae606882ff419c2ece5e9b2a9086d8de1e18e) Thanks [@jacekradko](https://github.com/jacekradko)! - work ship now only counts changesets the branch actually adds, matching what CI checks
+
 ## 1.8.1
 
 ### Patch Changes
