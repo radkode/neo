@@ -58,6 +58,11 @@
       "description": "Toolchain pins are changed by hand, not by bot",
       "matchDepTypes": ["packageManager", "engines"],
       "enabled": false
+    },
+    {
+      "description": "@types/node tracks the engines.node floor, not the newest Node",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<23"
     }
   ]
 }
