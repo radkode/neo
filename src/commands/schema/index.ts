@@ -79,17 +79,9 @@ function describeOption(opt: Option): SchemaOption {
   return schema;
 }
 
-interface RegisteredArgument {
-  name(): string;
-  description: string;
-  required: boolean;
-  variadic: boolean;
-}
-
 function describeArguments(cmd: Command): SchemaArgument[] {
-  const args = (cmd as unknown as { registeredArguments?: RegisteredArgument[] })
-    .registeredArguments;
-  if (!args || args.length === 0) return [];
+  const args = cmd.registeredArguments;
+  if (args.length === 0) return [];
   return args.map((a) => ({
     name: a.name(),
     description: a.description,

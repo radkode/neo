@@ -103,19 +103,9 @@ export function walkCommandTree(command: Command): CommandNode {
   }
 
   const args: ArgumentNode[] = [];
-  for (const arg of (
-    command as unknown as {
-      registeredArguments: Array<{
-        _name: string;
-        description: string;
-        required: boolean;
-        variadic: boolean;
-        argChoices?: string[];
-      }>;
-    }
-  ).registeredArguments ?? []) {
+  for (const arg of command.registeredArguments) {
     const argNode: ArgumentNode = {
-      name: arg._name,
+      name: arg.name(),
       description: arg.description ?? '',
       required: arg.required,
       variadic: arg.variadic ?? false,
@@ -137,8 +127,11 @@ export function walkCommandTree(command: Command): CommandNode {
     options,
     arguments: args,
     subcommands,
+    // commander exposes allowUnknownOption() as a setter only, with no public
+    // way to read the flag back, so this stays on the private field. The
+    // "should detect allowUnknownOption" test fails if commander ever drops it.
     allowUnknownOption:
-      (command as unknown as { _allowUnknownOption: boolean })._allowUnknownOption ?? false,
+      (command as unknown as { _allowUnknownOption?: boolean })._allowUnknownOption ?? false,
   };
 }
 
