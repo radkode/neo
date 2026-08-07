@@ -41,7 +41,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "link-local": "pnpm run build && pnpm link --global",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "prepublishOnly": "pnpm run build && pnpm run test",
     "release": "pnpm run build && pnpm run test && changeset publish",
     "start": "node dist/cli.js",
