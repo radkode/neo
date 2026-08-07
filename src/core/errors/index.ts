@@ -67,8 +67,7 @@ export class CommandError extends AppError {
 }
 
 export type Result<T, E extends AppError = AppError> =
-  | { success: true; data: T }
-  | { success: false; error: E };
+  { success: true; data: T } | { success: false; error: E };
 
 export function success<T>(data: T): Result<T> {
   return { success: true, data };

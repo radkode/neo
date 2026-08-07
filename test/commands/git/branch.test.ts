@@ -133,7 +133,8 @@ describe('git branch command', () => {
 
       // Mock git branch -vv - all branches have remote tracking
       vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial commit\n  feature def456 [origin/feature] Feature work',
+        stdout:
+          '* main abc123 [origin/main] Initial commit\n  feature def456 [origin/feature] Feature work',
       } as ExecaReturnValue<string>);
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
@@ -257,7 +258,9 @@ describe('git branch command', () => {
 
       expect(result.success).toBe(true);
       // Should detect deleted remote branch
-      expect(ui.warn).toHaveBeenCalledWith(expect.stringContaining('branch(es) available for cleanup'));
+      expect(ui.warn).toHaveBeenCalledWith(
+        expect.stringContaining('branch(es) available for cleanup')
+      );
     });
 
     it('should skip protected branches', async () => {
@@ -266,8 +269,7 @@ describe('git branch command', () => {
 
       // Mock git branch -vv with protected branches
       vi.mocked(execa).mockResolvedValueOnce({
-        stdout:
-          '* main abc123 [origin/main] Initial\n  develop def456 Dev\n  staging ghi789 Stage',
+        stdout: '* main abc123 [origin/main] Initial\n  develop def456 Dev\n  staging ghi789 Stage',
       } as ExecaReturnValue<string>);
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
@@ -322,7 +324,9 @@ describe('git branch command', () => {
       vi.mocked(execa).mockRejectedValueOnce(unmergedError);
 
       // Mock squash merge detection - show-ref for main
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: 'refs/heads/main' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce({
+        stdout: 'refs/heads/main',
+      } as ExecaReturnValue<string>);
 
       // Mock merge-base
       vi.mocked(execa).mockResolvedValueOnce({ stdout: 'abc123' } as ExecaReturnValue<string>);
@@ -333,7 +337,9 @@ describe('git branch command', () => {
       } as ExecaReturnValue<string>);
 
       // Mock rev-list (recent commits)
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: 'commit1\ncommit2' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce({
+        stdout: 'commit1\ncommit2',
+      } as ExecaReturnValue<string>);
 
       // Mock git show for each commit
       vi.mocked(execa).mockResolvedValueOnce({

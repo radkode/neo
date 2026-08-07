@@ -119,13 +119,18 @@ export function createWorktreeAddCommand(): Command {
     .option('-d, --detach', 'detach HEAD at the commit')
     .option('-f, --force', 'force creation even if branch is checked out')
     .option('--lock', 'lock the worktree after creation')
-    .option('-p, --path <path>', 'custom path for worktree (default: ~/.neo/worktrees/<repo>/<branch>)')
-    .action(runAction(async (branch, options) => {
-      const result = await executeWorktreeAdd(branch, options);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+    .option(
+      '-p, --path <path>',
+      'custom path for worktree (default: ~/.neo/worktrees/<repo>/<branch>)'
+    )
+    .action(
+      runAction(async (branch, options) => {
+        const result = await executeWorktreeAdd(branch, options);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

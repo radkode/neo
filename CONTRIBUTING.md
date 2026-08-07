@@ -71,6 +71,7 @@ pnpm changeset
 ```
 
 Select the change type:
+
 - **patch**: Bug fixes, small improvements
 - **minor**: New features, enhancements
 - **major**: Breaking changes

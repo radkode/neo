@@ -36,13 +36,13 @@ function detectCI(): boolean {
   const env = process.env;
   return Boolean(
     env['CI'] ||
-      env['CONTINUOUS_INTEGRATION'] ||
-      env['GITHUB_ACTIONS'] ||
-      env['GITLAB_CI'] ||
-      env['CIRCLECI'] ||
-      env['BUILDKITE'] ||
-      env['JENKINS_URL'] ||
-      env['TEAMCITY_VERSION']
+    env['CONTINUOUS_INTEGRATION'] ||
+    env['GITHUB_ACTIONS'] ||
+    env['GITLAB_CI'] ||
+    env['CIRCLECI'] ||
+    env['BUILDKITE'] ||
+    env['JENKINS_URL'] ||
+    env['TEAMCITY_VERSION']
   );
 }
 
@@ -51,13 +51,13 @@ function detectAgent(): boolean {
   // Known markers set by AI coding tools / agent runtimes.
   return Boolean(
     env['CLAUDECODE'] ||
-      env['CLAUDE_CODE'] ||
-      env['CURSOR_AGENT'] ||
-      env['AIDER'] ||
-      env['CODEX_CLI'] ||
-      env['NEO_AGENT'] ||
-      // Generic opt-in used by agents setting up a shell for a CLI.
-      env['AI_AGENT']
+    env['CLAUDE_CODE'] ||
+    env['CURSOR_AGENT'] ||
+    env['AIDER'] ||
+    env['CODEX_CLI'] ||
+    env['NEO_AGENT'] ||
+    // Generic opt-in used by agents setting up a shell for a CLI.
+    env['AI_AGENT']
   );
 }
 

@@ -122,21 +122,86 @@ async function discoverPackages(cwd: string): Promise<string[]> {
 }
 
 const ADJECTIVES = [
-  'brisk', 'bright', 'bold', 'busy', 'calm', 'clever', 'curious', 'eager',
-  'fierce', 'gentle', 'happy', 'jolly', 'keen', 'lucky', 'mellow', 'nimble',
-  'quiet', 'quick', 'rapid', 'silent', 'snappy', 'spry', 'swift', 'tidy',
-  'vivid', 'warm', 'witty', 'zesty',
+  'brisk',
+  'bright',
+  'bold',
+  'busy',
+  'calm',
+  'clever',
+  'curious',
+  'eager',
+  'fierce',
+  'gentle',
+  'happy',
+  'jolly',
+  'keen',
+  'lucky',
+  'mellow',
+  'nimble',
+  'quiet',
+  'quick',
+  'rapid',
+  'silent',
+  'snappy',
+  'spry',
+  'swift',
+  'tidy',
+  'vivid',
+  'warm',
+  'witty',
+  'zesty',
 ];
 const ANIMALS = [
-  'ants', 'bees', 'cats', 'crows', 'deer', 'dogs', 'eels', 'foxes',
-  'frogs', 'geckos', 'goats', 'hares', 'hawks', 'jays', 'lions', 'lynx',
-  'moles', 'moths', 'newts', 'owls', 'pandas', 'pigs', 'quails', 'rabbits',
-  'seals', 'tigers', 'wolves', 'yaks',
+  'ants',
+  'bees',
+  'cats',
+  'crows',
+  'deer',
+  'dogs',
+  'eels',
+  'foxes',
+  'frogs',
+  'geckos',
+  'goats',
+  'hares',
+  'hawks',
+  'jays',
+  'lions',
+  'lynx',
+  'moles',
+  'moths',
+  'newts',
+  'owls',
+  'pandas',
+  'pigs',
+  'quails',
+  'rabbits',
+  'seals',
+  'tigers',
+  'wolves',
+  'yaks',
 ];
 const VERBS = [
-  'bake', 'bounce', 'cheer', 'dance', 'dream', 'glow', 'hike', 'jump',
-  'laugh', 'march', 'paint', 'race', 'sing', 'skate', 'smile', 'sparkle',
-  'swim', 'think', 'wander', 'wave',
+  'bake',
+  'bounce',
+  'cheer',
+  'dance',
+  'dream',
+  'glow',
+  'hike',
+  'jump',
+  'laugh',
+  'march',
+  'paint',
+  'race',
+  'sing',
+  'skate',
+  'smile',
+  'sparkle',
+  'swim',
+  'think',
+  'wander',
+  'wave',
 ];
 
 function pick<T>(list: readonly T[]): T {
@@ -153,9 +218,7 @@ function parseBump(raw: string | undefined): BumpType | undefined {
   if ((BUMP_VALUES as readonly string[]).includes(normalized)) {
     return normalized as BumpType;
   }
-  throw new Error(
-    `Invalid --bump "${raw}". Expected one of: ${BUMP_VALUES.join(', ')}.`
-  );
+  throw new Error(`Invalid --bump "${raw}". Expected one of: ${BUMP_VALUES.join(', ')}.`);
 }
 
 async function ensureUniquePath(cwd: string): Promise<string> {
@@ -168,11 +231,7 @@ async function ensureUniquePath(cwd: string): Promise<string> {
   return join(cwd, '.changeset', `neo-${Date.now()}.md`);
 }
 
-function formatChangesetBody(
-  bump: BumpType,
-  packages: string[],
-  summary: string
-): string {
+function formatChangesetBody(bump: BumpType, packages: string[], summary: string): string {
   if (bump === 'empty') {
     return '---\n---\n';
   }
@@ -186,15 +245,14 @@ export async function executeChangeset(
 ): Promise<ChangesetResult> {
   const configPath = join(cwd, '.changeset', 'config.json');
   if (!(await pathExists(configPath))) {
-    throw new Error(
-      'No .changeset/config.json found. Run `pnpm dlx @changesets/cli init` first.'
-    );
+    throw new Error('No .changeset/config.json found. Run `pnpm dlx @changesets/cli init` first.');
   }
 
   const ctx = getRuntimeContext();
   const bumpArg = parseBump(options.bump);
 
-  const bump: BumpType = bumpArg ??
+  const bump: BumpType =
+    bumpArg ??
     (await promptSelect<BumpType>({
       message: 'What kind of change is this?',
       flag: '--bump',
@@ -212,7 +270,10 @@ export async function executeChangeset(
     const discovered = await discoverPackages(cwd);
 
     if (options.package) {
-      const requested = options.package.split(',').map((s) => s.trim()).filter(Boolean);
+      const requested = options.package
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const unknown = requested.filter((name) => !discovered.includes(name));
       if (unknown.length > 0) {
         throw new Error(
@@ -225,10 +286,7 @@ export async function executeChangeset(
     } else {
       // Monorepo with no explicit --package → must prompt interactively.
       if (ctx.yes || ctx.nonInteractive) {
-        throw new NonInteractiveError(
-          'Select package(s) to bump',
-          '--package <name>[,<name>...]'
-        );
+        throw new NonInteractiveError('Select package(s) to bump', '--package <name>[,<name>...]');
       }
       const selected = await checkbox({
         message: 'Which packages are affected?',
@@ -302,9 +360,7 @@ Examples:
               if (result.bump === 'empty') {
                 ui.muted('Empty changeset — no package version bump.');
               } else {
-                ui.muted(
-                  `${result.bump} bump for ${result.packages.join(', ')}`
-                );
+                ui.muted(`${result.bump} bump for ${result.packages.join(', ')}`);
               }
             },
           }

@@ -213,12 +213,7 @@ function renderCommandMarkdown(cmd: SchemaCommand, depth: number): string[] {
 }
 
 function renderSchemaMarkdown(schema: SchemaRoot): string {
-  const lines: string[] = [
-    `# ${schema.name}`,
-    '',
-    `**Version:** ${schema.version}`,
-    '',
-  ];
+  const lines: string[] = [`# ${schema.name}`, '', `**Version:** ${schema.version}`, ''];
   if (schema.description) {
     lines.push(schema.description, '');
   }
@@ -248,7 +243,12 @@ function renderSchemaMarkdown(schema: SchemaRoot): string {
     lines.push(...renderCommandMarkdown(cmd, 3));
   }
 
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+  return (
+    lines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trimEnd() + '\n'
+  );
 }
 
 export function createSchemaCommand(): Command {

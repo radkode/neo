@@ -88,10 +88,7 @@ function userNameToPrefix(userName: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-async function resolveBranchName(
-  raw: string,
-  options: WorkStartOptions
-): Promise<string> {
+async function resolveBranchName(raw: string, options: WorkStartOptions): Promise<string> {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
     throw new Error('Branch name is required.');
@@ -197,7 +194,9 @@ export async function executeWorkStart(
   let worktreePath: string | undefined;
 
   if (options.worktree) {
-    const projectRoot = (await getProjectRoot()) ?? (await execa('git', ['rev-parse', '--show-toplevel'])).stdout.trim();
+    const projectRoot =
+      (await getProjectRoot()) ??
+      (await execa('git', ['rev-parse', '--show-toplevel'])).stdout.trim();
     // Last path segment only — "jacek/fix-foo" → "fix-foo" for the dir name.
     const lastSegment = branch.split('/').pop() ?? branch;
     const wtAbs = resolve(projectRoot, '.worktrees', lastSegment);

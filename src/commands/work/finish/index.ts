@@ -95,9 +95,7 @@ async function ghInstalled(): Promise<boolean> {
  * available or there's no PR for the branch. Squash-merges live here — GH is
  * the only reliable source of truth for "this got into main via squash".
  */
-async function queryPrMerged(
-  branch: string
-): Promise<{ merged: boolean; url: string } | null> {
+async function queryPrMerged(branch: string): Promise<{ merged: boolean; url: string } | null> {
   if (!(await ghInstalled())) return null;
   try {
     const { stdout } = await execa(
@@ -312,7 +310,9 @@ export function createWorkFinishCommand(): Command {
   const command = new Command('finish');
 
   command
-    .description('After a PR merges: switch to base, pull, delete the local branch, remove any worktree')
+    .description(
+      'After a PR merges: switch to base, pull, delete the local branch, remove any worktree'
+    )
     .argument('[branch]', 'branch to finish (default: current branch)')
     .option('--base <branch>', 'base branch (default: origin HEAD)')
     .option('--force', 'finish even if PR is not merged or cannot be confirmed')

@@ -199,7 +199,9 @@ export function createAiPrCommand(): Command {
   const command = new Command('pr');
 
   command
-    .description('Generate a PR title + body from the current branch and (optionally) create it via gh')
+    .description(
+      'Generate a PR title + body from the current branch and (optionally) create it via gh'
+    )
     .option('--base <branch>', 'base branch to diff against (default: origin HEAD)')
     .option('--draft', 'open the PR as a draft')
     .option('--no-create', 'generate the description only — do not call gh pr create')

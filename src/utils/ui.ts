@@ -166,9 +166,7 @@ class UISystem implements UI {
 
     pairs.forEach(([key, value]) => {
       const paddedKey = key.padEnd(maxKeyLength);
-      err(
-        `  ${chalk.hex(Colors.muted)(paddedKey + ':')}  ${chalk.hex(Colors.primary)(value)}`
-      );
+      err(`  ${chalk.hex(Colors.muted)(paddedKey + ':')}  ${chalk.hex(Colors.primary)(value)}`);
     });
   }
 

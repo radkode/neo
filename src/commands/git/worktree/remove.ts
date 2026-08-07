@@ -39,7 +39,9 @@ export async function executeWorktreeRemove(
 
     if (worktree.isMain) {
       ui.error('Cannot remove the main worktree!');
-      return failure(GitErrors.unknown('worktree remove', new Error('Cannot remove main worktree')));
+      return failure(
+        GitErrors.unknown('worktree remove', new Error('Cannot remove main worktree'))
+      );
     }
 
     const rtCtx = getRuntimeContext();
@@ -65,10 +67,7 @@ export async function executeWorktreeRemove(
     if (worktree.isLocked && !options.force) {
       ui.warn(`Worktree is locked${worktree.lockReason ? `: ${worktree.lockReason}` : ''}`);
       if (rtCtx.nonInteractive || rtCtx.yes) {
-        throw new NonInteractiveError(
-          `Worktree at ${worktree.path} is locked`,
-          '--force'
-        );
+        throw new NonInteractiveError(`Worktree at ${worktree.path} is locked`, '--force');
       }
       const confirm = await confirmPrompt({
         message: 'Force remove locked worktree?',
@@ -119,12 +118,14 @@ export function createWorktreeRemoveCommand(): Command {
     .description('Remove a worktree')
     .argument('<path>', 'path to the worktree to remove')
     .option('-f, --force', 'force removal even if dirty or locked')
-    .action(runAction(async (path, options) => {
-      const result = await executeWorktreeRemove(path, options);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+    .action(
+      runAction(async (path, options) => {
+        const result = await executeWorktreeRemove(path, options);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

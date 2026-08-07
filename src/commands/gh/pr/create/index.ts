@@ -80,11 +80,7 @@ async function getDefaultBranch(): Promise<string> {
 async function hasUnpushedCommits(): Promise<boolean> {
   try {
     const currentBranch = await getCurrentBranch();
-    const { stdout } = await execa('git', [
-      'log',
-      '--oneline',
-      `origin/${currentBranch}..HEAD`,
-    ]);
+    const { stdout } = await execa('git', ['log', '--oneline', `origin/${currentBranch}..HEAD`]);
     return stdout.trim().length > 0;
   } catch {
     // If origin branch doesn't exist, there are unpushed commits
@@ -378,8 +374,7 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
     } catch (ghError: unknown) {
       createSpinner.fail('Failed to create pull request');
 
-      const errorMessage =
-        ghError instanceof Error ? ghError.message : String(ghError);
+      const errorMessage = ghError instanceof Error ? ghError.message : String(ghError);
 
       // Check for common errors
       if (errorMessage.includes('already exists')) {
@@ -428,18 +423,20 @@ Examples:
     $ neo gh pr create --yes --json
 `
     )
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: GhPrCreateOptions = validate(
-        ghPrCreateOptionsSchema,
-        options,
-        'gh pr create options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: GhPrCreateOptions = validate(
+          ghPrCreateOptionsSchema,
+          options,
+          'gh pr create options'
+        );
 
-      const result = await executeGhPrCreate(validatedOptions);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+        const result = await executeGhPrCreate(validatedOptions);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

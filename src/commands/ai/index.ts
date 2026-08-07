@@ -4,11 +4,9 @@ import { createAiPrCommand } from '@/commands/ai/pr/index.js';
 export function createAiCommand(): Command {
   const command = new Command('ai');
 
-  command
-    .description('AI-powered helpers (pr description, review, etc.)')
-    .addHelpText(
-      'after',
-      `
+  command.description('AI-powered helpers (pr description, review, etc.)').addHelpText(
+    'after',
+    `
 Subcommands:
   pr         Generate a PR title + body from the current branch
 
@@ -19,7 +17,7 @@ Examples:
   Agent-friendly (emits { title, body } on stdout):
     $ neo ai pr --json --no-create
 `
-    );
+  );
 
   command.addCommand(createAiPrCommand());
 

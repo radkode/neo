@@ -116,11 +116,15 @@ export function buildCommitPrompt(request: AICommitRequest): StructuredPrompt {
   }
 
   if (request.recentCommits.length > 0) {
-    contextParts.push(`Recent commits (for style reference):\n${request.recentCommits.slice(0, 5).join('\n')}`);
+    contextParts.push(
+      `Recent commits (for style reference):\n${request.recentCommits.slice(0, 5).join('\n')}`
+    );
   }
 
   if (request.stagedFiles.length > 0) {
-    contextParts.push(`Staged files (${request.stagedFiles.length}):\n${request.stagedFiles.slice(0, 20).join('\n')}`);
+    contextParts.push(
+      `Staged files (${request.stagedFiles.length}):\n${request.stagedFiles.slice(0, 20).join('\n')}`
+    );
   }
 
   const context = contextParts.length > 0 ? contextParts.join('\n\n') + '\n\n' : '';

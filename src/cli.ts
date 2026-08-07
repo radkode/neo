@@ -80,8 +80,7 @@ Learn more:
 
       // Commands whose stdout is inherently machine-readable — never pollute
       // with banner or update-check, regardless of flags.
-      const isMachineOutputCommand =
-        commandName === 'schema' || commandName === 'completions';
+      const isMachineOutputCommand = commandName === 'schema' || commandName === 'completions';
 
       if (ctx.verbose) {
         logger.setVerbose(true);

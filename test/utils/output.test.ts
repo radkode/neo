@@ -10,11 +10,7 @@ vi.mock('@/utils/ui.js', () => ({
 
 import { emitJson, emitError } from '@/utils/output.js';
 import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
-import {
-  AppError,
-  ErrorCategory,
-  ErrorSeverity,
-} from '@/core/errors/index.js';
+import { AppError, ErrorCategory, ErrorSeverity } from '@/core/errors/index.js';
 import { ui } from '@/utils/ui.js';
 
 class TestAppError extends AppError {

@@ -24,15 +24,20 @@ import {
  * Check if error indicates remote branch was deleted
  */
 function isRemoteBranchDeletedError(error: unknown): boolean {
-  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  return errorMessage.includes('no such ref was fetched') || errorMessage.includes('but no such ref was fetched');
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    errorMessage.includes('no such ref was fetched') ||
+    errorMessage.includes('but no such ref was fetched')
+  );
 }
 
 /**
  * Check if error indicates pull failed due to multiple branch ambiguity
  */
 function isMultipleBranchesError(error: unknown): boolean {
-  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return errorMessage.includes('cannot fast-forward to multiple branches');
 }
 
@@ -269,7 +274,10 @@ async function handleDeletedRemoteBranch(branchName: string): Promise<Result<Pul
   const validatedAction = deletedBranchActionSchema.parse(
     await promptSelect({
       choices: [
-        { label: 'Switch to main and delete this branch (recommended)', value: 'switch_main_delete' },
+        {
+          label: 'Switch to main and delete this branch (recommended)',
+          value: 'switch_main_delete',
+        },
         { label: 'Switch to main and keep this branch', value: 'switch_main_keep' },
         { label: `Set a new upstream for "${branchName}"`, value: 'set_upstream' },
         { label: 'Cancel (no changes)', value: 'cancel' },
@@ -450,23 +458,25 @@ Examples:
     $ neo git pull --yes --json
 `
     )
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: GitPullOptions = validate(
-        gitPullOptionsSchema,
-        options,
-        'git pull options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: GitPullOptions = validate(
+          gitPullOptionsSchema,
+          options,
+          'git pull options'
+        );
 
-      const result = await executePull(validatedOptions);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-      if (result.data.cancelled) {
-        emitJson({ ok: false, command: 'git.pull', cancelled: true, reason: result.data.reason });
-        return;
-      }
-      emitJson({ ok: true, command: 'git.pull' });
-    }));
+        const result = await executePull(validatedOptions);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+        if (result.data.cancelled) {
+          emitJson({ ok: false, command: 'git.pull', cancelled: true, reason: result.data.reason });
+          return;
+        }
+        emitJson({ ok: true, command: 'git.pull' });
+      })
+    );
 
   return command;
 }

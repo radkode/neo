@@ -18,19 +18,21 @@ export function createPrAliasCommand(): Command {
     .option('-r, --reviewer <reviewers...>', 'request reviewers')
     .option('-l, --label <labels...>', 'add labels')
     .option('-w, --web', 'open PR in browser after creation')
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: GhPrCreateOptions = validate(
-        ghPrCreateOptionsSchema,
-        options,
-        'pr options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: GhPrCreateOptions = validate(
+          ghPrCreateOptionsSchema,
+          options,
+          'pr options'
+        );
 
-      const result = await executeGhPrCreate(validatedOptions);
+        const result = await executeGhPrCreate(validatedOptions);
 
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

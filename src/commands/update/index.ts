@@ -95,150 +95,152 @@ export function createUpdateCommand(): Command {
     .description('Update Neo CLI to the latest version')
     .option('--check-only', 'only check for updates without installing')
     .option('--force', 'force update even if already on latest version')
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: UpdateOptions = validate(
-        updateOptionsSchema,
-        options,
-        'update options'
-      );
-
-      const currentVersion = getCurrentVersion();
-      logger.debug(`Current version: ${currentVersion}`);
-
-      const spinner = ui.spinner('Checking for updates');
-      spinner.start();
-
-      let latestVersion: string;
-      try {
-        latestVersion = await getLatestVersion();
-      } catch {
-        spinner.fail('Failed to check for updates');
-        throw new Error(
-          'Could not connect to npm registry. Please check your internet connection.'
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: UpdateOptions = validate(
+          updateOptionsSchema,
+          options,
+          'update options'
         );
-      }
 
-      logger.debug(`Latest version: ${latestVersion}`);
+        const currentVersion = getCurrentVersion();
+        logger.debug(`Current version: ${currentVersion}`);
 
-      const comparison = compareVersions(latestVersion, currentVersion);
+        const spinner = ui.spinner('Checking for updates');
+        spinner.start();
 
-      if (comparison === 0) {
-        spinner.succeed('You are already on the latest version!');
-        ui.info(`Current version: ${currentVersion}`);
+        let latestVersion: string;
+        try {
+          latestVersion = await getLatestVersion();
+        } catch {
+          spinner.fail('Failed to check for updates');
+          throw new Error(
+            'Could not connect to npm registry. Please check your internet connection.'
+          );
+        }
 
-        if (!validatedOptions.force) {
+        logger.debug(`Latest version: ${latestVersion}`);
+
+        const comparison = compareVersions(latestVersion, currentVersion);
+
+        if (comparison === 0) {
+          spinner.succeed('You are already on the latest version!');
+          ui.info(`Current version: ${currentVersion}`);
+
+          if (!validatedOptions.force) {
+            return;
+          }
+
+          ui.warn('--force flag detected, proceeding with reinstall');
+        } else if (comparison < 0) {
+          spinner.warn(
+            `You are on a newer version (${currentVersion}) than the latest stable (${latestVersion})`
+          );
+
+          if (!validatedOptions.force && !validatedOptions.checkOnly) {
+            const rtCtx = getRuntimeContext();
+            if (rtCtx.nonInteractive || rtCtx.yes) {
+              // Downgrading is potentially destructive; require explicit --force.
+              throw new NonInteractiveError(
+                `Downgrade from ${currentVersion} to ${latestVersion} requires explicit --force`,
+                '--force'
+              );
+            }
+            const shouldDowngrade = await confirmPrompt({
+              message: 'Do you want to downgrade to the latest stable version?',
+              default: false,
+            });
+
+            if (!shouldDowngrade) {
+              ui.muted('Update cancelled');
+              return;
+            }
+          } else if (!validatedOptions.force) {
+            return;
+          }
+        } else {
+          spinner.succeed('Update available!');
+          ui.keyValue([
+            ['Current version', currentVersion],
+            ['Latest version', latestVersion],
+          ]);
+        }
+
+        if (validatedOptions.checkOnly) {
+          emitJson({
+            ok: true,
+            command: 'update',
+            currentVersion,
+            latestVersion,
+            updateAvailable: comparison > 0,
+          });
+          if (comparison > 0) {
+            ui.muted('Run neo update to install the latest version');
+          }
           return;
         }
 
-        ui.warn('--force flag detected, proceeding with reinstall');
-      } else if (comparison < 0) {
-        spinner.warn(
-          `You are on a newer version (${currentVersion}) than the latest stable (${latestVersion})`
-        );
-
-        if (!validatedOptions.force && !validatedOptions.checkOnly) {
+        if (!validatedOptions.force && comparison !== 0) {
           const rtCtx = getRuntimeContext();
-          if (rtCtx.nonInteractive || rtCtx.yes) {
-            // Downgrading is potentially destructive; require explicit --force.
+          let confirm: boolean;
+          if (rtCtx.yes) {
+            confirm = true;
+          } else if (rtCtx.nonInteractive) {
+            // Updating rewrites a global binary — require --yes/--force explicitly.
             throw new NonInteractiveError(
-              `Downgrade from ${currentVersion} to ${latestVersion} requires explicit --force`,
-              '--force'
+              `Update to ${latestVersion} requires confirmation`,
+              '--yes'
             );
+          } else {
+            confirm = await confirmPrompt({
+              message: `Update to version ${latestVersion}?`,
+              default: true,
+            });
           }
-          const shouldDowngrade = await confirmPrompt({
-            message: 'Do you want to downgrade to the latest stable version?',
-            default: false,
-          });
 
-          if (!shouldDowngrade) {
+          if (!confirm) {
             ui.muted('Update cancelled');
             return;
           }
-        } else if (!validatedOptions.force) {
-          return;
         }
-      } else {
-        spinner.succeed('Update available!');
-        ui.keyValue([
-          ['Current version', currentVersion],
-          ['Latest version', latestVersion],
-        ]);
-      }
 
-      if (validatedOptions.checkOnly) {
-        emitJson({
-          ok: true,
-          command: 'update',
-          currentVersion,
-          latestVersion,
-          updateAvailable: comparison > 0,
-        });
-        if (comparison > 0) {
-          ui.muted('Run neo update to install the latest version');
-        }
-        return;
-      }
+        const updateSpinner = ui.spinner('Detecting package manager');
+        updateSpinner.start();
+        const packageManager = await detectPackageManager();
+        updateSpinner.text = `Updating via ${packageManager}...`;
 
-      if (!validatedOptions.force && comparison !== 0) {
-        const rtCtx = getRuntimeContext();
-        let confirm: boolean;
-        if (rtCtx.yes) {
-          confirm = true;
-        } else if (rtCtx.nonInteractive) {
-          // Updating rewrites a global binary — require --yes/--force explicitly.
-          throw new NonInteractiveError(
-            `Update to ${latestVersion} requires confirmation`,
-            '--yes'
-          );
-        } else {
-          confirm = await confirmPrompt({
-            message: `Update to version ${latestVersion}?`,
-            default: true,
+        logger.debug(`Using package manager: ${packageManager}`);
+
+        try {
+          await executeUpdate(packageManager, validatedOptions.force || false);
+          updateSpinner.succeed(`Successfully updated to version ${latestVersion}!`);
+
+          emitJson({
+            ok: true,
+            command: 'update',
+            from: currentVersion,
+            to: latestVersion,
+            packageManager,
           });
-        }
 
-        if (!confirm) {
-          ui.muted('Update cancelled');
-          return;
-        }
-      }
+          ui.muted('Run neo --version to verify the installation');
+        } catch (error: unknown) {
+          updateSpinner.fail('Update failed');
 
-      const updateSpinner = ui.spinner('Detecting package manager');
-      updateSpinner.start();
-      const packageManager = await detectPackageManager();
-      updateSpinner.text = `Updating via ${packageManager}...`;
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const installCmd = `${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`;
 
-      logger.debug(`Using package manager: ${packageManager}`);
-
-      try {
-        await executeUpdate(packageManager, validatedOptions.force || false);
-        updateSpinner.succeed(`Successfully updated to version ${latestVersion}!`);
-
-        emitJson({
-          ok: true,
-          command: 'update',
-          from: currentVersion,
-          to: latestVersion,
-          packageManager,
-        });
-
-        ui.muted('Run neo --version to verify the installation');
-      } catch (error: unknown) {
-        updateSpinner.fail('Update failed');
-
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const installCmd = `${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`;
-
-        if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
-          throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`, {
+          if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
+            throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`, {
+              cause: error,
+            });
+          }
+          throw new Error(`Update failed: ${errorMessage}. Try updating manually: ${installCmd}`, {
             cause: error,
           });
         }
-        throw new Error(`Update failed: ${errorMessage}. Try updating manually: ${installCmd}`, {
-          cause: error,
-        });
-      }
-    }));
+      })
+    );
 
   return command;
 }

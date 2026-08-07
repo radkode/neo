@@ -148,9 +148,8 @@ locked reason: in use
     });
 
     it('should generate correct worktree paths', async () => {
-      const { getWorktreePath, getWorktreesBaseDir } = await import(
-        '../../../src/commands/git/worktree/utils.js'
-      );
+      const { getWorktreePath, getWorktreesBaseDir } =
+        await import('../../../src/commands/git/worktree/utils.js');
       const os = await import('os');
       const path = await import('path');
 
@@ -158,7 +157,9 @@ locked reason: in use
       expect(baseDir).toBe(path.join(os.homedir(), '.neo', 'worktrees'));
 
       const result = getWorktreePath('my-repo', 'feature/my-branch');
-      expect(result).toBe(path.join(os.homedir(), '.neo', 'worktrees', 'my-repo', 'feature-my-branch'));
+      expect(result).toBe(
+        path.join(os.homedir(), '.neo', 'worktrees', 'my-repo', 'feature-my-branch')
+      );
     });
 
     it('should sanitize branch names in paths', async () => {
@@ -168,7 +169,9 @@ locked reason: in use
 
       // Slashes should be replaced with dashes
       const result1 = getWorktreePath('repo', 'feature/test/branch');
-      expect(result1).toBe(path.join(os.homedir(), '.neo', 'worktrees', 'repo', 'feature-test-branch'));
+      expect(result1).toBe(
+        path.join(os.homedir(), '.neo', 'worktrees', 'repo', 'feature-test-branch')
+      );
 
       // Special characters should be removed
       const result2 = getWorktreePath('repo', 'fix@bug#123');
@@ -214,13 +217,16 @@ locked reason: in use
       expect(existsError.message).toBe('Worktree already exists at: /path/to/worktree');
 
       const checkedOutError = GitErrors.worktreeBranchCheckedOut('worktree', 'my-branch');
-      expect(checkedOutError.message).toBe('Branch "my-branch" is already checked out in another worktree!');
+      expect(checkedOutError.message).toBe(
+        'Branch "my-branch" is already checked out in another worktree!'
+      );
     });
   });
 
   describe('subcommand structure', () => {
     it('should have correct add command options', async () => {
-      const { createWorktreeAddCommand } = await import('../../../src/commands/git/worktree/add.js');
+      const { createWorktreeAddCommand } =
+        await import('../../../src/commands/git/worktree/add.js');
       const addCommand = createWorktreeAddCommand();
 
       expect(addCommand.name()).toBe('add');
@@ -235,7 +241,8 @@ locked reason: in use
     });
 
     it('should have correct remove command options', async () => {
-      const { createWorktreeRemoveCommand } = await import('../../../src/commands/git/worktree/remove.js');
+      const { createWorktreeRemoveCommand } =
+        await import('../../../src/commands/git/worktree/remove.js');
       const removeCommand = createWorktreeRemoveCommand();
 
       expect(removeCommand.name()).toBe('remove');
@@ -246,7 +253,8 @@ locked reason: in use
     });
 
     it('should have correct list command', async () => {
-      const { createWorktreeListCommand } = await import('../../../src/commands/git/worktree/list.js');
+      const { createWorktreeListCommand } =
+        await import('../../../src/commands/git/worktree/list.js');
       const listCommand = createWorktreeListCommand();
 
       expect(listCommand.name()).toBe('list');
@@ -254,7 +262,8 @@ locked reason: in use
     });
 
     it('should have correct switch command', async () => {
-      const { createWorktreeSwitchCommand } = await import('../../../src/commands/git/worktree/switch.js');
+      const { createWorktreeSwitchCommand } =
+        await import('../../../src/commands/git/worktree/switch.js');
       const switchCommand = createWorktreeSwitchCommand();
 
       expect(switchCommand.name()).toBe('switch');
