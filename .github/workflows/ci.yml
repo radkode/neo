@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main, develop]
+  # No branch filter: a PR targeting anything other than main still needs CI.
+  # Filtering on [main] silently gave stacked PRs zero checks.
   pull_request:
-    branches: [main]
 
 jobs:
   changeset-check:
