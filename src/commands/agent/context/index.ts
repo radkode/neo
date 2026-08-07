@@ -46,23 +46,25 @@ function createContextAddCommand(): Command {
     .argument('<content>', 'context content')
     .option('--tag <tags...>', 'tags to assign')
     .option('--priority <priority>', 'priority level (low, medium, high, critical)')
-    .action(runAction(async (rawContent: string, options: unknown) => {
-      await ensureAgentInitialized();
+    .action(
+      runAction(async (rawContent: string, options: unknown) => {
+        await ensureAgentInitialized();
 
-      const content: ContextContent = validateArgument(
-        contextContentSchema,
-        rawContent,
-        'context content'
-      );
+        const content: ContextContent = validateArgument(
+          contextContentSchema,
+          rawContent,
+          'context content'
+        );
 
-      const validatedOptions: AgentContextAddOptions = validate(
-        agentContextAddOptionsSchema,
-        options,
-        'context add options'
-      );
+        const validatedOptions: AgentContextAddOptions = validate(
+          agentContextAddOptionsSchema,
+          options,
+          'context add options'
+        );
 
-      await addContext(content, validatedOptions);
-    }));
+        await addContext(content, validatedOptions);
+      })
+    );
 
   return command;
 }
@@ -77,17 +79,19 @@ function createContextListCommand(): Command {
     .description('List context items')
     .option('--tag <tag>', 'filter by tag')
     .option('--priority <priority>', 'filter by priority')
-    .action(runAction(async (options: unknown) => {
-      await ensureAgentInitialized();
+    .action(
+      runAction(async (options: unknown) => {
+        await ensureAgentInitialized();
 
-      const validatedOptions: AgentContextListOptions = validate(
-        agentContextListOptionsSchema,
-        options,
-        'context list options'
-      );
+        const validatedOptions: AgentContextListOptions = validate(
+          agentContextListOptionsSchema,
+          options,
+          'context list options'
+        );
 
-      await listContexts(validatedOptions);
-    }));
+        await listContexts(validatedOptions);
+      })
+    );
 
   return command;
 }
@@ -101,13 +105,15 @@ function createContextRemoveCommand(): Command {
   command
     .description('Remove a context item')
     .argument('<id>', 'context ID to remove')
-    .action(runAction(async (rawId: string) => {
-      await ensureAgentInitialized();
+    .action(
+      runAction(async (rawId: string) => {
+        await ensureAgentInitialized();
 
-      const id: ContextId = validateArgument(contextIdSchema, rawId, 'context ID');
+        const id: ContextId = validateArgument(contextIdSchema, rawId, 'context ID');
 
-      await removeContext(id);
-    }));
+        await removeContext(id);
+      })
+    );
 
   return command;
 }
@@ -285,10 +291,7 @@ async function removeContext(id: ContextId): Promise<void> {
       confirmed = true;
     } else if (rtCtx.nonInteractive) {
       db.close();
-      throw new NonInteractiveError(
-        'Context removal requires confirmation',
-        '--yes'
-      );
+      throw new NonInteractiveError('Context removal requires confirmation', '--yes');
     } else {
       confirmed = await confirm({
         message: 'Are you sure you want to remove this context?',

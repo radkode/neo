@@ -399,8 +399,12 @@ export class BashIntegration implements ShellIntegration {
     const existingSection = this.extractNeoSection(content);
     let neoContent = '';
     if (existingSection) {
-      const lines = existingSection.split('\n')
-        .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+      const lines = existingSection
+        .split('\n')
+        .filter(
+          (line) =>
+            !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END)
+        )
         .filter((line) => !line.trim().startsWith(`alias ${alias}=`))
         .filter((line) => line.trim() !== '');
       neoContent = lines.join('\n');
@@ -415,8 +419,12 @@ export class BashIntegration implements ShellIntegration {
     const content = await this.readRc();
     const existingSection = this.extractNeoSection(content);
     if (!existingSection) return;
-    const lines = existingSection.split('\n')
-      .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+    const lines = existingSection
+      .split('\n')
+      .filter(
+        (line) =>
+          !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END)
+      )
       .filter((line) => !line.trim().startsWith(`alias ${alias}=`))
       .filter((line) => line.trim() !== '');
     if (lines.length === 0) {
@@ -439,8 +447,12 @@ export class BashIntegration implements ShellIntegration {
     const existingSection = this.extractNeoSection(content);
     let neoContent = '';
     if (existingSection) {
-      const lines = existingSection.split('\n')
-        .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+      const lines = existingSection
+        .split('\n')
+        .filter(
+          (line) =>
+            !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END)
+        )
         .filter((line) => !line.includes('neo.bash'))
         .filter((line) => !line.includes('Neo CLI completions'))
         .filter((line) => line.trim() !== '');
@@ -456,8 +468,12 @@ export class BashIntegration implements ShellIntegration {
     const content = await this.readRc();
     const existingSection = this.extractNeoSection(content);
     if (!existingSection) return;
-    const lines = existingSection.split('\n')
-      .filter((line) => !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END))
+    const lines = existingSection
+      .split('\n')
+      .filter(
+        (line) =>
+          !line.trim().startsWith(NEO_MARKER_START) && !line.trim().startsWith(NEO_MARKER_END)
+      )
       .filter((line) => !line.includes('neo.bash'))
       .filter((line) => !line.includes('Neo CLI completions'))
       .filter((line) => line.trim() !== '');
@@ -533,7 +549,9 @@ export class FishIntegration implements ShellIntegration {
 
   async removeCompletions(): Promise<void> {
     // Fish completions are just a file — deleting handled externally
-    logger.debug('Fish completions can be removed by deleting neo.fish from the completions directory');
+    logger.debug(
+      'Fish completions can be removed by deleting neo.fish from the completions directory'
+    );
   }
 
   async backup(): Promise<string | null> {

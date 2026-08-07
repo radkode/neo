@@ -2,8 +2,24 @@
   "name": "@radkode/neo",
   "version": "1.8.2",
   "description": "Modern CLI toolkit with intelligent git workflows and configuration management",
-  "author": "Jacek Radko",
+  "keywords": [
+    "cli",
+    "typescript",
+    "commander",
+    "radkode",
+    "terminal",
+    "command-line"
+  ],
+  "homepage": "https://github.com/radkode/neo#readme",
+  "bugs": {
+    "url": "https://github.com/radkode/neo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/radkode/neo.git"
+  },
   "license": "MIT",
+  "author": "Jacek Radko",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,31 +31,12 @@
     "bin",
     "templates"
   ],
-  "keywords": [
-    "cli",
-    "typescript",
-    "commander",
-    "radkode",
-    "terminal",
-    "command-line"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/radkode/neo.git"
-  },
-  "bugs": {
-    "url": "https://github.com/radkode/neo/issues"
-  },
-  "homepage": "https://github.com/radkode/neo#readme",
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsc && tsc-alias",
     "changeset": "changeset",
+    "changeset:publish": "pnpm run build && changeset publish",
     "changeset:status": "changeset status",
     "changeset:version": "changeset version",
-    "changeset:publish": "pnpm run build && changeset publish",
     "dev": "tsx src/cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -48,17 +45,12 @@
     "prepublishOnly": "pnpm run build && pnpm run test",
     "release": "pnpm run build && pnpm run test && changeset publish",
     "start": "node dist/cli.js",
+    "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test": "vitest run",
     "unlink-local": "pnpm unlink --global @radkode/neo",
     "version-packages": "changeset version && pnpm install --lockfile-only"
   },
-  "engines": {
-    "node": ">=22.13.0",
-    "pnpm": ">=11.0.0"
-  },
-  "packageManager": "pnpm@11.3.0",
   "dependencies": {
     "@commander-js/extra-typings": "^15.0.0",
     "@inquirer/prompts": "^8.5.2",
@@ -85,10 +77,18 @@
     "globals": "^17.9.0",
     "jiti": "^2.7.0",
     "prettier": "^3.9.6",
-    "prettier-plugin-packagejson": "^2.5.20",
+    "prettier-plugin-packagejson": "^3.0.2",
     "tsc-alias": "^1.9.1",
     "tsx": "^4.23.8",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@11.3.0",
+  "engines": {
+    "node": ">=22.13.0",
+    "pnpm": ">=11.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

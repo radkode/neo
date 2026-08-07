@@ -144,7 +144,7 @@ describe('ContextDB', () => {
       const contexts = db.listContexts();
 
       // Semantic priority order: critical > high > medium > low
-      const priorities = contexts.map(c => c.priority);
+      const priorities = contexts.map((c) => c.priority);
 
       expect(contexts).toHaveLength(4);
       expect(priorities).toEqual(['critical', 'high', 'medium', 'low']);
@@ -287,7 +287,7 @@ describe('ContextDB', () => {
       const originalUpdatedAt = added.updated_at;
 
       // Wait a bit to ensure different timestamp
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const updated = db.updateContext(added.id, {
         content: 'New content',
@@ -425,7 +425,7 @@ describe('ContextDB', () => {
       );
 
       expect(results).toHaveLength(10);
-      const ids = new Set(results.map(r => r.id));
+      const ids = new Set(results.map((r) => r.id));
       expect(ids.size).toBe(10); // All unique IDs
     });
   });

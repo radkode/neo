@@ -534,7 +534,9 @@ describe('CompletionGenerator', () => {
       await CompletionGenerator.createCompletionFiles('/test/completions', program);
 
       // Should contain actual commands from the program
-      const zshCall = vi.mocked(writeFile).mock.calls.find((c) => c[0] === '/test/completions/_neo');
+      const zshCall = vi
+        .mocked(writeFile)
+        .mock.calls.find((c) => c[0] === '/test/completions/_neo');
       expect(zshCall).toBeDefined();
       const content = zshCall![1] as string;
       expect(content).toContain("'completions:");
@@ -546,17 +548,15 @@ describe('CompletionGenerator', () => {
 
       await CompletionGenerator.createCompletionFiles('/test/completions');
 
-      expect(logger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Created completion file')
-      );
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Created completion file'));
     });
 
     it('should throw on mkdir error', async () => {
       vi.mocked(mkdir).mockRejectedValue(new Error('Permission denied'));
 
-      await expect(
-        CompletionGenerator.createCompletionFiles('/test/completions')
-      ).rejects.toThrow('Permission denied');
+      await expect(CompletionGenerator.createCompletionFiles('/test/completions')).rejects.toThrow(
+        'Permission denied'
+      );
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('Failed to create completion files')
@@ -567,9 +567,9 @@ describe('CompletionGenerator', () => {
       vi.mocked(mkdir).mockResolvedValue(undefined);
       vi.mocked(writeFile).mockRejectedValue(new Error('Write failed'));
 
-      await expect(
-        CompletionGenerator.createCompletionFiles('/test/completions')
-      ).rejects.toThrow('Write failed');
+      await expect(CompletionGenerator.createCompletionFiles('/test/completions')).rejects.toThrow(
+        'Write failed'
+      );
 
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('Failed to create completion files')

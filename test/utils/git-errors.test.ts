@@ -160,13 +160,17 @@ describe('detectGitError', () => {
 
       // This will actually match MERGE_CONFLICT due to "conflict" pattern
       // The actual implementation matches patterns in order
-      expect([GitErrorCode.MERGE_CONFLICT, GitErrorCode.REBASE_CONFLICT]).toContain(result.gitErrorCode);
+      expect([GitErrorCode.MERGE_CONFLICT, GitErrorCode.REBASE_CONFLICT]).toContain(
+        result.gitErrorCode
+      );
     });
   });
 
   describe('NON_FAST_FORWARD', () => {
     it('should detect non-fast-forward errors', () => {
-      const error = new Error('Updates were rejected because the tip of your current branch is behind');
+      const error = new Error(
+        'Updates were rejected because the tip of your current branch is behind'
+      );
       const result = detectGitError(error, context);
 
       expect(result.gitErrorCode).toBe(GitErrorCode.NON_FAST_FORWARD);
@@ -210,11 +214,15 @@ describe('detectGitError', () => {
       // Note: "no such ref was fetched" is shared between NO_UPSTREAM and REMOTE_BRANCH_DELETED
       // NO_UPSTREAM comes first in the patterns array, so it matches first
       // This tests the actual behavior of the implementation
-      const error = new Error("Your configuration specifies to merge... but no such ref was fetched");
+      const error = new Error(
+        'Your configuration specifies to merge... but no such ref was fetched'
+      );
       const result = detectGitError(error, context);
 
       // Either NO_UPSTREAM or REMOTE_BRANCH_DELETED depending on pattern order
-      expect([GitErrorCode.NO_UPSTREAM, GitErrorCode.REMOTE_BRANCH_DELETED]).toContain(result.gitErrorCode);
+      expect([GitErrorCode.NO_UPSTREAM, GitErrorCode.REMOTE_BRANCH_DELETED]).toContain(
+        result.gitErrorCode
+      );
     });
   });
 

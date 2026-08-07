@@ -103,7 +103,17 @@ export function walkCommandTree(command: Command): CommandNode {
   }
 
   const args: ArgumentNode[] = [];
-  for (const arg of (command as unknown as { registeredArguments: Array<{ _name: string; description: string; required: boolean; variadic: boolean; argChoices?: string[] }> }).registeredArguments ?? []) {
+  for (const arg of (
+    command as unknown as {
+      registeredArguments: Array<{
+        _name: string;
+        description: string;
+        required: boolean;
+        variadic: boolean;
+        argChoices?: string[];
+      }>;
+    }
+  ).registeredArguments ?? []) {
     const argNode: ArgumentNode = {
       name: arg._name,
       description: arg.description ?? '',
@@ -127,7 +137,8 @@ export function walkCommandTree(command: Command): CommandNode {
     options,
     arguments: args,
     subcommands,
-    allowUnknownOption: (command as unknown as { _allowUnknownOption: boolean })._allowUnknownOption ?? false,
+    allowUnknownOption:
+      (command as unknown as { _allowUnknownOption: boolean })._allowUnknownOption ?? false,
   };
 }
 
@@ -270,7 +281,11 @@ function formatZshOption(opt: OptionNode): string {
   return `${longFlag}=[${desc}]:${opt.long}:`;
 }
 
-function formatZshArgument(arg: ArgumentNode, position: number, parentNode: CommandNode): string | null {
+function formatZshArgument(
+  arg: ArgumentNode,
+  position: number,
+  parentNode: CommandNode
+): string | null {
   const desc = arg.description.replace(/'/g, "'\\''");
 
   // Check for dynamic completions based on context
@@ -300,7 +315,12 @@ function formatZshArgument(arg: ArgumentNode, position: number, parentNode: Comm
 
 function isGitContext(node: CommandNode): boolean {
   // Check if any parent context relates to git
-  return node.name === 'add' || node.name === 'remove' || node.name === 'switch' || node.name === 'branch';
+  return (
+    node.name === 'add' ||
+    node.name === 'remove' ||
+    node.name === 'switch' ||
+    node.name === 'branch'
+  );
 }
 
 // === Bash Generator ===
@@ -396,7 +416,9 @@ function generateBashSubcommandCase(node: CommandNode, lines: string[], depth: n
       // Handle dynamic completions for specific contexts
       if (node.name === 'git' && sub.name === 'commit') {
         lines.push(`${indent}    if [[ "$prev" == "--type" || "$prev" == "-t" ]]; then`);
-        lines.push(`${indent}      COMPREPLY=($(compgen -W "${COMMIT_TYPES.join(' ')}" -- "$cur"))`);
+        lines.push(
+          `${indent}      COMPREPLY=($(compgen -W "${COMMIT_TYPES.join(' ')}" -- "$cur"))`
+        );
         lines.push(`${indent}    else`);
         lines.push(`${indent}      COMPREPLY=($(compgen -W "${subOpts}" -- "$cur"))`);
         lines.push(`${indent}    fi`);
@@ -602,32 +624,186 @@ function buildFallbackTree(): CommandNode {
     name: 'neo',
     description: 'Neo CLI',
     options: [
-      { flags: '-v, --verbose', long: 'verbose', short: 'v', description: 'Enable verbose logging', required: false, isBoolean: true, isVariadic: false },
-      { flags: '-c, --config <path>', long: 'config', short: 'c', description: 'Path to config file', required: false, isBoolean: false, isVariadic: false, argName: 'path' },
-      { flags: '--no-color', long: 'color', description: 'Disable colored output', required: false, isBoolean: true, isVariadic: false },
-      { flags: '--no-banner', long: 'banner', description: 'Hide banner', required: false, isBoolean: true, isVariadic: false },
+      {
+        flags: '-v, --verbose',
+        long: 'verbose',
+        short: 'v',
+        description: 'Enable verbose logging',
+        required: false,
+        isBoolean: true,
+        isVariadic: false,
+      },
+      {
+        flags: '-c, --config <path>',
+        long: 'config',
+        short: 'c',
+        description: 'Path to config file',
+        required: false,
+        isBoolean: false,
+        isVariadic: false,
+        argName: 'path',
+      },
+      {
+        flags: '--no-color',
+        long: 'color',
+        description: 'Disable colored output',
+        required: false,
+        isBoolean: true,
+        isVariadic: false,
+      },
+      {
+        flags: '--no-banner',
+        long: 'banner',
+        description: 'Hide banner',
+        required: false,
+        isBoolean: true,
+        isVariadic: false,
+      },
     ],
     arguments: [],
     subcommands: [
-      { name: 'init', description: 'Install and configure Neo CLI globally', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      { name: 'config', description: 'Manage configuration', options: [], arguments: [], subcommands: [
-        { name: 'get', description: 'Get a configuration value', options: [], arguments: [{ name: 'key', description: 'Configuration key', required: true, variadic: false }], subcommands: [], allowUnknownOption: false },
-        { name: 'set', description: 'Set a configuration value', options: [], arguments: [{ name: 'key', description: 'Configuration key', required: true, variadic: false }], subcommands: [], allowUnknownOption: false },
-        { name: 'list', description: 'List all configuration values', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      ], allowUnknownOption: false },
-      { name: 'git', description: 'Git operations and utilities', options: [], arguments: [], subcommands: [
-        { name: 'commit', description: 'Create a conventional commit', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-        { name: 'push', description: 'Push commits to remote repository', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-        { name: 'pull', description: 'Pull changes from remote repository', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-        { name: 'branch', description: 'Analyze and manage local git branches', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-        { name: 'stash', description: 'Interactively manage git stashes', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-        { name: 'worktree', description: 'Manage git worktrees', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      ], allowUnknownOption: false },
-      { name: 'gh', description: 'GitHub CLI operations', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      { name: 'pr', description: 'Create a pull request', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      { name: 'alias', description: 'Manage shell aliases', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      { name: 'update', description: 'Update Neo CLI to the latest version', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
-      { name: 'agent', description: 'Manage AI agent context and configuration', options: [], arguments: [], subcommands: [], allowUnknownOption: false },
+      {
+        name: 'init',
+        description: 'Install and configure Neo CLI globally',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'config',
+        description: 'Manage configuration',
+        options: [],
+        arguments: [],
+        subcommands: [
+          {
+            name: 'get',
+            description: 'Get a configuration value',
+            options: [],
+            arguments: [
+              { name: 'key', description: 'Configuration key', required: true, variadic: false },
+            ],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'set',
+            description: 'Set a configuration value',
+            options: [],
+            arguments: [
+              { name: 'key', description: 'Configuration key', required: true, variadic: false },
+            ],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'list',
+            description: 'List all configuration values',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+        ],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'git',
+        description: 'Git operations and utilities',
+        options: [],
+        arguments: [],
+        subcommands: [
+          {
+            name: 'commit',
+            description: 'Create a conventional commit',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'push',
+            description: 'Push commits to remote repository',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'pull',
+            description: 'Pull changes from remote repository',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'branch',
+            description: 'Analyze and manage local git branches',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'stash',
+            description: 'Interactively manage git stashes',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+          {
+            name: 'worktree',
+            description: 'Manage git worktrees',
+            options: [],
+            arguments: [],
+            subcommands: [],
+            allowUnknownOption: false,
+          },
+        ],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'gh',
+        description: 'GitHub CLI operations',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'pr',
+        description: 'Create a pull request',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'alias',
+        description: 'Manage shell aliases',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'update',
+        description: 'Update Neo CLI to the latest version',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
+      {
+        name: 'agent',
+        description: 'Manage AI agent context and configuration',
+        options: [],
+        arguments: [],
+        subcommands: [],
+        allowUnknownOption: false,
+      },
     ],
     allowUnknownOption: false,
   };

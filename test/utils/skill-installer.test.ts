@@ -17,13 +17,7 @@ describe('installClaudeSkill', () => {
     originalHome = process.env['HOME'];
     process.env['HOME'] = tmpHome;
 
-    bundledTemplatePath = join(
-      process.cwd(),
-      'templates',
-      'skills',
-      'neo',
-      'SKILL.md'
-    );
+    bundledTemplatePath = join(process.cwd(), 'templates', 'skills', 'neo', 'SKILL.md');
     await stat(bundledTemplatePath); // throws if missing
   });
 
@@ -45,9 +39,7 @@ describe('installClaudeSkill', () => {
 
     expect(result).not.toBeNull();
     expect(result!.status).toBe('installed');
-    expect(result!.destination).toBe(
-      join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md')
-    );
+    expect(result!.destination).toBe(join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'));
 
     const dest = await readFile(result!.destination, 'utf8');
     const src = await readFile(bundledTemplatePath, 'utf8');
@@ -57,10 +49,7 @@ describe('installClaudeSkill', () => {
   it('reports unchanged when destination already matches', async () => {
     await mkdir(join(tmpHome, '.claude', 'skills', 'neo'), { recursive: true });
     const src = await readFile(bundledTemplatePath);
-    await writeFile(
-      join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'),
-      src
-    );
+    await writeFile(join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'), src);
 
     const result = await installClaudeSkill();
     expect(result!.status).toBe('unchanged');
@@ -68,27 +57,18 @@ describe('installClaudeSkill', () => {
 
   it('skips when destination diverges and force is not set', async () => {
     await mkdir(join(tmpHome, '.claude', 'skills', 'neo'), { recursive: true });
-    await writeFile(
-      join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'),
-      'custom user content'
-    );
+    await writeFile(join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'), 'custom user content');
 
     const result = await installClaudeSkill();
     expect(result!.status).toBe('skipped-divergent');
 
-    const after = await readFile(
-      join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'),
-      'utf8'
-    );
+    const after = await readFile(join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'), 'utf8');
     expect(after).toBe('custom user content');
   });
 
   it('overwrites a divergent destination when force is set', async () => {
     await mkdir(join(tmpHome, '.claude', 'skills', 'neo'), { recursive: true });
-    await writeFile(
-      join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'),
-      'custom user content'
-    );
+    await writeFile(join(tmpHome, '.claude', 'skills', 'neo', 'SKILL.md'), 'custom user content');
 
     const result = await installClaudeSkill({ force: true });
     expect(result!.status).toBe('updated');

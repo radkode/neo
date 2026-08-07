@@ -9,7 +9,10 @@ import { configManager, DEFAULT_CONFIG, type NeoConfig } from '@/utils/config.js
  * Profile data structure (subset of NeoConfig relevant to profiles)
  * Excludes system-level fields like installation and updates
  */
-export type ProfileConfig = Omit<NeoConfig, 'activeProfile' | 'autoSwitch' | 'installation' | 'updates'>;
+export type ProfileConfig = Omit<
+  NeoConfig,
+  'activeProfile' | 'autoSwitch' | 'installation' | 'updates'
+>;
 
 /**
  * Manages configuration profiles for Neo CLI

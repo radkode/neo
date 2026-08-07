@@ -274,7 +274,9 @@ async function getStashDiff(stashRef: string): Promise<string> {
 /**
  * Get stash file stats
  */
-async function getStashStats(stashRef: string): Promise<{ files: string[]; additions: number; deletions: number }> {
+async function getStashStats(
+  stashRef: string
+): Promise<{ files: string[]; additions: number; deletions: number }> {
   try {
     const { stdout: nameOutput } = await execa('git', ['stash', 'show', '--name-only', stashRef]);
     const files = nameOutput.trim() ? nameOutput.trim().split('\n') : [];
@@ -589,12 +591,14 @@ Examples:
     $ neo git stash --json
 `
     )
-    .action(runAction(async () => {
-      const result = await executeStash();
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+    .action(
+      runAction(async () => {
+        const result = await executeStash();
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

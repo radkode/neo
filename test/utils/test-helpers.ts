@@ -254,7 +254,11 @@ export function createExecaMock(config: ExecaMockConfig = {}) {
       if (response instanceof Error) {
         throw response;
       }
-      return { stdout: response.stdout ?? '', stderr: response.stderr ?? '', exitCode: response.exitCode ?? 0 };
+      return {
+        stdout: response.stdout ?? '',
+        stderr: response.stderr ?? '',
+        exitCode: response.exitCode ?? 0,
+      };
     }
 
     // Check for command prefix match (e.g., 'git status' matches 'git status --porcelain')
@@ -263,11 +267,19 @@ export function createExecaMock(config: ExecaMockConfig = {}) {
         if (response instanceof Error) {
           throw response;
         }
-        return { stdout: response.stdout ?? '', stderr: response.stderr ?? '', exitCode: response.exitCode ?? 0 };
+        return {
+          stdout: response.stdout ?? '',
+          stderr: response.stderr ?? '',
+          exitCode: response.exitCode ?? 0,
+        };
       }
     }
 
-    return { stdout: defaultResponse.stdout ?? '', stderr: defaultResponse.stderr ?? '', exitCode: defaultResponse.exitCode ?? 0 };
+    return {
+      stdout: defaultResponse.stdout ?? '',
+      stderr: defaultResponse.stderr ?? '',
+      exitCode: defaultResponse.exitCode ?? 0,
+    };
   });
 }
 
@@ -288,7 +300,11 @@ export function createSequentialExecaMock(responses: (ExecaResponse | Error)[]) 
     if (response instanceof Error) {
       throw response;
     }
-    return { stdout: response.stdout ?? '', stderr: response.stderr ?? '', exitCode: response.exitCode ?? 0 };
+    return {
+      stdout: response.stdout ?? '',
+      stderr: response.stderr ?? '',
+      exitCode: response.exitCode ?? 0,
+    };
   });
 }
 
@@ -346,10 +362,7 @@ export function failureResult<E>(error: E) {
  * @example
  * expectCalledWithPattern(execaMock, ['git', ['push', 'origin', expect.any(String)]]);
  */
-export function expectCalledWithPattern(
-  mock: ReturnType<typeof vi.fn>,
-  pattern: unknown[]
-) {
+export function expectCalledWithPattern(mock: ReturnType<typeof vi.fn>, pattern: unknown[]) {
   const calls = mock.mock.calls;
   const match = calls.some((call) => {
     if (call.length !== pattern.length) return false;

@@ -211,7 +211,9 @@ function sleep(ms: number): Promise<void> {
 /**
  * Generate a commit message using AI
  */
-export async function generateCommitMessage(request: AICommitRequest): Promise<Result<AICommitResponse>> {
+export async function generateCommitMessage(
+  request: AICommitRequest
+): Promise<Result<AICommitResponse>> {
   // Check if diff is too large
   if (isDiffTooLarge(request.diff)) {
     return failure(AIErrors.tokenLimitExceeded(getDiffSize(request.diff)));
@@ -250,9 +252,7 @@ const PR_MAX_TOKENS = 2000;
  * Returns a Result so callers can distinguish missing-key / network / parse
  * errors without throwing.
  */
-export async function generatePrDescription(
-  request: AIPrRequest
-): Promise<Result<AIPrResponse>> {
+export async function generatePrDescription(request: AIPrRequest): Promise<Result<AIPrResponse>> {
   if (isCommitListTooLarge(request.commits, request.diff)) {
     return failure(AIErrors.tokenLimitExceeded(request.diff.length));
   }

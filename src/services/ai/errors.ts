@@ -47,13 +47,17 @@ export const AIErrors = {
    * API key is not configured
    */
   missingApiKey(): AIError {
-    return new AIError(AIErrorCode.MISSING_API_KEY, 'ANTHROPIC_API_KEY environment variable is not set', {
-      suggestions: [
-        'Set the ANTHROPIC_API_KEY environment variable',
-        'Get an API key at https://console.anthropic.com',
-        'Add to your shell profile: export ANTHROPIC_API_KEY="your-key"',
-      ],
-    });
+    return new AIError(
+      AIErrorCode.MISSING_API_KEY,
+      'ANTHROPIC_API_KEY environment variable is not set',
+      {
+        suggestions: [
+          'Set the ANTHROPIC_API_KEY environment variable',
+          'Get an API key at https://console.anthropic.com',
+          'Add to your shell profile: export ANTHROPIC_API_KEY="your-key"',
+        ],
+      }
+    );
   },
 
   /**
@@ -78,7 +82,10 @@ export const AIErrors = {
 
     return new AIError(AIErrorCode.RATE_LIMITED, message, {
       context: { retryAfter },
-      suggestions: ['Wait a moment and try again', 'Check your API usage at https://console.anthropic.com'],
+      suggestions: [
+        'Wait a moment and try again',
+        'Check your API usage at https://console.anthropic.com',
+      ],
     });
   },
 
@@ -106,7 +113,10 @@ export const AIErrors = {
   invalidResponse(rawResponse: string): AIError {
     return new AIError(AIErrorCode.INVALID_RESPONSE, 'Failed to parse AI response', {
       context: { rawResponse: rawResponse.slice(0, 500) },
-      suggestions: ['Try again - AI responses can vary', 'Use the interactive wizard instead: neo git commit'],
+      suggestions: [
+        'Try again - AI responses can vary',
+        'Use the interactive wizard instead: neo git commit',
+      ],
     });
   },
 
@@ -114,14 +124,18 @@ export const AIErrors = {
    * Network error during API call
    */
   networkError(error: Error): AIError {
-    return new AIError(AIErrorCode.NETWORK_ERROR, `Failed to connect to AI service: ${error.message}`, {
-      originalError: error,
-      suggestions: [
-        'Check your internet connection',
-        'Verify the Anthropic API is available',
-        'Try again in a moment',
-      ],
-    });
+    return new AIError(
+      AIErrorCode.NETWORK_ERROR,
+      `Failed to connect to AI service: ${error.message}`,
+      {
+        originalError: error,
+        suggestions: [
+          'Check your internet connection',
+          'Verify the Anthropic API is available',
+          'Try again in a moment',
+        ],
+      }
+    );
   },
 
   /**

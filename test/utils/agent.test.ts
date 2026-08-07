@@ -263,9 +263,7 @@ describe('Agent utilities', () => {
       vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
       vi.mocked(writeFile).mockRejectedValue(new Error('Write failed'));
 
-      await expect(saveAgentConfig(config)).rejects.toThrow(
-        'Failed to save agent configuration'
-      );
+      await expect(saveAgentConfig(config)).rejects.toThrow('Failed to save agent configuration');
     });
   });
 

@@ -91,11 +91,13 @@ describe('GlobalInstaller', () => {
   describe('isInstalledGlobally', () => {
     it('should return true when package is installed', async () => {
       execaMock.mockResolvedValue({
-        stdout: JSON.stringify([{
-          dependencies: {
-            '@radkode/neo': { version: '1.0.0' },
+        stdout: JSON.stringify([
+          {
+            dependencies: {
+              '@radkode/neo': { version: '1.0.0' },
+            },
           },
-        }]),
+        ]),
         stderr: '',
       });
 
@@ -161,11 +163,13 @@ describe('GlobalInstaller', () => {
   describe('getInstalledVersion', () => {
     it('should return installed version', async () => {
       execaMock.mockResolvedValue({
-        stdout: JSON.stringify([{
-          dependencies: {
-            '@radkode/neo': { version: '1.2.3' },
+        stdout: JSON.stringify([
+          {
+            dependencies: {
+              '@radkode/neo': { version: '1.2.3' },
+            },
           },
-        }]),
+        ]),
         stderr: '',
       });
 
@@ -213,17 +217,21 @@ describe('GlobalInstaller', () => {
 
       // isInstalledGlobally check
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '1.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '1.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 
       // getInstalledVersion
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '1.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '1.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 
@@ -341,9 +349,11 @@ describe('GlobalInstaller', () => {
 
       // But package still exists
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '1.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '1.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 
@@ -383,9 +393,11 @@ describe('GlobalInstaller', () => {
 
       // getInstalledVersion
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '2.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '2.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 
@@ -454,17 +466,21 @@ describe('GlobalInstaller', () => {
 
       // isInstalledGlobally
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '1.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '1.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 
       // getInstalledVersion
       execaMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([{
-          dependencies: { '@radkode/neo': { version: '1.0.0' } },
-        }]),
+        stdout: JSON.stringify([
+          {
+            dependencies: { '@radkode/neo': { version: '1.0.0' } },
+          },
+        ]),
         stderr: '',
       });
 

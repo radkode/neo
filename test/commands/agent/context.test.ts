@@ -134,7 +134,9 @@ describe('createAgentContextCommand', () => {
       vi.mocked(ContextDB.create).mockResolvedValue(mockDb as never);
 
       const command = createAgentContextCommand();
-      await command.parseAsync(['add', 'High priority context', '--priority', 'high'], { from: 'user' });
+      await command.parseAsync(['add', 'High priority context', '--priority', 'high'], {
+        from: 'user',
+      });
 
       expect(mockDb.addContext).toHaveBeenCalledWith({
         content: 'High priority context',
@@ -244,7 +246,9 @@ describe('createAgentContextCommand', () => {
       await command.parseAsync(['list'], { from: 'user' });
 
       expect(ui.warn).toHaveBeenCalledWith('No contexts found');
-      expect(ui.muted).toHaveBeenCalledWith('Add your first context with: neo agent context add "Your context here"');
+      expect(ui.muted).toHaveBeenCalledWith(
+        'Add your first context with: neo agent context add "Your context here"'
+      );
     });
 
     it('should exit when database path not found', async () => {

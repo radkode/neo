@@ -32,77 +32,81 @@ export function createCompletionsCommand(): Command {
   command
     .description('Generate or install shell completions')
     .argument('[shell]', 'shell type (zsh, bash, fish)')
-    .action(runAction(async (shell: string | undefined) => {
-      const shellType = (shell ?? detectShell()) as ShellType;
+    .action(
+      runAction(async (shell: string | undefined) => {
+        const shellType = (shell ?? detectShell()) as ShellType;
 
-      if (!SUPPORTED_SHELLS.includes(shellType as typeof SUPPORTED_SHELLS[number])) {
-        throw new Error(
-          `Unsupported shell: ${shellType}. Supported: ${SUPPORTED_SHELLS.join(', ')}`
-        );
-      }
+        if (!SUPPORTED_SHELLS.includes(shellType as (typeof SUPPORTED_SHELLS)[number])) {
+          throw new Error(
+            `Unsupported shell: ${shellType}. Supported: ${SUPPORTED_SHELLS.join(', ')}`
+          );
+        }
 
-      const rootProgram = getRootProgram(command);
-      const output = CompletionGenerator.generateCompletions(rootProgram, shellType);
-      // Completion scripts are the payload of this command — always stdout.
-      process.stdout.write(output);
-    }));
+        const rootProgram = getRootProgram(command);
+        const output = CompletionGenerator.generateCompletions(rootProgram, shellType);
+        // Completion scripts are the payload of this command — always stdout.
+        process.stdout.write(output);
+      })
+    );
 
   command
     .command('install')
     .description('Install completions for the current shell')
-    .action(runAction(async () => {
-      const shellType = detectShell();
-      const rootProgram = getRootProgram(command);
+    .action(
+      runAction(async () => {
+        const shellType = detectShell();
+        const rootProgram = getRootProgram(command);
 
-      const completionsPath = join(configManager.getConfigDir(), 'completions');
+        const completionsPath = join(configManager.getConfigDir(), 'completions');
 
-      const spinner = ui.spinner(`Installing ${shellType} completions`);
-      spinner.start();
+        const spinner = ui.spinner(`Installing ${shellType} completions`);
+        spinner.start();
 
-      try {
-        await CompletionGenerator.createCompletionFiles(completionsPath, rootProgram);
+        try {
+          await CompletionGenerator.createCompletionFiles(completionsPath, rootProgram);
 
-        let reload: string;
-        switch (shellType) {
-          case 'zsh': {
-            const zsh = new ZshIntegration();
-            await zsh.addCompletions(completionsPath);
-            spinner.succeed('ZSH completions installed');
-            reload = 'source ~/.zshrc';
-            break;
+          let reload: string;
+          switch (shellType) {
+            case 'zsh': {
+              const zsh = new ZshIntegration();
+              await zsh.addCompletions(completionsPath);
+              spinner.succeed('ZSH completions installed');
+              reload = 'source ~/.zshrc';
+              break;
+            }
+            case 'bash': {
+              const bash = new BashIntegration();
+              await bash.addCompletions(join(completionsPath, 'neo.bash'));
+              spinner.succeed('Bash completions installed');
+              reload = 'source ~/.bashrc';
+              break;
+            }
+            case 'fish': {
+              const fish = new FishIntegration();
+              await fish.addCompletions(join(completionsPath, 'neo.fish'));
+              spinner.succeed('Fish completions installed');
+              reload = '(auto-loaded in new Fish sessions)';
+              break;
+            }
           }
-          case 'bash': {
-            const bash = new BashIntegration();
-            await bash.addCompletions(join(completionsPath, 'neo.bash'));
-            spinner.succeed('Bash completions installed');
-            reload = 'source ~/.bashrc';
-            break;
-          }
-          case 'fish': {
-            const fish = new FishIntegration();
-            await fish.addCompletions(join(completionsPath, 'neo.fish'));
-            spinner.succeed('Fish completions installed');
-            reload = '(auto-loaded in new Fish sessions)';
-            break;
-          }
+
+          emitJson(
+            {
+              ok: true,
+              command: 'completions.install',
+              shell: shellType,
+              completionsPath,
+            },
+            {
+              text: () => ui.info(`Restart your terminal or run: ${reload}`),
+            }
+          );
+        } catch (error) {
+          spinner.fail('Failed to install completions');
+          throw error instanceof Error ? error : new Error(String(error));
         }
-
-        emitJson(
-          {
-            ok: true,
-            command: 'completions.install',
-            shell: shellType,
-            completionsPath,
-          },
-          {
-            text: () => ui.info(`Restart your terminal or run: ${reload}`),
-          }
-        );
-      } catch (error) {
-        spinner.fail('Failed to install completions');
-        throw error instanceof Error ? error : new Error(String(error));
-      }
-    }));
+      })
+    );
 
   return command;
 }

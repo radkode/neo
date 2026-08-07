@@ -85,12 +85,14 @@ function parseFilter(value: string | undefined): string[] | null {
     .filter(Boolean);
 }
 
-function pickScripts(scripts: Record<string, string>, only: string[] | null, skip: string[] | null): Script[] {
+function pickScripts(
+  scripts: Record<string, string>,
+  only: string[] | null,
+  skip: string[] | null
+): Script[] {
   const base = only ?? DEFAULT_SCRIPTS;
   const skipSet = new Set(skip ?? []);
-  return (base as readonly string[]).filter(
-    (s): s is Script => s in scripts && !skipSet.has(s)
-  );
+  return (base as readonly string[]).filter((s): s is Script => s in scripts && !skipSet.has(s));
 }
 
 function pmArgs(pm: PackageManager, script: string): string[] {
@@ -197,7 +199,9 @@ Examples:
               const passed = result.results.filter((r) => r.status === 'passed').length;
               const failed = result.results.filter((r) => r.status === 'failed').length;
               if (result.ok) {
-                ui.success(`All ${passed} script(s) passed in ${Math.round(result.totalDurationMs / 100) / 10}s`);
+                ui.success(
+                  `All ${passed} script(s) passed in ${Math.round(result.totalDurationMs / 100) / 10}s`
+                );
               } else {
                 ui.error(`${failed} of ${result.results.length} script(s) failed`);
               }

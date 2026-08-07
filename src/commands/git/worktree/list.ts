@@ -72,12 +72,14 @@ export async function executeWorktreeList(): Promise<Result<WorktreeInfo[]>> {
 export function createWorktreeListCommand(): Command {
   const command = new Command('list');
 
-  command.description('List all worktrees').action(runAction(async () => {
-    const result = await executeWorktreeList();
-    if (isFailure(result)) {
-      throw result.error;
-    }
-  }));
+  command.description('List all worktrees').action(
+    runAction(async () => {
+      const result = await executeWorktreeList();
+      if (isFailure(result)) {
+        throw result.error;
+      }
+    })
+  );
 
   return command;
 }

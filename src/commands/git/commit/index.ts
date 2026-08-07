@@ -92,7 +92,8 @@ async function getStagedFiles(): Promise<string[]> {
  * Check if error is "nothing to commit" error
  */
 function isNothingToCommitError(error: unknown): boolean {
-  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const errorMessage =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return errorMessage.includes('nothing to commit');
 }
 
@@ -325,8 +326,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     const runtimeCtx = getRuntimeContext();
     // Quick mode: all required fields provided OR agent mode with sensible inputs.
     // In non-interactive/yes mode, we can't prompt — require the essentials up front.
-    const quickMode =
-      options.type !== undefined && options.message !== undefined;
+    const quickMode = options.type !== undefined && options.message !== undefined;
 
     if (!quickMode && (runtimeCtx.yes || runtimeCtx.nonInteractive)) {
       if (!options.type || !options.message) {
@@ -506,18 +506,20 @@ Examples:
     $ neo git commit --ai --yes --json
 `
     )
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: GitCommitOptions = validate(
-        gitCommitOptionsSchema,
-        options,
-        'git commit options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: GitCommitOptions = validate(
+          gitCommitOptionsSchema,
+          options,
+          'git commit options'
+        );
 
-      const result = await executeCommit(validatedOptions);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+        const result = await executeCommit(validatedOptions);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

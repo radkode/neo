@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildCommitPrompt, parseCommitResponse, isDiffTooLarge, getDiffSize } from '@/services/ai/prompts.js';
+import {
+  buildCommitPrompt,
+  parseCommitResponse,
+  isDiffTooLarge,
+  getDiffSize,
+} from '@/services/ai/prompts.js';
 
 describe('AI commit prompts', () => {
   describe('buildCommitPrompt', () => {
@@ -115,7 +120,8 @@ describe('AI commit prompts', () => {
     });
 
     it('should parse JSON with extra text around it', () => {
-      const response = 'Here is the commit message:\n{"type":"docs","message":"update readme","breaking":false}\nLet me know if you need changes.';
+      const response =
+        'Here is the commit message:\n{"type":"docs","message":"update readme","breaking":false}\nLet me know if you need changes.';
 
       const result = parseCommitResponse(response);
 

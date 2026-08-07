@@ -219,29 +219,27 @@ describe('AI Service', () => {
       vi.mocked(secretsManager.getSecret).mockResolvedValue('sk-test-key');
 
       // First call fails with network error, second succeeds
-      mockFetch
-        .mockRejectedValueOnce(new Error('Network timeout'))
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            id: 'msg-123',
-            type: 'message',
-            role: 'assistant',
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  type: 'fix',
-                  message: 'fix bug',
-                  breaking: false,
-                }),
-              },
-            ],
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 50, output_tokens: 25 },
-          }),
-        });
+      mockFetch.mockRejectedValueOnce(new Error('Network timeout')).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'msg-123',
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                type: 'fix',
+                message: 'fix bug',
+                breaking: false,
+              }),
+            },
+          ],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 50, output_tokens: 25 },
+        }),
+      });
 
       const result = await generateCommitMessage(validRequest);
 

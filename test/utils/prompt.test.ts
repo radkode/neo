@@ -5,16 +5,8 @@ vi.mock('@inquirer/prompts', () => ({
 }));
 
 import { select } from '@inquirer/prompts';
-import {
-  NonInteractiveError,
-  promptSelect,
-  mayPrompt,
-  promptGate,
-} from '@/utils/prompt.js';
-import {
-  buildRuntimeContext,
-  setRuntimeContext,
-} from '@/utils/runtime-context.js';
+import { NonInteractiveError, promptSelect, mayPrompt, promptGate } from '@/utils/prompt.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 
 const promptMock = vi.mocked(select);
 
@@ -81,9 +73,9 @@ describe('promptSelect', () => {
   });
 
   it('throws when given no choices', async () => {
-    await expect(
-      promptSelect({ choices: [], message: 'pick' })
-    ).rejects.toThrow('No choices provided');
+    await expect(promptSelect({ choices: [], message: 'pick' })).rejects.toThrow(
+      'No choices provided'
+    );
   });
 
   it('attaches flag hint to NonInteractiveError for agent discoverability', async () => {

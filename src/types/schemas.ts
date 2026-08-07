@@ -170,7 +170,10 @@ export const aiApiKeySchema = z
  */
 export const aiModelSchema = z
   .string()
-  .regex(/^claude-/, 'Model must be a valid Claude model identifier (e.g., claude-haiku-4-5-20251001)');
+  .regex(
+    /^claude-/,
+    'Model must be a valid Claude model identifier (e.g., claude-haiku-4-5-20251001)'
+  );
 
 /**
  * Alias setup options schema

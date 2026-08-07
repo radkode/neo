@@ -173,7 +173,11 @@ describe('createUpdateCommand', () => {
 
       await command.parseAsync([''], { from: 'user' });
 
-      expect(execa).toHaveBeenCalledWith('pnpm', expect.arrayContaining(['add', '-g']), expect.any(Object));
+      expect(execa).toHaveBeenCalledWith(
+        'pnpm',
+        expect.arrayContaining(['add', '-g']),
+        expect.any(Object)
+      );
     });
 
     it('should detect yarn as package manager', async () => {
@@ -190,7 +194,11 @@ describe('createUpdateCommand', () => {
 
       await command.parseAsync([''], { from: 'user' });
 
-      expect(execa).toHaveBeenCalledWith('yarn', expect.arrayContaining(['global', 'add']), expect.any(Object));
+      expect(execa).toHaveBeenCalledWith(
+        'yarn',
+        expect.arrayContaining(['global', 'add']),
+        expect.any(Object)
+      );
     });
 
     it('should default to npm as package manager', async () => {
@@ -207,7 +215,11 @@ describe('createUpdateCommand', () => {
 
       await command.parseAsync([''], { from: 'user' });
 
-      expect(execa).toHaveBeenCalledWith('npm', expect.arrayContaining(['install', '-g']), expect.any(Object));
+      expect(execa).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['install', '-g']),
+        expect.any(Object)
+      );
     });
 
     it('should force reinstall with --force flag', async () => {
@@ -224,7 +236,11 @@ describe('createUpdateCommand', () => {
       await command.parseAsync(['--force'], { from: 'user' });
 
       expect(ui.warn).toHaveBeenCalledWith(expect.stringContaining('--force'));
-      expect(execa).toHaveBeenCalledWith('npm', expect.arrayContaining(['--force']), expect.any(Object));
+      expect(execa).toHaveBeenCalledWith(
+        'npm',
+        expect.arrayContaining(['--force']),
+        expect.any(Object)
+      );
     });
 
     it('should handle permission errors', async () => {

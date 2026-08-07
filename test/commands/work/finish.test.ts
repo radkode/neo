@@ -116,7 +116,9 @@ describe('executeWorkFinish', () => {
     execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
     execaMock.mockResolvedValueOnce({ stdout: 'main' } as never); // current branch === base
 
-    await expect(executeWorkFinish(undefined, {})).rejects.toThrow(/Refusing to delete base branch/);
+    await expect(executeWorkFinish(undefined, {})).rejects.toThrow(
+      /Refusing to delete base branch/
+    );
   });
 
   it('throws when the named branch does not exist locally', async () => {
@@ -199,7 +201,8 @@ describe('executeWorkFinish', () => {
     } as never); // gh pr list
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // pull
     execaMock.mockResolvedValueOnce({
-      stdout: 'worktree /repo\nbranch refs/heads/main\n\nworktree /repo/.worktrees/fix-foo\nbranch refs/heads/jacek/fix-foo\n',
+      stdout:
+        'worktree /repo\nbranch refs/heads/main\n\nworktree /repo/.worktrees/fix-foo\nbranch refs/heads/jacek/fix-foo\n',
     } as never); // worktree list
     // pathExists(/repo/.worktrees/fix-foo) — uses fs.access, not execa, but the
     // path is checked via access(). In the test process this path doesn't exist

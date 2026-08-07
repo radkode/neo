@@ -48,9 +48,7 @@ export function getWorktreesBaseDir(): string {
  */
 export function getWorktreePath(repoName: string, branchName: string): string {
   // Sanitize branch name (replace / with -, remove special chars)
-  const sanitizedBranch = branchName
-    .replace(/\//g, '-')
-    .replace(/[^a-zA-Z0-9-_]/g, '');
+  const sanitizedBranch = branchName.replace(/\//g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
   return join(getWorktreesBaseDir(), repoName, sanitizedBranch);
 }
 

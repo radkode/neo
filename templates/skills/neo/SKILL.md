@@ -29,17 +29,17 @@ For one-off commits outside this flow, use `neo git commit` (interactive convent
 
 ## Command map
 
-| Want to... | Use | Instead of |
-|---|---|---|
-| Push safely | `neo git push` | `git push` |
-| Pull without losing WIP | `neo git pull` | `git stash && git pull && git stash pop` |
-| Commit with conventional format | `neo git commit` (or `--ai`) | `git commit -m` |
-| Open a PR | `neo gh pr create --title ... --body ...` | `gh pr create` |
-| Generate a PR description | `neo ai pr --json --no-create` | hand-writing one |
-| Start a new branch | `neo work start <name>` | `git checkout -b` |
-| Ship a finished branch | `neo work ship` | push + `gh pr create` manually |
-| Clean up after merge | `neo work finish` | `git checkout main && git pull && git branch -D` |
-| Verify the repo is healthy | `neo verify` / `neo doctor` | ad-hoc checks |
+| Want to...                      | Use                                       | Instead of                                       |
+| ------------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| Push safely                     | `neo git push`                            | `git push`                                       |
+| Pull without losing WIP         | `neo git pull`                            | `git stash && git pull && git stash pop`         |
+| Commit with conventional format | `neo git commit` (or `--ai`)              | `git commit -m`                                  |
+| Open a PR                       | `neo gh pr create --title ... --body ...` | `gh pr create`                                   |
+| Generate a PR description       | `neo ai pr --json --no-create`            | hand-writing one                                 |
+| Start a new branch              | `neo work start <name>`                   | `git checkout -b`                                |
+| Ship a finished branch          | `neo work ship`                           | push + `gh pr create` manually                   |
+| Clean up after merge            | `neo work finish`                         | `git checkout main && git pull && git branch -D` |
+| Verify the repo is healthy      | `neo verify` / `neo doctor`               | ad-hoc checks                                    |
 
 ## Agent patterns
 

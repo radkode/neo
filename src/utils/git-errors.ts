@@ -325,7 +325,10 @@ export function isNetworkError(error: unknown): boolean {
  * Check if error is conflict error (merge or rebase)
  */
 export function isConflictError(error: unknown): boolean {
-  return isGitError(error, GitErrorCode.MERGE_CONFLICT) || isGitError(error, GitErrorCode.REBASE_CONFLICT);
+  return (
+    isGitError(error, GitErrorCode.MERGE_CONFLICT) ||
+    isGitError(error, GitErrorCode.REBASE_CONFLICT)
+  );
 }
 
 /**
@@ -439,13 +442,18 @@ export const GitErrors = {
   },
 
   remoteBranchDeleted(commandName: string, branchName: string): GitError {
-    return new GitError('Remote branch no longer exists!', GitErrorCode.REMOTE_BRANCH_DELETED, commandName, {
-      suggestions: [
-        `Your local branch "${branchName}" is tracking a remote branch that has been deleted`,
-        'Switch to main: git checkout main',
-        `Or set a new upstream: git branch --set-upstream-to=origin/${branchName} ${branchName}`,
-      ],
-    });
+    return new GitError(
+      'Remote branch no longer exists!',
+      GitErrorCode.REMOTE_BRANCH_DELETED,
+      commandName,
+      {
+        suggestions: [
+          `Your local branch "${branchName}" is tracking a remote branch that has been deleted`,
+          'Switch to main: git checkout main',
+          `Or set a new upstream: git branch --set-upstream-to=origin/${branchName} ${branchName}`,
+        ],
+      }
+    );
   },
 
   unknown(commandName: string, error?: unknown): GitError {
@@ -459,7 +467,12 @@ export const GitErrors = {
     if (error instanceof Error) {
       options.originalError = error;
     }
-    return new GitError(`Git command failed: ${commandName}`, GitErrorCode.UNKNOWN, commandName, options);
+    return new GitError(
+      `Git command failed: ${commandName}`,
+      GitErrorCode.UNKNOWN,
+      commandName,
+      options
+    );
   },
 
   stashNotFound(commandName: string): GitError {
@@ -472,13 +485,18 @@ export const GitErrors = {
   },
 
   stashApplyConflict(commandName: string): GitError {
-    return new GitError('Conflicts detected when applying stash!', GitErrorCode.STASH_APPLY_CONFLICT, commandName, {
-      suggestions: [
-        'Resolve conflicts manually in your editor',
-        'Stage resolved files: git add <files>',
-        'The stash was not dropped - you can retry after resolving',
-      ],
-    });
+    return new GitError(
+      'Conflicts detected when applying stash!',
+      GitErrorCode.STASH_APPLY_CONFLICT,
+      commandName,
+      {
+        suggestions: [
+          'Resolve conflicts manually in your editor',
+          'Stage resolved files: git add <files>',
+          'The stash was not dropped - you can retry after resolving',
+        ],
+      }
+    );
   },
 
   nothingToStash(commandName: string): GitError {
@@ -492,21 +510,31 @@ export const GitErrors = {
   },
 
   worktreeNotFound(commandName: string, path: string): GitError {
-    return new GitError(`Worktree not found: ${path}`, GitErrorCode.WORKTREE_NOT_FOUND, commandName, {
-      suggestions: [
-        'Use "neo git worktree list" to see available worktrees',
-        'The worktree may have been removed or the path is incorrect',
-      ],
-    });
+    return new GitError(
+      `Worktree not found: ${path}`,
+      GitErrorCode.WORKTREE_NOT_FOUND,
+      commandName,
+      {
+        suggestions: [
+          'Use "neo git worktree list" to see available worktrees',
+          'The worktree may have been removed or the path is incorrect',
+        ],
+      }
+    );
   },
 
   worktreeAlreadyExists(commandName: string, path: string): GitError {
-    return new GitError(`Worktree already exists at: ${path}`, GitErrorCode.WORKTREE_ALREADY_EXISTS, commandName, {
-      suggestions: [
-        'Use "neo git worktree list" to see existing worktrees',
-        'Remove the existing worktree first with "neo git worktree remove"',
-      ],
-    });
+    return new GitError(
+      `Worktree already exists at: ${path}`,
+      GitErrorCode.WORKTREE_ALREADY_EXISTS,
+      commandName,
+      {
+        suggestions: [
+          'Use "neo git worktree list" to see existing worktrees',
+          'Remove the existing worktree first with "neo git worktree remove"',
+        ],
+      }
+    );
   },
 
   worktreeBranchCheckedOut(commandName: string, branch: string): GitError {

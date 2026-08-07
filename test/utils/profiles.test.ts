@@ -63,7 +63,11 @@ describe('ProfileManager', () => {
       const manager = new ProfileManager();
 
       accessMock.mockResolvedValue(undefined);
-      readdirMock.mockResolvedValue(['default.json', 'work.json', 'personal.json'] as unknown as []);
+      readdirMock.mockResolvedValue([
+        'default.json',
+        'work.json',
+        'personal.json',
+      ] as unknown as []);
 
       const profiles = await manager.list();
 
@@ -213,9 +217,7 @@ describe('ProfileManager', () => {
         user: {},
       });
 
-      await expect(manager.delete('work')).rejects.toThrow(
-        "Cannot delete active profile 'work'"
-      );
+      await expect(manager.delete('work')).rejects.toThrow("Cannot delete active profile 'work'");
     });
   });
 

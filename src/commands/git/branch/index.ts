@@ -85,7 +85,12 @@ export async function executeBranch(options: GitBranchOptions): Promise<Result<v
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('no branches found')) {
-      return failure(GitErrors.unknown('branch', new Error('No local branches found. This repository appears to have no local branches.')));
+      return failure(
+        GitErrors.unknown(
+          'branch',
+          new Error('No local branches found. This repository appears to have no local branches.')
+        )
+      );
     }
 
     return failure(GitErrors.unknown('branch', error));
@@ -652,18 +657,20 @@ Examples:
     $ neo git branch --yes
 `
     )
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: GitBranchOptions = validate(
-        gitBranchOptionsSchema,
-        options,
-        'git branch options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: GitBranchOptions = validate(
+          gitBranchOptionsSchema,
+          options,
+          'git branch options'
+        );
 
-      const result = await executeBranch(validatedOptions);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+        const result = await executeBranch(validatedOptions);
+        if (isFailure(result)) {
+          throw result.error;
+        }
+      })
+    );
 
   return command;
 }

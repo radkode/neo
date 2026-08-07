@@ -302,52 +302,54 @@ Examples:
 `
     )
     .allowUnknownOption()
-    .action(runAction(async (args: string[], opts) => {
-      // Parse args to extract remote, branch, and passthrough options
-      // Options start with - or --, positional args are remote and branch
-      const passthrough: string[] = [];
-      const positionalArgs: string[] = [];
+    .action(
+      runAction(async (args: string[], opts) => {
+        // Parse args to extract remote, branch, and passthrough options
+        // Options start with - or --, positional args are remote and branch
+        const passthrough: string[] = [];
+        const positionalArgs: string[] = [];
 
-      for (const arg of args) {
-        // Skip our known options
-        if (arg === '--dry-run') {
-          continue;
+        for (const arg of args) {
+          // Skip our known options
+          if (arg === '--dry-run') {
+            continue;
+          }
+
+          if (arg.startsWith('-')) {
+            // This is an option to pass through to git
+            passthrough.push(arg);
+          } else {
+            // This is a positional argument (remote or branch)
+            positionalArgs.push(arg);
+          }
         }
 
-        if (arg.startsWith('-')) {
-          // This is an option to pass through to git
-          passthrough.push(arg);
-        } else {
-          // This is a positional argument (remote or branch)
-          positionalArgs.push(arg);
+        // First positional is remote, second is branch
+        const remote = positionalArgs[0];
+        const branch = positionalArgs[1];
+
+        const typedOpts = opts as {
+          dryRun?: boolean;
+          forceMain?: boolean;
+          onReject?: 'pull-rebase' | 'force' | 'cancel';
+        };
+        const options: PushOptions = {
+          dryRun: typedOpts.dryRun,
+          passthrough,
+          remote,
+          branch,
+          forceMain: typedOpts.forceMain,
+          onReject: typedOpts.onReject,
+        };
+
+        logger.debug(`Options: ${JSON.stringify(options)}`);
+
+        const result = await executePush(options);
+        if (isFailure(result)) {
+          throw result.error;
         }
-      }
-
-      // First positional is remote, second is branch
-      const remote = positionalArgs[0];
-      const branch = positionalArgs[1];
-
-      const typedOpts = opts as {
-        dryRun?: boolean;
-        forceMain?: boolean;
-        onReject?: 'pull-rebase' | 'force' | 'cancel';
-      };
-      const options: PushOptions = {
-        dryRun: typedOpts.dryRun,
-        passthrough,
-        remote,
-        branch,
-        forceMain: typedOpts.forceMain,
-        onReject: typedOpts.onReject,
-      };
-
-      logger.debug(`Options: ${JSON.stringify(options)}`);
-
-      const result = await executePush(options);
-      if (isFailure(result)) {
-        throw result.error;
-      }
-    }));
+      })
+    );
 
   return command;
 }

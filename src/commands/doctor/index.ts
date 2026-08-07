@@ -278,7 +278,8 @@ async function checkAnthropicKey(): Promise<CheckResult> {
     name: 'anthropicKey',
     status: 'warn',
     message: 'No Anthropic API key configured.',
-    suggestion: 'Set $ANTHROPIC_API_KEY or run `neo config set ai.apiKey <key>` — required for `neo git commit --ai`.',
+    suggestion:
+      'Set $ANTHROPIC_API_KEY or run `neo config set ai.apiKey <key>` — required for `neo git commit --ai`.',
   };
 }
 
@@ -323,7 +324,9 @@ export function createDoctorCommand(): Command {
   const command = new Command('doctor');
 
   command
-    .description('Diagnose the local Neo setup — node version, package managers, git/gh, config, and API keys')
+    .description(
+      'Diagnose the local Neo setup — node version, package managers, git/gh, config, and API keys'
+    )
     .addHelpText(
       'after',
       `

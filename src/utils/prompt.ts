@@ -142,10 +142,7 @@ export interface PasswordPromptOptions {
  * Prompt for a password/secret with masked input.
  * In non-interactive mode, reads from the env var if provided, otherwise throws.
  */
-export async function promptPassword({
-  message,
-  envVar,
-}: PasswordPromptOptions): Promise<string> {
+export async function promptPassword({ message, envVar }: PasswordPromptOptions): Promise<string> {
   const ctx = getRuntimeContext();
 
   if (envVar && process.env[envVar]) {
@@ -153,10 +150,7 @@ export async function promptPassword({
   }
 
   if (ctx.nonInteractive) {
-    throw new NonInteractiveError(
-      message,
-      envVar ? `$${envVar} env var` : undefined
-    );
+    throw new NonInteractiveError(message, envVar ? `$${envVar} env var` : undefined);
   }
 
   return new Promise((resolve) => {

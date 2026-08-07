@@ -24,15 +24,17 @@ export function createAgentInitCommand(): Command {
     .description('Initialize agent context management in the current project')
     .option('--project <name>', 'project name')
     .option('--force', 'force initialization even if already initialized')
-    .action(runAction(async (options: unknown) => {
-      const validatedOptions: AgentInitOptions = validate(
-        agentInitOptionsSchema,
-        options,
-        'agent init options'
-      );
+    .action(
+      runAction(async (options: unknown) => {
+        const validatedOptions: AgentInitOptions = validate(
+          agentInitOptionsSchema,
+          options,
+          'agent init options'
+        );
 
-      await initializeAgent(validatedOptions);
-    }));
+        await initializeAgent(validatedOptions);
+      })
+    );
 
   return command;
 }

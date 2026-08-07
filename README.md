@@ -17,12 +17,12 @@
 
 Daily CLI workflows have friction. Neo wraps familiar commands with sensible defaults and guardrails:
 
-| Friction | Neo's Solution |
-|----------|----------------|
-| Accidentally pushing to `main` | Interactive confirmation before main branch pushes |
-| Forgetting to pull before pushing | `neo git push` pulls first, then pushes |
-| Typing `git stash && git pull && git stash pop` | `neo git pull` handles it automatically |
-| Managing scattered config files | Unified `neo config` with secure secrets storage |
+| Friction                                        | Neo's Solution                                     |
+| ----------------------------------------------- | -------------------------------------------------- |
+| Accidentally pushing to `main`                  | Interactive confirmation before main branch pushes |
+| Forgetting to pull before pushing               | `neo git push` pulls first, then pushes            |
+| Typing `git stash && git pull && git stash pop` | `neo git pull` handles it automatically            |
+| Managing scattered config files                 | Unified `neo config` with secure secrets storage   |
 
 Neo doesn't replace your tools—it wraps them with opinions that prevent mistakes and save keystrokes.
 
@@ -111,20 +111,20 @@ Neo is built to be scripted and driven by AI coding agents (Claude Code, Cursor,
 
 ### Flags
 
-| Flag | What it does |
-|------|--------------|
-| `--json` | Emit a single JSON payload on stdout. Implies `--non-interactive` and `--quiet`. Errors come back as `{"error": {...}}`. |
-| `-y, --yes` | Auto-accept prompt defaults. Safe for idempotent operations; destructive actions still require an explicit flag like `--force`. |
-| `--non-interactive` | Fail fast with exit code `2` instead of prompting. Pair with `--yes` or the prompt-specific flag. |
-| `-q, --quiet` | Suppress banner, spinners, and decorative output. |
+| Flag                | What it does                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `--json`            | Emit a single JSON payload on stdout. Implies `--non-interactive` and `--quiet`. Errors come back as `{"error": {...}}`.        |
+| `-y, --yes`         | Auto-accept prompt defaults. Safe for idempotent operations; destructive actions still require an explicit flag like `--force`. |
+| `--non-interactive` | Fail fast with exit code `2` instead of prompting. Pair with `--yes` or the prompt-specific flag.                               |
+| `-q, --quiet`       | Suppress banner, spinners, and decorative output.                                                                               |
 
 ### Exit codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Command failure (see stderr/JSON error for details) |
-| `2` | Non-interactive prompt required — pass the missing flag |
+| Code | Meaning                                                 |
+| ---- | ------------------------------------------------------- |
+| `0`  | Success                                                 |
+| `1`  | Command failure (see stderr/JSON error for details)     |
+| `2`  | Non-interactive prompt required — pass the missing flag |
 
 ### Environment markers
 

@@ -73,7 +73,9 @@ describe('createCompletionsCommand', () => {
   it('should accept an optional shell argument', () => {
     const cmd = createCompletionsCommand();
     // The command accepts [shell] as an optional argument
-    const args = (cmd as unknown as { registeredArguments: Array<{ _name: string; required: boolean }> }).registeredArguments;
+    const args = (
+      cmd as unknown as { registeredArguments: Array<{ _name: string; required: boolean }> }
+    ).registeredArguments;
     expect(args).toHaveLength(1);
     expect(args[0]!._name).toBe('shell');
     expect(args[0]!.required).toBe(false);
@@ -97,10 +99,7 @@ describe('createCompletionsCommand', () => {
 
     await program.parseAsync(['node', 'neo', 'completions', 'zsh']);
 
-    expect(CompletionGenerator.generateCompletions).toHaveBeenCalledWith(
-      expect.any(Object),
-      'zsh'
-    );
+    expect(CompletionGenerator.generateCompletions).toHaveBeenCalledWith(expect.any(Object), 'zsh');
     expect(writeSpy).toHaveBeenCalledWith('# mock completions');
 
     writeSpy.mockRestore();

@@ -206,7 +206,9 @@ describe('createConfigCommand', () => {
       const command = createConfigCommand();
       await command.parseAsync(['get', 'preferences.banner'], { from: 'user' });
 
-      expect(ui.error).toHaveBeenCalledWith(expect.stringContaining('Failed to read configuration'));
+      expect(ui.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to read configuration')
+      );
       expect(exitMock).toHaveBeenCalledWith(1);
     });
   });
@@ -227,7 +229,9 @@ describe('createConfigCommand', () => {
       await command.parseAsync(['set', 'preferences.banner', 'compact'], { from: 'user' });
 
       expect(configManager.write).toHaveBeenCalled();
-      expect(ui.success).toHaveBeenCalledWith('Configuration updated: preferences.banner = compact');
+      expect(ui.success).toHaveBeenCalledWith(
+        'Configuration updated: preferences.banner = compact'
+      );
     });
 
     it('should set secret key', async () => {
@@ -398,7 +402,9 @@ describe('createConfigCommand', () => {
       const command = createConfigCommand();
       await command.parseAsync(['list'], { from: 'user' });
 
-      expect(ui.error).toHaveBeenCalledWith(expect.stringContaining('Failed to read configuration'));
+      expect(ui.error).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to read configuration')
+      );
       expect(exitMock).toHaveBeenCalledWith(1);
     });
   });

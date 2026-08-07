@@ -116,5 +116,4 @@ describe('CLI', () => {
       expect(agentCommand).toBeDefined();
     });
   });
-
 });
