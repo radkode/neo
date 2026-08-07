@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": ".",
+
+    /* Relaxed for tests and config files only. Both rules guard against unsafe
+       access to data whose shape isn't known at compile time; in tests the
+       fixtures are literals defined a few lines up, so they produce noise
+       rather than safety. src/ still compiles with both enabled. */
+    "noUncheckedIndexedAccess": false,
+    "noPropertyAccessFromIndexSignature": false
+  },
+  "include": ["src/**/*", "test/**/*", "eslint.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}

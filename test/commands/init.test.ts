@@ -41,7 +41,7 @@ vi.mock('@/utils/ui.js', () => ({
 }));
 
 vi.mock('@/utils/validation.js', () => ({
-  validate: vi.fn((schema, value) => value),
+  validate: vi.fn((_schema, value) => value),
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 

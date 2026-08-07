@@ -32,5 +32,13 @@ export default [
       'no-console': 'off',
     },
   },
+  {
+    files: ['test/**/*.ts'],
+    rules: {
+      // ui.test.ts asserts on ANSI escape sequences, so \x1b in a regex is the
+      // point of the test rather than a stray control character.
+      'no-control-regex': 'off',
+    },
+  },
   prettier,
 ];

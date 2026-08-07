@@ -37,8 +37,8 @@ vi.mock('@/utils/secrets.js', () => ({
 }));
 
 vi.mock('@/utils/validation.js', () => ({
-  validateArgument: vi.fn((schema, value) => value),
-  validateConfigValue: vi.fn((key, value) => value),
+  validateArgument: vi.fn((_schema, value) => value),
+  validateConfigValue: vi.fn((_key, value) => value),
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 
@@ -71,7 +71,6 @@ vi.mock('@/commands/config/profile/index.js', async () => {
 import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
 import { secretsManager } from '@/utils/secrets.js';
-import { validateArgument } from '@/utils/validation.js';
 import { promptPassword } from '@/utils/prompt.js';
 
 describe('createConfigCommand', () => {
@@ -177,7 +176,7 @@ describe('createConfigCommand', () => {
     });
 
     it('should show not configured for missing secret', async () => {
-      vi.mocked(secretsManager.getSecret).mockResolvedValue(null);
+      vi.mocked(secretsManager.getSecret).mockResolvedValue(undefined);
 
       const command = createConfigCommand();
       await command.parseAsync(['get', 'ai.apiKey'], { from: 'user' });
@@ -467,6 +466,8 @@ describe('setNestedValue helper', () => {
 
     expect(configManager.write).toHaveBeenCalled();
     const writtenConfig = vi.mocked(configManager.write).mock.calls[0][0];
-    expect((writtenConfig as { new: { nested: { key: string } } }).new.nested.key).toBe('value');
+    expect((writtenConfig as unknown as { new: { nested: { key: string } } }).new.nested.key).toBe(
+      'value'
+    );
   });
 });

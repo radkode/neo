@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { rm, mkdtemp, readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { tmpdir, homedir } from 'os';
+import { tmpdir } from 'os';
 
 // We need to create the temp dir before importing ConfigManager
 // because DEFAULT_CONFIG is evaluated at module load time
@@ -28,7 +28,7 @@ const { ConfigManager } = await import('../../src/utils/config.js');
 
 describe('ConfigManager', () => {
   let tempDir: string;
-  let configManager: ConfigManager;
+  let configManager: InstanceType<typeof ConfigManager>;
 
   beforeEach(async () => {
     // Create a fresh temp directory for each test
@@ -135,6 +135,7 @@ describe('ConfigManager', () => {
   describe('write', () => {
     it('should create config directory if it does not exist', async () => {
       const config: NeoConfig = {
+        ai: { enabled: true },
         installation: {
           installedAt: '2024-01-01T00:00:00.000Z',
           version: '1.0.0',
@@ -167,6 +168,7 @@ describe('ConfigManager', () => {
 
     it('should format config as pretty JSON', async () => {
       const config: NeoConfig = {
+        ai: { enabled: true },
         installation: {
           installedAt: '2024-01-01T00:00:00.000Z',
           version: '1.0.0',
@@ -202,6 +204,7 @@ describe('ConfigManager', () => {
     it('should update specific values while preserving others', async () => {
       // First write an initial config
       const initialConfig: NeoConfig = {
+        ai: { enabled: true },
         installation: {
           installedAt: '2024-01-01T00:00:00.000Z',
           version: '1.0.0',

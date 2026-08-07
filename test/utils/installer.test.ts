@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
-import { GlobalInstaller, type InstallationResult } from '../../src/utils/installer.js';
+import { GlobalInstaller } from '../../src/utils/installer.js';
 
 // Mock dependencies
 vi.mock('execa', () => ({
