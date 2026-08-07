@@ -225,7 +225,19 @@ describe('schemas', () => {
 
   describe('commitTypeSchema', () => {
     it('should validate all conventional commit types', () => {
-      const validTypes = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'];
+      const validTypes = [
+        'feat',
+        'fix',
+        'docs',
+        'style',
+        'refactor',
+        'perf',
+        'test',
+        'build',
+        'ci',
+        'chore',
+        'revert',
+      ];
 
       for (const type of validTypes) {
         const result = commitTypeSchema.safeParse(type);
@@ -235,7 +247,7 @@ describe('schemas', () => {
     });
 
     it('should reject invalid commit types', () => {
-      const invalidTypes = ['feature', 'bugfix', 'update', 'build', 'ci', 'perf', 'random'];
+      const invalidTypes = ['feature', 'bugfix', 'update', 'random'];
 
       for (const type of invalidTypes) {
         const result = commitTypeSchema.safeParse(type);

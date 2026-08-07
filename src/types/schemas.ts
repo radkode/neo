@@ -48,12 +48,23 @@ export const gitBranchOptionsSchema = baseOptionsSchema.extend({
 /**
  * Valid conventional commit types
  */
-export const commitTypeSchema = z.enum(
-  ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore'],
-  {
-    message: 'Type must be one of: feat, fix, docs, style, refactor, test, chore',
-  }
-);
+export const COMMIT_TYPES = [
+  'feat',
+  'fix',
+  'docs',
+  'style',
+  'refactor',
+  'perf',
+  'test',
+  'build',
+  'ci',
+  'chore',
+  'revert',
+] as const;
+
+export const commitTypeSchema = z.enum(COMMIT_TYPES, {
+  message: `Type must be one of: ${COMMIT_TYPES.join(', ')}`,
+});
 
 /**
  * Commit scope schema
