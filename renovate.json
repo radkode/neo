@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommitTypeAll(chore)"],
+  "timezone": "Etc/UTC",
+  "schedule": ["* 2-6 * * 1"],
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 4,
+  "prHourlyLimit": 0,
+  "labels": ["dependencies"],
+  "configMigration": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 2-6 * * 1"],
+    "automerge": true
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"]
+  },
+  "packageRules": [
+    {
+      "description": "All non-major npm updates land in one PR",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm non-major",
+      "groupSlug": "npm-non-major"
+    },
+    {
+      "description": "Majors get their own PR, a longer soak, and are opened on request",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "7 days",
+      "dependencyDashboardApproval": true,
+      "addLabels": ["major"]
+    },
+    {
+      "description": "Runtime dependency majors change what we publish",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["major"],
+      "prBodyNotes": [
+        ":warning: This bumps a runtime dependency across a major boundary, so it changes the published package. Add a changeset (`pnpm changeset`) before merging."
+      ]
+    },
+    {
+      "description": "Workflow action SHAs in one PR, automerged",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "groupSlug": "github-actions",
+      "automerge": true
+    },
+    {
+      "description": "Toolchain pins are changed by hand, not by bot",
+      "matchDepTypes": ["packageManager", "engines"],
+      "enabled": false
+    }
+  ]
+}
