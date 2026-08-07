@@ -51,14 +51,20 @@ vi.mock('node:fs/promises', async () => {
   return {
     ...actual,
     access: vi.fn().mockRejectedValue(new Error('not found')), // .changeset dir absent by default
+    // Not read by ship, which asks git what the branch added rather than listing
+    // the directory. Mocked so the inherited-changeset test can put a file on
+    // disk that git reports as *not* added here, which is the case that used to
+    // slip through.
     readdir: vi.fn().mockResolvedValue([]),
   };
 });
 
+import { access, readdir } from 'node:fs/promises';
 import { executeWorkShip } from '@/commands/work/ship/index.js';
 import { executeVerify } from '@/commands/verify/index.js';
 import { executeChangeset } from '@/commands/changeset/index.js';
 import { executeAiPr } from '@/commands/ai/pr/index.js';
+import { ui } from '@/utils/ui.js';
 
 const execaMock = vi.mocked(execa);
 const verifyMock = vi.mocked(executeVerify);
@@ -71,19 +77,25 @@ const aiPrMock = vi.mocked(executeAiPr);
  *   1. rev-parse --is-inside-work-tree      (in-repo guard)
  *   2. rev-parse --show-toplevel            (getProjectRoot → cwd)
  *   3. branch --show-current                (getCurrentBranch)
- *   4. symbolic-ref refs/remotes/origin/HEAD (detectDefaultBranch — only when --base unset)
+ *   4. symbolic-ref refs/remotes/origin/HEAD (detectDefaultBranch. Called once
+ *                                            either way: to resolve the base when
+ *                                            --base is unset, or to compare
+ *                                            against it when --base is set)
  *   5. status --porcelain                   (hasUncommittedChanges)
  *   6. fetch origin <base>
  *   7. rev-list --count origin/<base>..HEAD (countCommitsAhead)
  *   — verify (mocked) —
- *   — changeset (mocked / disabled) —
- *   8. rev-parse --abbrev-ref @{upstream}   (hasUpstream)
- *   9. push ... origin <branch>
- *  10. gh --version                          (ghInstalled)
- *  11. gh pr view --json url                  (existingPrUrl)
+ *   8. diff --diff-filter=A origin/<base>...HEAD -- .changeset
+ *                                           (hasPendingChangeset, only when
+ *                                            changesets are enabled)
+ *   — changeset creation (mocked / disabled) —
+ *   9. rev-parse --abbrev-ref @{upstream}   (hasUpstream)
+ *  10. push ... origin <branch>
+ *  11. gh --version                          (ghInstalled)
+ *  12. gh pr view --json url                  (existingPrUrl)
  *  — if no PR + AI unavailable —
- *  12. log origin/<base>..HEAD --pretty=...  (getCommitSubjects)
- *  13. gh pr create ...                      (creates PR)
+ *  13. log origin/<base>..HEAD --pretty=...  (getCommitSubjects)
+ *  14. gh pr create ...                      (creates PR)
  */
 
 describe('executeWorkShip', () => {
@@ -256,5 +268,128 @@ describe('executeWorkShip', () => {
     expect(result.prCreated).toBe(false);
     expect(result.prUrl).toBeUndefined();
     expect(result.pushed).toBe(true);
+  });
+
+  describe('changeset detection', () => {
+    /** Walk the mocks up to (and including) the `git diff` that lists added changesets. */
+    function mockUpToChangesetDiff(addedChangesets: string): void {
+      vi.mocked(access).mockResolvedValueOnce(undefined); // .changeset dir exists
+      execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse --is-inside-work-tree
+      execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never); // rev-parse --show-toplevel
+      execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
+      execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
+      execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
+      execaMock.mockResolvedValueOnce({ stdout: addedChangesets } as never); // git diff --diff-filter=A
+    }
+
+    function mockPushAndExistingPr(): void {
+      execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // hasUpstream
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
+      execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
+      execaMock.mockResolvedValueOnce({
+        stdout: 'https://github.com/x/y/pull/9',
+      } as never); // gh pr view
+    }
+
+    it('creates a changeset when the only one present was inherited from the base', async () => {
+      // The directory is not empty, but `git diff --diff-filter=A` reports nothing
+      // added: that changeset came from the base, so CI's `--since=origin/main`
+      // would still see none. Listing the directory would wrongly accept it.
+      vi.mocked(readdir).mockResolvedValueOnce(['inherited.md'] as never);
+      mockUpToChangesetDiff('');
+      changesetMock.mockResolvedValueOnce({ path: '.changeset/fresh.md' } as never);
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // git add
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // git commit --amend
+      mockPushAndExistingPr();
+
+      const result = await executeWorkShip({ verify: false });
+
+      expect(changesetMock).toHaveBeenCalledTimes(1);
+      expect(result.changesetExisting).toBe(false);
+      expect(result.changesetPath).toBe('.changeset/fresh.md');
+    });
+
+    it('reuses a changeset this branch actually added', async () => {
+      mockUpToChangesetDiff('.changeset/mine.md\n');
+      mockPushAndExistingPr();
+
+      const result = await executeWorkShip({ verify: false });
+
+      expect(changesetMock).not.toHaveBeenCalled();
+      expect(result.changesetExisting).toBe(true);
+      expect(result.changesetPath).toContain('mine.md');
+    });
+
+    it('ignores the changeset README when deciding whether one was added', async () => {
+      mockUpToChangesetDiff('.changeset/README.md\n');
+      changesetMock.mockResolvedValueOnce({ path: '.changeset/fresh.md' } as never);
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // git add
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // git commit --amend
+      mockPushAndExistingPr();
+
+      const result = await executeWorkShip({ verify: false });
+
+      expect(changesetMock).toHaveBeenCalledTimes(1);
+      expect(result.changesetExisting).toBe(false);
+    });
+
+    it('scopes the diff to origin/<base>', async () => {
+      mockUpToChangesetDiff('.changeset/mine.md\n');
+      mockPushAndExistingPr();
+
+      await executeWorkShip({ verify: false });
+
+      const diffCall = execaMock.mock.calls.find(
+        ([cmd, args]) => cmd === 'git' && Array.isArray(args) && args[0] === 'diff'
+      );
+      expect(diffCall?.[1]).toContain('--diff-filter=A');
+      expect(diffCall?.[1]).toContain('origin/main...HEAD');
+      expect(diffCall?.[1]).toContain('.changeset');
+    });
+  });
+
+  it('warns when the base is not the default branch', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse --is-inside-work-tree
+    execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never); // rev-parse --show-toplevel
+    execaMock.mockResolvedValueOnce({ stdout: 'jacek/child' } as never); // current branch
+    execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
+    execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/child' } as never); // hasUpstream
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
+    execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
+    execaMock.mockResolvedValueOnce({
+      stdout: 'https://github.com/x/y/pull/9',
+    } as never); // gh pr view
+
+    await executeWorkShip({ verify: false, changeset: false, base: 'jacek/parent' });
+
+    const warned = vi.mocked(ui.warn).mock.calls.map(([msg]) => String(msg));
+    expect(warned.some((m) => m.includes('jacek/parent') && m.includes('main'))).toBe(true);
+    expect(warned.some((m) => /close this PR/i.test(m))).toBe(true);
+  });
+
+  it('does not warn when the base is the default branch', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse --is-inside-work-tree
+    execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never); // rev-parse --show-toplevel
+    execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
+    execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
+    execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // hasUpstream
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
+    execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
+    execaMock.mockResolvedValueOnce({
+      stdout: 'https://github.com/x/y/pull/9',
+    } as never); // gh pr view
+
+    await executeWorkShip({ verify: false, changeset: false, base: 'main' });
+
+    const warned = vi.mocked(ui.warn).mock.calls.map(([msg]) => String(msg));
+    expect(warned.some((m) => /close this PR/i.test(m))).toBe(false);
   });
 });
