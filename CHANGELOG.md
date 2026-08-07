@@ -1,5 +1,13 @@
 # @radkode/neo
 
+## 1.8.3
+
+### Patch Changes
+
+- [#54](https://github.com/radkode/neo/pull/54) [`0d68d2d`](https://github.com/radkode/neo/commit/0d68d2dca04a2af8ee20b6cb80fc979f6b036aea) Thanks [@jacekradko](https://github.com/jacekradko)! - Load the prettier packagejson plugin, reformat the repo, and gate formatting in CI
+
+- [#60](https://github.com/radkode/neo/pull/60) [`66c8625`](https://github.com/radkode/neo/commit/66c86250ede765a06fc679a1a8f76b43d622e4a2) Thanks [@jacekradko](https://github.com/jacekradko)! - Use commander's public API to read registered arguments instead of casting to reach internals. No behavior change; schema and completion output are byte-identical.
+
 ## 1.8.2
 
 ### Patch Changes
