@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mockProcessExit, createSpinnerMock } from '../utils/test-helpers.js';
+import { mockProcessExit, createSpinnerMock, execaResult } from '../utils/test-helpers.js';
 
 // Mock all dependencies
 vi.mock('execa', () => ({
@@ -36,7 +36,7 @@ vi.mock('@/utils/ui.js', () => ({
 }));
 
 vi.mock('@/utils/validation.js', () => ({
-  validate: vi.fn((schema, value) => value),
+  validate: vi.fn((_schema, value) => value),
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 
@@ -45,7 +45,7 @@ vi.mock('@/utils/update-check.js', () => ({
   compareVersions: vi.fn(),
 }));
 
-import { execa, type ExecaReturnValue } from 'execa';
+import { execa } from 'execa';
 import { confirm } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { fetchLatestCliVersion, compareVersions } from '@/utils/update-check.js';
@@ -165,8 +165,8 @@ describe('createUpdateCommand', () => {
       vi.mocked(compareVersions).mockReturnValue(1);
       vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>) // ls pnpm-lock.yaml succeeds
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>); // pnpm add
+        .mockResolvedValueOnce(execaResult({})) // ls pnpm-lock.yaml succeeds
+        .mockResolvedValueOnce(execaResult({})); // pnpm add
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
@@ -186,8 +186,8 @@ describe('createUpdateCommand', () => {
       vi.mocked(confirm).mockResolvedValue(true);
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found')) // ls pnpm-lock.yaml fails
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>) // ls yarn.lock succeeds
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>); // yarn global add
+        .mockResolvedValueOnce(execaResult({})) // ls yarn.lock succeeds
+        .mockResolvedValueOnce(execaResult({})); // yarn global add
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
@@ -208,7 +208,7 @@ describe('createUpdateCommand', () => {
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found')) // ls pnpm-lock.yaml fails
         .mockRejectedValueOnce(new Error('not found')) // ls yarn.lock fails
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>); // npm install
+        .mockResolvedValueOnce(execaResult({})); // npm install
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
@@ -228,7 +228,7 @@ describe('createUpdateCommand', () => {
       vi.mocked(execa)
         .mockRejectedValueOnce(new Error('not found'))
         .mockRejectedValueOnce(new Error('not found'))
-        .mockResolvedValueOnce({} as ExecaReturnValue<string>);
+        .mockResolvedValueOnce(execaResult({}));
 
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();

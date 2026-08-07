@@ -1,4 +1,5 @@
 import { execa } from 'execa';
+import { execaResult } from '../../../utils/test-helpers.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promptSelect } from '@/utils/prompt.js';
 import { confirm, input } from '@inquirer/prompts';
@@ -90,7 +91,7 @@ describe('gh pr create command', () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
     // gh --version succeeds
-    execaMock.mockResolvedValueOnce({ stdout: 'gh version 2.0.0' });
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'gh version 2.0.0' }));
     // gh auth status fails
     execaMock.mockRejectedValueOnce(new Error('not logged in'));
 
@@ -106,13 +107,13 @@ describe('gh pr create command', () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
     // gh --version succeeds
-    execaMock.mockResolvedValueOnce({ stdout: 'gh version 2.0.0' });
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'gh version 2.0.0' }));
     // gh auth status succeeds
-    execaMock.mockResolvedValueOnce({ stdout: 'Logged in' });
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'Logged in' }));
     // git branch --show-current returns main
-    execaMock.mockResolvedValueOnce({ stdout: 'main' });
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' }));
     // git remote show origin returns main as HEAD branch
-    execaMock.mockResolvedValueOnce({ stdout: 'HEAD branch: main' });
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'HEAD branch: main' }));
 
     const result = await executeGhPrCreate({});
 
@@ -125,27 +126,27 @@ describe('gh pr create command', () => {
   it('should create PR successfully with all options provided', async () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
-    execaMock.mockImplementation(async (cmd: string, args?: readonly string[]) => {
+    execaMock.mockImplementation((async (cmd: string, args?: readonly string[]) => {
       if (cmd === 'gh' && args?.[0] === '--version') {
-        return { stdout: 'gh version 2.0.0' };
+        return execaResult({ stdout: 'gh version 2.0.0' });
       }
       if (cmd === 'gh' && args?.[0] === 'auth') {
-        return { stdout: 'Logged in' };
+        return execaResult({ stdout: 'Logged in' });
       }
       if (cmd === 'git' && args?.[0] === 'branch' && args?.[1] === '--show-current') {
-        return { stdout: 'feature/test-branch' };
+        return execaResult({ stdout: 'feature/test-branch' });
       }
       if (cmd === 'git' && args?.[0] === 'remote' && args?.[1] === 'show') {
-        return { stdout: 'HEAD branch: main' };
+        return execaResult({ stdout: 'HEAD branch: main' });
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '--oneline') {
-        return { stdout: '' }; // No unpushed commits
+        return execaResult({ stdout: '' }); // No unpushed commits
       }
       if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
-        return { stdout: 'https://github.com/owner/repo/pull/123' };
+        return execaResult({ stdout: 'https://github.com/owner/repo/pull/123' });
       }
-      return { stdout: '' };
-    });
+      return execaResult({ stdout: '' });
+    }) as unknown as Parameters<typeof execaMock.mockImplementation>[0]);
 
     const result = await executeGhPrCreate({
       title: 'Test PR',
@@ -163,30 +164,30 @@ describe('gh pr create command', () => {
   it('should prompt for title when not provided', async () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
-    execaMock.mockImplementation(async (cmd: string, args?: readonly string[]) => {
+    execaMock.mockImplementation((async (cmd: string, args?: readonly string[]) => {
       if (cmd === 'gh' && args?.[0] === '--version') {
-        return { stdout: 'gh version 2.0.0' };
+        return execaResult({ stdout: 'gh version 2.0.0' });
       }
       if (cmd === 'gh' && args?.[0] === 'auth') {
-        return { stdout: 'Logged in' };
+        return execaResult({ stdout: 'Logged in' });
       }
       if (cmd === 'git' && args?.[0] === 'branch' && args?.[1] === '--show-current') {
-        return { stdout: 'feature/my-feature' };
+        return execaResult({ stdout: 'feature/my-feature' });
       }
       if (cmd === 'git' && args?.[0] === 'remote' && args?.[1] === 'show') {
-        return { stdout: 'HEAD branch: main' };
+        return execaResult({ stdout: 'HEAD branch: main' });
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '--oneline') {
-        return { stdout: '' }; // No unpushed commits
+        return execaResult({ stdout: '' }); // No unpushed commits
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '-1') {
-        return { stdout: 'Add new feature' }; // Last commit message
+        return execaResult({ stdout: 'Add new feature' }); // Last commit message
       }
       if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
-        return { stdout: 'https://github.com/owner/repo/pull/124' };
+        return execaResult({ stdout: 'https://github.com/owner/repo/pull/124' });
       }
-      return { stdout: '' };
-    });
+      return execaResult({ stdout: '' });
+    }) as unknown as Parameters<typeof execaMock.mockImplementation>[0]);
 
     // Mock prompts
     inputMock.mockResolvedValueOnce('My custom title'); // title prompt
@@ -204,36 +205,36 @@ describe('gh pr create command', () => {
   it('should prompt to push when there are unpushed commits', async () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
-    execaMock.mockImplementation(async (cmd: string, args?: readonly string[]) => {
+    execaMock.mockImplementation((async (cmd: string, args?: readonly string[]) => {
       if (cmd === 'gh' && args?.[0] === '--version') {
-        return { stdout: 'gh version 2.0.0' };
+        return execaResult({ stdout: 'gh version 2.0.0' });
       }
       if (cmd === 'gh' && args?.[0] === 'auth') {
-        return { stdout: 'Logged in' };
+        return execaResult({ stdout: 'Logged in' });
       }
       if (cmd === 'git' && args?.[0] === 'branch' && args?.[1] === '--show-current') {
-        return { stdout: 'feature/unpushed' };
+        return execaResult({ stdout: 'feature/unpushed' });
       }
       if (cmd === 'git' && args?.[0] === 'remote' && args?.[1] === 'show') {
-        return { stdout: 'HEAD branch: main' };
+        return execaResult({ stdout: 'HEAD branch: main' });
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '--oneline') {
-        return { stdout: 'abc123 Some commit' }; // Has unpushed commits
+        return execaResult({ stdout: 'abc123 Some commit' }); // Has unpushed commits
       }
       if (cmd === 'git' && args?.[0] === 'ls-remote') {
-        return { stdout: 'refs/heads/feature/unpushed' }; // Branch exists on remote
+        return execaResult({ stdout: 'refs/heads/feature/unpushed' }); // Branch exists on remote
       }
       if (cmd === 'git' && args?.[0] === 'push') {
-        return { stdout: 'pushed' };
+        return execaResult({ stdout: 'pushed' });
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '-1') {
-        return { stdout: 'Some commit' };
+        return execaResult({ stdout: 'Some commit' });
       }
       if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
-        return { stdout: 'https://github.com/owner/repo/pull/125' };
+        return execaResult({ stdout: 'https://github.com/owner/repo/pull/125' });
       }
-      return { stdout: '' };
-    });
+      return execaResult({ stdout: '' });
+    }) as unknown as Parameters<typeof execaMock.mockImplementation>[0]);
 
     // Mock prompts: confirm fires for push (1st) then wantBody (2nd)
     confirmMock
@@ -257,27 +258,27 @@ describe('gh pr create command', () => {
   it('should handle PR already exists error', async () => {
     const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
 
-    execaMock.mockImplementation(async (cmd: string, args?: readonly string[]) => {
+    execaMock.mockImplementation((async (cmd: string, args?: readonly string[]) => {
       if (cmd === 'gh' && args?.[0] === '--version') {
-        return { stdout: 'gh version 2.0.0' };
+        return execaResult({ stdout: 'gh version 2.0.0' });
       }
       if (cmd === 'gh' && args?.[0] === 'auth') {
-        return { stdout: 'Logged in' };
+        return execaResult({ stdout: 'Logged in' });
       }
       if (cmd === 'git' && args?.[0] === 'branch' && args?.[1] === '--show-current') {
-        return { stdout: 'feature/existing-pr' };
+        return execaResult({ stdout: 'feature/existing-pr' });
       }
       if (cmd === 'git' && args?.[0] === 'remote' && args?.[1] === 'show') {
-        return { stdout: 'HEAD branch: main' };
+        return execaResult({ stdout: 'HEAD branch: main' });
       }
       if (cmd === 'git' && args?.[0] === 'log' && args?.[1] === '--oneline') {
-        return { stdout: '' }; // No unpushed commits
+        return execaResult({ stdout: '' }); // No unpushed commits
       }
       if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
         throw new Error('a pull request for branch "feature/existing-pr" already exists');
       }
-      return { stdout: '' };
-    });
+      return execaResult({ stdout: '' });
+    }) as unknown as Parameters<typeof execaMock.mockImplementation>[0]);
 
     const result = await executeGhPrCreate({
       title: 'Test PR',

@@ -20,9 +20,6 @@ vi.mock('os', async (importOriginal) => {
   };
 });
 
-// Import types statically (they're erased at runtime anyway)
-import type { NeoSecrets } from '../../src/utils/secrets.js';
-
 // Import values after mocking - FORCE fresh import each test
 let SecretsManager: typeof import('../../src/utils/secrets.js').SecretsManager;
 

@@ -20,9 +20,9 @@ describe('UI System', () => {
   });
 
   const stderrOutputs = (): string[] =>
-    stderrSpy.mock.calls.map((c) => String(c[0]).replace(/\n$/, ''));
+    stderrSpy.mock.calls.map((c: unknown[]) => String(c[0]).replace(/\n$/, ''));
   const stdoutOutputs = (): string[] =>
-    stdoutSpy.mock.calls.map((c) => String(c[0]).replace(/\n$/, ''));
+    stdoutSpy.mock.calls.map((c: unknown[]) => String(c[0]).replace(/\n$/, ''));
 
   describe('Core Output Methods', () => {
     describe('success()', () => {

@@ -1,4 +1,5 @@
 import { execa } from 'execa';
+import { execaResult } from '../../utils/test-helpers.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promptSelect } from '@/utils/prompt.js';
 
@@ -66,12 +67,12 @@ describe('git push command', () => {
   it('rebases then retries push when remote is ahead and user selects rebase', async () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
-    execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
     const rejectionError = new Error('non-fast-forward');
     (rejectionError as { shortMessage?: string }).shortMessage = 'fetch first';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
-    execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // pull --rebase
-    execaMock.mockResolvedValueOnce({ stdout: 'pushed' }); // push retry
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'rebased' })); // pull --rebase
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'pushed' })); // push retry
 
     promptSelectMock.mockResolvedValueOnce('pull-rebase');
 
@@ -105,11 +106,11 @@ describe('git push command', () => {
   it('force pushes when remote is ahead and user selects force', async () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
-    execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
     const rejectionError = new Error('rejected');
     (rejectionError as { shortMessage?: string }).shortMessage = 'non-fast-forward';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
-    execaMock.mockResolvedValueOnce({ stdout: 'forced' }); // force push
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'forced' })); // force push
 
     promptSelectMock.mockResolvedValueOnce('force');
 

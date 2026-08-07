@@ -1,4 +1,5 @@
 import { execa } from 'execa';
+import { execaResult } from '../../utils/test-helpers.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promptSelect } from '@/utils/prompt.js';
 
@@ -97,11 +98,11 @@ describe('git pull command', () => {
     it('retries with explicit branch when pull fails with multiple branches error', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
 
-      execaMock.mockResolvedValueOnce({ stdout: 'main' }); // branch name
-      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' })); // branch name
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
       execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
-      execaMock.mockResolvedValueOnce({ stdout: 'Already up to date.' }); // retry with explicit branch
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'Already up to date.' })); // retry with explicit branch
 
       const command = createPullCommand();
       await command.parseAsync([], { from: 'user' });
@@ -117,14 +118,14 @@ describe('git pull command', () => {
     it('handles divergence on retry after multiple branches error', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
 
-      execaMock.mockResolvedValueOnce({ stdout: 'feature/test' }); // branch name
-      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/test' })); // branch name
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
       execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
       const divergenceError = new Error('Not possible to fast-forward');
       (divergenceError as { shortMessage?: string }).shortMessage = 'not possible to fast-forward';
       execaMock.mockRejectedValueOnce(divergenceError); // retry also diverges
-      execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // rebase pull
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'rebased' })); // rebase pull
 
       promptSelectMock.mockResolvedValueOnce('rebase');
 
@@ -144,12 +145,12 @@ describe('git pull command', () => {
     it('rebases when pull cannot fast-forward and user selects rebase', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
 
-      execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch name
-      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch name
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const divergenceError = new Error('Not possible to fast-forward');
       (divergenceError as { shortMessage?: string }).shortMessage = 'not possible to fast-forward';
       execaMock.mockRejectedValueOnce(divergenceError); // initial pull
-      execaMock.mockResolvedValueOnce({ stdout: 'rebased' }); // rebase pull
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'rebased' })); // rebase pull
 
       promptSelectMock.mockResolvedValueOnce('rebase');
 
@@ -168,12 +169,12 @@ describe('git pull command', () => {
     it('merges when pull cannot fast-forward and user selects merge', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
 
-      execaMock.mockResolvedValueOnce({ stdout: 'feature/diverge' }); // branch name
-      execaMock.mockResolvedValueOnce({ stdout: '' }); // upstream check
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch name
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const divergenceError = new Error('Not possible to fast-forward');
       execaMock.mockRejectedValueOnce(divergenceError); // initial pull
-      execaMock.mockResolvedValueOnce({ stdout: '' }); // fetch
-      execaMock.mockResolvedValueOnce({ stdout: 'merged' }); // merge
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // fetch
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'merged' })); // merge
 
       promptSelectMock.mockResolvedValueOnce('merge');
 

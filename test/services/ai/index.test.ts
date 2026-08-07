@@ -99,6 +99,8 @@ describe('AI Service', () => {
 
       const result = await generateCommitMessage({
         diff: largeDiff,
+        recentCommits: [],
+        branchName: 'main',
         stagedFiles: ['file.ts'],
       });
 

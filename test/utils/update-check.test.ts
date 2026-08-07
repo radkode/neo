@@ -35,6 +35,7 @@ vi.mock('@/utils/ui.js', () => ({
 }));
 
 const baseConfig: NeoConfig = {
+  ai: { enabled: true },
   installation: {
     installedAt: '2024-01-01T00:00:00.000Z',
     version: '0.9.2',

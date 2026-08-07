@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mockProcessExit, createSpinnerMock } from '../../utils/test-helpers.js';
+import { mockProcessExit, createSpinnerMock, execaResult } from '../../utils/test-helpers.js';
 
 // Mock all dependencies before importing the module
 vi.mock('execa', () => ({
@@ -38,11 +38,11 @@ vi.mock('@/utils/ui.js', () => ({
 }));
 
 vi.mock('@/utils/validation.js', () => ({
-  validate: vi.fn((schema, value) => value),
+  validate: vi.fn((_schema, value) => value),
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 
-import { execa, type ExecaReturnValue } from 'execa';
+import { execa } from 'execa';
 import { select, checkbox, confirm } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 
@@ -129,13 +129,15 @@ describe('git branch command', () => {
 
     it('should analyze branches successfully with all tracked branches', async () => {
       // Mock git rev-parse (verify git repo)
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv - all branches have remote tracking
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout:
-          '* main abc123 [origin/main] Initial commit\n  feature def456 [origin/feature] Feature work',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout:
+            '* main abc123 [origin/main] Initial commit\n  feature def456 [origin/feature] Feature work',
+        })
+      );
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -148,12 +150,14 @@ describe('git branch command', () => {
 
     it('should show cleanup candidates in dry run mode', async () => {
       // Mock git rev-parse (verify git repo)
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with untracked branch
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
+        })
+      );
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({ dryRun: true });
@@ -164,12 +168,14 @@ describe('git branch command', () => {
 
     it('should prompt for cleanup action', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with untracked branch
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
+        })
+      );
 
       // Mock user cancels
       vi.mocked(select).mockResolvedValueOnce('cancel');
@@ -183,19 +189,21 @@ describe('git branch command', () => {
 
     it('should handle delete all action', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with untracked branch
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial commit\n  old-feature def456 Old feature',
+        })
+      );
 
       // Mock user selects delete all
       vi.mocked(select).mockResolvedValueOnce('delete_all');
       vi.mocked(confirm).mockResolvedValueOnce(true);
 
       // Mock successful branch deletion
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '' }));
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -206,12 +214,14 @@ describe('git branch command', () => {
 
     it('should handle select specific branches action', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with untracked branches
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial\n  feat-a def456 A\n  feat-b ghi789 B',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial\n  feat-a def456 A\n  feat-b ghi789 B',
+        })
+      );
 
       // Mock user selects specific branches
       vi.mocked(select).mockResolvedValueOnce('delete_selected');
@@ -219,7 +229,7 @@ describe('git branch command', () => {
       vi.mocked(confirm).mockResolvedValueOnce(true);
 
       // Mock successful branch deletion
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '' }));
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -229,10 +239,10 @@ describe('git branch command', () => {
 
     it('should handle no branches found error', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv returns empty
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '' }));
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -242,13 +252,15 @@ describe('git branch command', () => {
 
     it('should handle branches with deleted remote', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with deleted remote branch
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout:
-          '* main abc123 [origin/main] Initial commit\n  stale def456 [origin/stale: gone] Old work',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout:
+            '* main abc123 [origin/main] Initial commit\n  stale def456 [origin/stale: gone] Old work',
+        })
+      );
 
       // Mock user cancels
       vi.mocked(select).mockResolvedValueOnce('cancel');
@@ -265,12 +277,15 @@ describe('git branch command', () => {
 
     it('should skip protected branches', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with protected branches
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial\n  develop def456 Dev\n  staging ghi789 Stage',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout:
+            '* main abc123 [origin/main] Initial\n  develop def456 Dev\n  staging ghi789 Stage',
+        })
+      );
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});
@@ -284,18 +299,20 @@ describe('git branch command', () => {
 
     it('should handle force mode without confirmation', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv with untracked branch
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial\n  old-feature def456 Old',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial\n  old-feature def456 Old',
+        })
+      );
 
       // Mock delete all action
       vi.mocked(select).mockResolvedValueOnce('delete_all');
 
       // Mock successful branch deletion
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '' }));
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({ force: true });
@@ -308,12 +325,14 @@ describe('git branch command', () => {
 
     it('should handle unmerged branch with squash merge detection', async () => {
       // Mock git rev-parse
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '.git' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '.git' }));
 
       // Mock git branch -vv
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '* main abc123 [origin/main] Initial\n  old-feature def456 Old',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '* main abc123 [origin/main] Initial\n  old-feature def456 Old',
+        })
+      );
 
       // Mock delete all action and confirmation
       vi.mocked(select).mockResolvedValueOnce('delete_all');
@@ -324,30 +343,38 @@ describe('git branch command', () => {
       vi.mocked(execa).mockRejectedValueOnce(unmergedError);
 
       // Mock squash merge detection - show-ref for main
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: 'refs/heads/main',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: 'refs/heads/main',
+        })
+      );
 
       // Mock merge-base
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: 'abc123' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: 'abc123' }));
 
       // Mock diff (branch content)
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '+added line\n-removed line',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '+added line\n-removed line',
+        })
+      );
 
       // Mock rev-list (recent commits)
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: 'commit1\ncommit2',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: 'commit1\ncommit2',
+        })
+      );
 
       // Mock git show for each commit
-      vi.mocked(execa).mockResolvedValueOnce({
-        stdout: '+added line\n-removed line',
-      } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(
+        execaResult({
+          stdout: '+added line\n-removed line',
+        })
+      );
 
       // Mock force delete after squash merge detection
-      vi.mocked(execa).mockResolvedValueOnce({ stdout: '' } as ExecaReturnValue<string>);
+      vi.mocked(execa).mockResolvedValueOnce(execaResult({ stdout: '' }));
 
       const { executeBranch } = await import('../../../src/commands/git/branch/index.js');
       const result = await executeBranch({});

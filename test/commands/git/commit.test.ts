@@ -212,9 +212,6 @@ describe('git commit command', () => {
 
   describe('commit type descriptions', () => {
     it('should have descriptions for all commit types', async () => {
-      // Import the module to check internal structure
-      const commitModule = await import('../../../src/commands/git/commit/index.js');
-
       // This test ensures that all commit types have descriptions
       // We're testing the existence of the COMMIT_TYPE_DESCRIPTIONS constant indirectly
       const { commitTypeSchema } = await import('../../../src/types/schemas.js');

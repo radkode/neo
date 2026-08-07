@@ -30,8 +30,8 @@ vi.mock('@/storage/db.js', () => ({
 }));
 
 vi.mock('@/utils/validation.js', () => ({
-  validate: vi.fn((schema, value) => value),
-  validateArgument: vi.fn((schema, value) => value),
+  validate: vi.fn((_schema, value) => value),
+  validateArgument: vi.fn((_schema, value) => value),
   isValidationError: vi.fn().mockReturnValue(false),
 }));
 
@@ -42,7 +42,6 @@ vi.mock('@inquirer/prompts', () => ({
 import { ui } from '@/utils/ui.js';
 import { ensureAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 import { ContextDB } from '@/storage/db.js';
-import { validateArgument } from '@/utils/validation.js';
 import { confirm } from '@inquirer/prompts';
 
 describe('createAgentContextCommand', () => {

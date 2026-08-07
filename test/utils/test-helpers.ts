@@ -6,6 +6,7 @@
  */
 
 import { vi } from 'vitest';
+import type { Result } from 'execa';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -223,6 +224,25 @@ export interface ExecaResponse {
   stdout?: string;
   stderr?: string;
   exitCode?: number;
+}
+
+/**
+ * Builds a value shaped like an execa result for use as a mock return.
+ *
+ * execa's `Result` carries ~16 required properties that mocks never touch, and
+ * `mockResolvedValue` wants the exact resolved type of the overload it was
+ * given rather than the public `Result` alias, so a cast is unavoidable. The
+ * return type is inferred from the call site, which keeps that cast in one
+ * place instead of at every mock.
+ */
+export function execaResult<T = Result>(response: ExecaResponse = {}): T {
+  return {
+    stdout: '',
+    stderr: '',
+    exitCode: 0,
+    failed: false,
+    ...response,
+  } as unknown as T;
 }
 
 export interface ExecaMockConfig {
