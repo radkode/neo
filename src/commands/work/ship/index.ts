@@ -261,7 +261,7 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
   }
 
   // Push
-  let pushed = false;
+  let pushed: boolean;
   const pushSpinner = ui.spinner(`Pushing ${branch} to origin`);
   pushSpinner.start();
   try {
@@ -326,7 +326,10 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
           createSpinner.fail('Failed to create PR');
           const stderr = (error as { stderr?: string }).stderr ?? '';
           if (stderr) ui.muted(stderr.trim().split('\n').slice(-10).join('\n'));
-          throw new Error('gh pr create failed. Fix the issue and re-run, or open the PR manually.');
+          throw new Error(
+            'gh pr create failed. Fix the issue and re-run, or open the PR manually.',
+            { cause: error }
+          );
         }
       }
     }

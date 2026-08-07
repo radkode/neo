@@ -189,7 +189,9 @@ export async function executeAiPr(options: AiPrOptions): Promise<AiPrResult> {
     createSpinner.fail('Failed to create PR');
     const stderr = (error as { stderr?: string }).stderr ?? '';
     if (stderr) ui.muted(stderr.trim().split('\n').slice(-10).join('\n'));
-    throw new Error('gh pr create failed. Run with --json to inspect the generated title/body.');
+    throw new Error('gh pr create failed. Run with --json to inspect the generated title/body.', {
+      cause: error,
+    });
   }
 }
 

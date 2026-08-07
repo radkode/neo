@@ -230,11 +230,13 @@ export function createUpdateCommand(): Command {
         const installCmd = `${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`;
 
         if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
-          throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`);
+          throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`, {
+            cause: error,
+          });
         }
-        throw new Error(
-          `Update failed: ${errorMessage}. Try updating manually: ${installCmd}`
-        );
+        throw new Error(`Update failed: ${errorMessage}. Try updating manually: ${installCmd}`, {
+          cause: error,
+        });
       }
     }));
 

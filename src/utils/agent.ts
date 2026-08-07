@@ -159,7 +159,7 @@ export async function saveAgentConfig(config: AgentConfig): Promise<void> {
     await writeFile(configPath, JSON.stringify(rawConfig, null, 2), 'utf-8');
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to save agent configuration: ${msg}`);
+    throw new Error(`Failed to save agent configuration: ${msg}`, { cause: error });
   }
 }
 

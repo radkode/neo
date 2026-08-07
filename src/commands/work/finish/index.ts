@@ -210,7 +210,7 @@ export async function executeWorkFinish(
   // correctly reflects squash-merges. Fall back to the ancestor check so the
   // command works in repos without a PR (or gh).
   const prInfo = await queryPrMerged(branch);
-  let mergedOnRemote: boolean | null = null;
+  let mergedOnRemote: boolean | null;
   if (prInfo) {
     mergedOnRemote = prInfo.merged;
   } else {
@@ -282,7 +282,7 @@ export async function executeWorkFinish(
   // would refuse because the ref tree doesn't match base.
   const delSpinner = ui.spinner(`Deleting local branch ${branch}`);
   delSpinner.start();
-  let branchDeleted = false;
+  let branchDeleted: boolean;
   try {
     await execa('git', ['branch', '-D', branch]);
     delSpinner.succeed(`Deleted ${branch}`);

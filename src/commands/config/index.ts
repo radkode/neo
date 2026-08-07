@@ -70,7 +70,7 @@ function createConfigGetCommand(): Command {
         config = await configManager.read();
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to read configuration: ${msg}`);
+        throw new Error(`Failed to read configuration: ${msg}`, { cause: error });
       }
       const value = getNestedValue(config, key);
 
@@ -163,7 +163,7 @@ function createConfigSetCommand(): Command {
         await configManager.write(updated);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to set configuration: ${msg}`);
+        throw new Error(`Failed to set configuration: ${msg}`, { cause: error });
       }
 
       emitJson(
@@ -231,7 +231,7 @@ function createConfigListCommand(): Command {
       config = await configManager.read();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to read configuration: ${msg}`);
+      throw new Error(`Failed to read configuration: ${msg}`, { cause: error });
     }
     const apiKeyConfigured = await secretsManager.isConfigured('ai.apiKey');
 
