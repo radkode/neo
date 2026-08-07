@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.8.0
+
+### Minor Changes
+
+- [#43](https://github.com/radkode/neo/pull/43) [`a357953`](https://github.com/radkode/neo/commit/a357953b5aabe095b56a387a967e585731b4eaaf) Thanks [@jacekradko](https://github.com/jacekradko)! - Accept the full Conventional Commits type set. `perf`, `build`, `ci`, and `revert` were previously rejected, so repos that use `ci:` for workflow changes could not commit through neo at all. The list now lives in one place instead of five.
+
 ## 1.7.1
 
 ### Patch Changes
