@@ -334,7 +334,7 @@ export class ProfileManager {
       return profileName;
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in profile file: ${error.message}`);
+        throw new Error(`Invalid JSON in profile file: ${error.message}`, { cause: error });
       }
       throw error;
     }
