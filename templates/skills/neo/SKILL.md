@@ -60,7 +60,8 @@ Exit codes: `0` success, `1` failure, `2` non-interactive prompt required (the J
 
 ## Anti-patterns
 
-- Don't `git push` to bypass neo's main-branch confirmation. If you need to push to main, use explicit flags (`--force`, etc.) — neo will tell you what's missing.
+- Don't `git push` to bypass neo's main-branch confirmation. If you need to push to main, use `neo git push --force-main`. Not `--force`: that is not a neo flag, so it passes straight through to git as a real force-push.
 - Don't open PRs with `gh pr create` when `neo work ship` is the right call. Ship handles verify + changeset + push + PR in one step.
 - Don't skip changesets. `neo work ship` enforces them; if a change doesn't affect a published package, create an empty changeset (`---\n---`).
 - Don't re-derive the command tree from memory. `neo schema --json` is authoritative and version-correct.
+- Don't quietly fall back to raw `git`/`gh` when neo is installed but misbehaving. The bullets above cover neo being absent; this one covers it being wrong. A rejected valid input, a guardrail that misfires, a missing command or flag, a stale example: reaching for the fallback is the finding. Say it out loud, file it (in DailyDeck if you have it: `create-task`, `intake: "filed"`, `repo: "radkode/neo"`; a GitHub issue on radkode/neo otherwise), and then work around it.
