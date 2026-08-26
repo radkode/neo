@@ -162,8 +162,8 @@ cat > package.json << EOL
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "prepublishOnly": "pnpm run build && pnpm run test",
-    "link-local": "pnpm run build && pnpm link --global",
-    "unlink-local": "pnpm unlink --global $FULL_PACKAGE_NAME"
+    "link-local": "pnpm run build && pnpm add --global .",
+    "unlink-local": "pnpm remove --global $FULL_PACKAGE_NAME"
   },
   "engines": {
     "node": ">=20.0.0",
