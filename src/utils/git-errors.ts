@@ -21,6 +21,7 @@ export enum GitErrorCode {
   NETWORK_ERROR = 'GIT_NETWORK_ERROR',
   MERGE_CONFLICT = 'GIT_MERGE_CONFLICT',
   REBASE_CONFLICT = 'GIT_REBASE_CONFLICT',
+  UNCOMMITTED_CHANGES = 'GIT_UNCOMMITTED_CHANGES',
   NON_FAST_FORWARD = 'GIT_NON_FAST_FORWARD',
   NOTHING_TO_COMMIT = 'GIT_NOTHING_TO_COMMIT',
   NO_STAGED_CHANGES = 'GIT_NO_STAGED_CHANGES',
@@ -108,6 +109,24 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     getSuggestions: () => ['Check your internet connection'],
   },
   {
+    // Ahead of the conflict entries on purpose: a refusal to start is not a
+    // conflict, and git says so before any merge or rebase has begun.
+    code: GitErrorCode.UNCOMMITTED_CHANGES,
+    patterns: [
+      'cannot pull with rebase',
+      'please commit or stash them',
+      'your local changes to the following files would be overwritten',
+      'you have unstaged changes',
+      'cannot rebase: your index contains uncommitted changes',
+    ],
+    message: 'You have uncommitted changes.',
+    getSuggestions: () => [
+      'Stash them: git stash push -u',
+      'Or commit them: neo git commit',
+      'Then retry the pull',
+    ],
+  },
+  {
     code: GitErrorCode.MERGE_CONFLICT,
     patterns: ['merge conflict', 'automatic merge failed', 'fix conflicts'],
     message: 'Merge conflicts detected!',
@@ -119,7 +138,16 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
   },
   {
     code: GitErrorCode.REBASE_CONFLICT,
-    patterns: ['rebase', 'conflict'],
+    // NOT ['rebase', 'conflict']. These are matched with .some() against the
+    // whole of stderr, so a bare 'rebase' reported every failure of every
+    // rebase-flavoured command as a conflict, suggesting `git rebase
+    // --continue` to people who had no rebase in progress.
+    patterns: [
+      'could not apply',
+      'conflict (',
+      'resolve all conflicts manually',
+      'after resolving the conflicts',
+    ],
     message: 'Rebase hit conflicts.',
     getSuggestions: () => [
       'Fix conflicts in your editor',
@@ -183,7 +211,11 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
   },
   {
     code: GitErrorCode.STASH_APPLY_CONFLICT,
-    patterns: ['conflict', 'could not apply stash', 'needs merge'],
+    // The bare 'conflict' this used to carry was dead: REBASE_CONFLICT's own
+    // bare 'conflict' sat earlier in the array and always won. Narrowing that
+    // entry would have made this one live and started reporting unrelated
+    // failures as stash conflicts, so it is narrowed in the same change.
+    patterns: ['could not apply stash', 'needs merge', 'conflict ('],
     message: 'Conflicts detected when applying stash!',
     getSuggestions: () => [
       'Resolve conflicts manually in your editor',
@@ -332,6 +364,13 @@ export function isConflictError(error: unknown): boolean {
 }
 
 /**
+ * Check if error is git refusing to start because the working tree is dirty
+ */
+export function isUncommittedChangesError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.UNCOMMITTED_CHANGES);
+}
+
+/**
  * Check if error is non-fast-forward/diverged error
  */
 export function isNonFastForwardError(error: unknown): boolean {
@@ -409,6 +448,21 @@ export const GitErrors = {
         'Or abort the rebase: git rebase --abort',
       ],
     });
+  },
+
+  uncommittedChanges(commandName: string): GitError {
+    return new GitError(
+      'You have uncommitted changes.',
+      GitErrorCode.UNCOMMITTED_CHANGES,
+      commandName,
+      {
+        suggestions: [
+          'Stash them: git stash push -u',
+          'Or commit them: neo git commit',
+          'Then retry the pull',
+        ],
+      }
+    );
   },
 
   nonFastForward(commandName: string): GitError {

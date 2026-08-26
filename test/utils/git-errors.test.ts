@@ -151,17 +151,67 @@ describe('detectGitError', () => {
   });
 
   describe('REBASE_CONFLICT', () => {
-    it('should detect rebase conflict errors', () => {
-      // Note: REBASE_CONFLICT pattern requires both "rebase" AND "conflict" words
-      // but MERGE_CONFLICT patterns come before it in the array, so "merge conflict" matches first
-      // This tests the actual behavior - the pattern matching is order-dependent
-      const error = new Error('error: could not apply during rebase');
-      const result = detectGitError(error, { ...context, commandName: 'rebase' });
+    it('detects a real rebase conflict', () => {
+      const error = new Error(
+        'error: could not apply a1b2c3d... some commit\nhint: Resolve all conflicts manually'
+      );
 
-      // This will actually match MERGE_CONFLICT due to "conflict" pattern
-      // The actual implementation matches patterns in order
-      expect([GitErrorCode.MERGE_CONFLICT, GitErrorCode.REBASE_CONFLICT]).toContain(
-        result.gitErrorCode
+      expect(detectGitError(error, { ...context, commandName: 'rebase' }).gitErrorCode).toBe(
+        GitErrorCode.REBASE_CONFLICT
+      );
+    });
+
+    it('does not report a conflict for stderr that merely says "rebase"', () => {
+      // The reported defect. Patterns are matched with .some() against the
+      // whole of stderr, so a bare 'rebase' entry classified every
+      // rebase-flavoured failure as a conflict and suggested `git rebase
+      // --continue` to people with no rebase in progress.
+      const error = new Error(
+        'error: cannot pull with rebase: You have unstaged changes.\nerror: Please commit or stash them.'
+      );
+
+      const result = detectGitError(error, { ...context, commandName: 'pull' });
+
+      expect(result.gitErrorCode).not.toBe(GitErrorCode.REBASE_CONFLICT);
+      expect(result.gitErrorCode).not.toBe(GitErrorCode.MERGE_CONFLICT);
+    });
+
+    it('does not report a conflict when a rebase simply cannot start', () => {
+      const error = new Error('fatal: It seems that there is already a rebase-merge directory');
+
+      expect(isConflictError(error)).toBe(false);
+    });
+  });
+
+  describe('UNCOMMITTED_CHANGES', () => {
+    it('classifies the dirty-tree pull refusal, verbatim from the report', () => {
+      const error = new Error(
+        'error: cannot pull with rebase: You have unstaged changes.\nerror: Please commit or stash them.'
+      );
+
+      const result = detectGitError(error, { ...context, commandName: 'pull' });
+
+      expect(result.gitErrorCode).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
+      expect(result.message).toBe('You have uncommitted changes.');
+    });
+
+    it('suggests stash or commit, not conflict resolution', () => {
+      const error = new Error('error: Please commit or stash them.');
+
+      const { suggestions } = detectGitError(error, { ...context, commandName: 'pull' });
+
+      expect(suggestions.some(s => s.includes('stash'))).toBe(true);
+      expect(suggestions.some(s => s.includes('rebase --continue'))).toBe(false);
+      expect(suggestions.some(s => s.includes('git add'))).toBe(false);
+    });
+
+    it('classifies a checkout that would clobber local work', () => {
+      const error = new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/a.ts'
+      );
+
+      expect(detectGitError(error, context).gitErrorCode).toBe(
+        GitErrorCode.UNCOMMITTED_CHANGES
       );
     });
   });
@@ -379,7 +429,13 @@ describe('Type guard functions', () => {
     });
 
     it('should return true for rebase conflicts', () => {
-      expect(isConflictError(new Error('rebase conflict'))).toBe(true);
+      expect(isConflictError(new Error('error: could not apply a1b2c3d'))).toBe(true);
+    });
+
+    it('returns false for a dirty tree, which is not a conflict', () => {
+      expect(
+        isConflictError(new Error('error: cannot pull with rebase: You have unstaged changes.'))
+      ).toBe(false);
     });
 
     it('should return false for other errors', () => {

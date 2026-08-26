@@ -17,6 +17,7 @@ import {
   isAuthenticationError,
   isNetworkError,
   isConflictError,
+  isUncommittedChangesError,
   isNonFastForwardError,
 } from '@/utils/git-errors.js';
 
@@ -155,6 +156,13 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
       return handleDeletedRemoteBranch(branchName);
     }
 
+    // Before the conflict arm: git refusing to start on a dirty tree is not a
+    // conflict, and the recovery is the opposite (stash or commit, not resolve
+    // and continue).
+    if (isUncommittedChangesError(error)) {
+      return failure(GitErrors.uncommittedChanges('pull'));
+    }
+
     if (isConflictError(error)) {
       return failure(GitErrors.mergeConflict('pull'));
     }
@@ -211,6 +219,9 @@ async function handleDivergedPull(
       return success({ cancelled: false } as const);
     } catch (error) {
       rebaseSpinner.stop();
+      if (isUncommittedChangesError(error)) {
+        return failure(GitErrors.uncommittedChanges('pull'));
+      }
       if (isConflictError(error)) {
         return failure(GitErrors.rebaseConflict('pull'));
       }
@@ -246,6 +257,9 @@ async function handleDivergedPull(
     } catch (error) {
       fetchSpinner.stop();
       mergeSpinner.stop();
+      if (isUncommittedChangesError(error)) {
+        return failure(GitErrors.uncommittedChanges('pull'));
+      }
       if (isConflictError(error)) {
         return failure(GitErrors.mergeConflict('pull'));
       }
