@@ -198,7 +198,8 @@ describe('detectGitError', () => {
     it('suggests stash or commit, not conflict resolution', () => {
       const error = new Error('error: Please commit or stash them.');
 
-      const { suggestions } = detectGitError(error, { ...context, commandName: 'pull' });
+      const suggestions = detectGitError(error, { ...context, commandName: 'pull' })
+        .suggestions ?? [];
 
       expect(suggestions.some(s => s.includes('stash'))).toBe(true);
       expect(suggestions.some(s => s.includes('rebase --continue'))).toBe(false);
