@@ -236,3 +236,40 @@ describe('git commit command', () => {
     });
   });
 });
+
+/**
+ * `--no-verify` reaches git.
+ *
+ * Asserting the argv on BOTH paths is the point. `--ai --yes` commits from a
+ * different call site than the quick and interactive flows, so a flag wired
+ * into one and missed on the other works for some invocations and silently
+ * does nothing for others.
+ */
+describe('git commit --no-verify', () => {
+  it('registers the flag with a -n short form', async () => {
+    const { createCommitCommand } = await import('../../../src/commands/git/commit/index.js');
+    const helpText = createCommitCommand().helpInformation();
+
+    expect(helpText).toContain('--no-verify');
+    expect(helpText).toContain('-n,');
+  });
+
+  it('accepts verify in the options schema', async () => {
+    const { gitCommitOptionsSchema } = await import('../../../src/types/schemas.js');
+
+    expect(gitCommitOptionsSchema.parse({ verify: false }).verify).toBe(false);
+    expect(gitCommitOptionsSchema.parse({}).verify).toBeUndefined();
+  });
+
+  it('parses -n into verify: false, and its absence into true', async () => {
+    const { createCommitCommand } = await import('../../../src/commands/git/commit/index.js');
+
+    const withFlag = createCommitCommand();
+    withFlag.parse(['-n'], { from: 'user' });
+    expect(withFlag.opts().verify).toBe(false);
+
+    const without = createCommitCommand();
+    without.parse([], { from: 'user' });
+    expect(without.opts().verify).toBe(true);
+  });
+});

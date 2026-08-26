@@ -96,6 +96,9 @@ export const gitCommitOptionsSchema = baseOptionsSchema.extend({
   breaking: z.boolean().optional(),
   all: z.boolean().optional(),
   ai: z.boolean().optional(),
+  // Commander's negated form: absent or `true` means run hooks, `false` comes
+  // from `-n`/`--no-verify` and forwards `--no-verify` to git.
+  verify: z.boolean().optional(),
 });
 
 /**

@@ -65,6 +65,22 @@ function formatCommitMessage(
 }
 
 /**
+ * Build the argv for `git commit`.
+ *
+ * Both commit paths go through here so a flag cannot be wired into one and
+ * silently missed on the other: `--ai --yes` commits from a different call site
+ * than the quick and interactive flows, and that is exactly how `--no-verify`
+ * would end up working for some invocations and not others.
+ */
+function buildCommitArgs(message: string, options: GitCommitOptions): string[] {
+  const args = ['commit', '-m', message];
+  // Commander sets `verify: false` for `-n`/`--no-verify`, and leaves it
+  // undefined when the flag is absent. Only an explicit false skips hooks.
+  if (options.verify === false) args.push('--no-verify');
+  return args;
+}
+
+/**
  * Check if there are staged changes
  */
 async function hasStagedChanges(): Promise<boolean> {
@@ -297,7 +313,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         spinner.start();
 
         try {
-          await execa('git', ['commit', '-m', formattedMessage]);
+          await execa('git', buildCommitArgs(formattedMessage, options));
           spinner.succeed('Commit created successfully!');
 
           const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
@@ -437,7 +453,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     spinner.start();
 
     try {
-      await execa('git', ['commit', '-m', formattedMessage]);
+      await execa('git', buildCommitArgs(formattedMessage, options));
       spinner.succeed('Commit created successfully!');
 
       const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
@@ -489,6 +505,7 @@ export function createCommitCommand(): Command {
     .option('--breaking', 'mark as breaking change')
     .option('-a, --all', 'automatically stage all modified files')
     .option('--ai', 'generate commit message using AI')
+    .option('-n, --no-verify', 'skip the pre-commit and commit-msg hooks')
     .addHelpText(
       'after',
       `
