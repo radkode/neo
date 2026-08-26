@@ -34,6 +34,11 @@ describe('git commit command', () => {
       expect(helpText).toContain('--breaking');
       expect(helpText).toContain('--all');
       expect(helpText).toContain('--ai');
+
+      const noVerifyOption = command.options.find((option) => option.long === '--no-verify');
+      expect(noVerifyOption?.short).toBe('-n');
+      expect(noVerifyOption?.attributeName()).toBe('verify');
+      expect(noVerifyOption?.negate).toBe(true);
     });
 
     it('should have --ai option for AI-powered commit messages', async () => {
@@ -168,6 +173,7 @@ describe('git commit command', () => {
         body: 'Detailed description',
         breaking: true,
         all: false,
+        verify: false,
       };
       expect(gitCommitOptionsSchema.parse(allOptions)).toEqual(allOptions);
 
@@ -234,42 +240,5 @@ describe('git commit command', () => {
         'revert',
       ]);
     });
-  });
-});
-
-/**
- * `--no-verify` reaches git.
- *
- * Asserting the argv on BOTH paths is the point. `--ai --yes` commits from a
- * different call site than the quick and interactive flows, so a flag wired
- * into one and missed on the other works for some invocations and silently
- * does nothing for others.
- */
-describe('git commit --no-verify', () => {
-  it('registers the flag with a -n short form', async () => {
-    const { createCommitCommand } = await import('../../../src/commands/git/commit/index.js');
-    const helpText = createCommitCommand().helpInformation();
-
-    expect(helpText).toContain('--no-verify');
-    expect(helpText).toContain('-n,');
-  });
-
-  it('accepts verify in the options schema', async () => {
-    const { gitCommitOptionsSchema } = await import('../../../src/types/schemas.js');
-
-    expect(gitCommitOptionsSchema.parse({ verify: false }).verify).toBe(false);
-    expect(gitCommitOptionsSchema.parse({}).verify).toBeUndefined();
-  });
-
-  it('parses -n into verify: false, and its absence into true', async () => {
-    const { createCommitCommand } = await import('../../../src/commands/git/commit/index.js');
-
-    const withFlag = createCommitCommand();
-    withFlag.parse(['-n'], { from: 'user' });
-    expect((withFlag.opts() as { verify?: boolean }).verify).toBe(false);
-
-    const without = createCommitCommand();
-    without.parse([], { from: 'user' });
-    expect((without.opts() as { verify?: boolean }).verify).toBe(true);
   });
 });

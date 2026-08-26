@@ -64,18 +64,8 @@ function formatCommitMessage(
   return commitMsg;
 }
 
-/**
- * Build the argv for `git commit`.
- *
- * Both commit paths go through here so a flag cannot be wired into one and
- * silently missed on the other: `--ai --yes` commits from a different call site
- * than the quick and interactive flows, and that is exactly how `--no-verify`
- * would end up working for some invocations and not others.
- */
 function buildCommitArgs(message: string, options: GitCommitOptions): string[] {
   const args = ['commit', '-m', message];
-  // Commander sets `verify: false` for `-n`/`--no-verify`, and leaves it
-  // undefined when the flag is absent. Only an explicit false skips hooks.
   if (options.verify === false) args.push('--no-verify');
   return args;
 }

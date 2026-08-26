@@ -4,15 +4,6 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 import { generateCommitMessage, isAICommitAvailable } from '@/services/ai/index.js';
 
-/**
- * Argv-level coverage for `--no-verify`, on both commit paths.
- *
- * The quick/interactive flow and the `--ai --yes` flow reach git through
- * separate call sites. A flag added to one and missed on the other works for
- * some invocations and silently does nothing for others, which is the failure
- * these two assertions exist to prevent.
- */
-
 const spinnerMock = {
   start: vi.fn(),
   stop: vi.fn(),
@@ -46,11 +37,8 @@ vi.mock('@/utils/ui.js', () => ({
   },
 }));
 
-// Loosely typed on purpose: these tests drive execa by argv rather than by
-// call order, which execa's overloaded signature does not model.
 const mockExeca = execa as unknown as Mock;
 
-/** Stage one file, then let every other git call succeed. */
 function gitSucceeds(): void {
   mockExeca.mockImplementation(async (_cmd: string, args: readonly string[]) => {
     if (args[0] === 'diff') return execaResult({ stdout: 'a.txt' });
@@ -61,7 +49,6 @@ function gitSucceeds(): void {
   });
 }
 
-/** The argv of the single `git commit ...` invocation. */
 function commitArgs(): string[] {
   const call = (mockExeca.mock.calls as unknown[][]).find(
     ([, args]) => Array.isArray(args) && args[0] === 'commit'
