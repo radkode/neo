@@ -27,6 +27,7 @@ describe('GitErrorCode', () => {
     expect(GitErrorCode.NETWORK_ERROR).toBe('GIT_NETWORK_ERROR');
     expect(GitErrorCode.MERGE_CONFLICT).toBe('GIT_MERGE_CONFLICT');
     expect(GitErrorCode.REBASE_CONFLICT).toBe('GIT_REBASE_CONFLICT');
+    expect(GitErrorCode.UNCOMMITTED_CHANGES).toBe('GIT_UNCOMMITTED_CHANGES');
     expect(GitErrorCode.NON_FAST_FORWARD).toBe('GIT_NON_FAST_FORWARD');
     expect(GitErrorCode.NOTHING_TO_COMMIT).toBe('GIT_NOTHING_TO_COMMIT');
     expect(GitErrorCode.NO_STAGED_CHANGES).toBe('GIT_NO_STAGED_CHANGES');
@@ -142,27 +143,92 @@ describe('detectGitError', () => {
   });
 
   describe('MERGE_CONFLICT', () => {
-    it('should detect merge conflict errors', () => {
-      const error = new Error('Automatic merge failed; fix conflicts');
+    it('classifies a full merge conflict transcript', () => {
+      const error = new Error(
+        'Auto-merging src/a.ts\nCONFLICT (content): Merge conflict in src/a.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      );
       const result = detectGitError(error, context);
 
       expect(result.gitErrorCode).toBe(GitErrorCode.MERGE_CONFLICT);
     });
+
+    it('classifies a pull attempted with unresolved conflicts', () => {
+      const error = new Error(
+        'error: Pulling is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use git add/rm <file>\nfatal: Exiting because of an unresolved conflict.'
+      );
+
+      expect(detectGitError(error, { ...context, commandName: 'pull' }).gitErrorCode).toBe(
+        GitErrorCode.MERGE_CONFLICT
+      );
+    });
   });
 
   describe('REBASE_CONFLICT', () => {
-    it('should detect rebase conflict errors', () => {
-      // Note: REBASE_CONFLICT pattern requires both "rebase" AND "conflict" words
-      // but MERGE_CONFLICT patterns come before it in the array, so "merge conflict" matches first
-      // This tests the actual behavior - the pattern matching is order-dependent
-      const error = new Error('error: could not apply during rebase');
-      const result = detectGitError(error, { ...context, commandName: 'rebase' });
-
-      // This will actually match MERGE_CONFLICT due to "conflict" pattern
-      // The actual implementation matches patterns in order
-      expect([GitErrorCode.MERGE_CONFLICT, GitErrorCode.REBASE_CONFLICT]).toContain(
-        result.gitErrorCode
+    it('classifies a full rebase conflict transcript', () => {
+      const error = new Error(
+        'Auto-merging src/a.ts\nCONFLICT (content): Merge conflict in src/a.ts\nerror: could not apply a1b2c3d... some commit\nhint: Resolve all conflicts manually, mark them as resolved with git add/rm <conflicted_files>, then run git rebase --continue.'
       );
+
+      expect(detectGitError(error, { ...context, commandName: 'rebase' }).gitErrorCode).toBe(
+        GitErrorCode.REBASE_CONFLICT
+      );
+    });
+
+    it('does not report a conflict for stderr that merely says "rebase"', () => {
+      const error = new Error(
+        'error: cannot pull with rebase: You have unstaged changes.\nerror: Please commit or stash them.'
+      );
+
+      const result = detectGitError(error, { ...context, commandName: 'pull' });
+
+      expect(result.gitErrorCode).not.toBe(GitErrorCode.REBASE_CONFLICT);
+      expect(result.gitErrorCode).not.toBe(GitErrorCode.MERGE_CONFLICT);
+    });
+
+    it('does not report a conflict when a rebase simply cannot start', () => {
+      const error = new Error('fatal: It seems that there is already a rebase-merge directory');
+
+      expect(isConflictError(error)).toBe(false);
+    });
+  });
+
+  describe('UNCOMMITTED_CHANGES', () => {
+    it('classifies the dirty-tree pull refusal, verbatim from the report', () => {
+      const error = new Error(
+        'error: cannot pull with rebase: You have unstaged changes.\nerror: Please commit or stash them.'
+      );
+
+      const result = detectGitError(error, { ...context, commandName: 'pull' });
+
+      expect(result.gitErrorCode).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
+      expect(result.message).toBe('You have uncommitted changes.');
+    });
+
+    it('suggests stash or commit, not conflict resolution', () => {
+      const error = new Error('error: Please commit or stash them.');
+
+      const suggestions =
+        detectGitError(error, { ...context, commandName: 'pull' }).suggestions ?? [];
+
+      expect(suggestions.some((s) => s.includes('stash'))).toBe(true);
+      expect(suggestions.some((s) => s.includes('rebase --continue'))).toBe(false);
+      expect(suggestions.some((s) => s.includes('git add'))).toBe(false);
+    });
+
+    it('classifies a checkout that would clobber local work', () => {
+      const error = new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/a.ts'
+      );
+
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
+    });
+
+    it('classifies an untracked file that would be overwritten by a pull', () => {
+      const error = new Error(
+        'error: The following untracked working tree files would be overwritten by merge:\n\tsrc/a.ts'
+      );
+
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
     });
   });
 
@@ -236,12 +302,18 @@ describe('detectGitError', () => {
   });
 
   describe('STASH_APPLY_CONFLICT', () => {
-    it('should detect stash apply conflict errors', () => {
-      // Use "needs merge" pattern which is unique to STASH_APPLY_CONFLICT
-      const error = new Error('error: needs merge');
-      const result = detectGitError(error, context);
+    it('classifies a full stash conflict transcript', () => {
+      const error = new Error(
+        'Auto-merging src/a.ts\nCONFLICT (content): Merge conflict in src/a.ts\nOn branch main\nUnmerged paths:\n\tboth modified: src/a.ts\nThe stash entry is kept in case you need it again.'
+      );
 
-      expect(result.gitErrorCode).toBe(GitErrorCode.STASH_APPLY_CONFLICT);
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.STASH_APPLY_CONFLICT);
+    });
+
+    it('does not let the rebase prefix shadow a stash error', () => {
+      const error = new Error('error: could not apply stash');
+
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.STASH_APPLY_CONFLICT);
     });
   });
 
@@ -379,7 +451,13 @@ describe('Type guard functions', () => {
     });
 
     it('should return true for rebase conflicts', () => {
-      expect(isConflictError(new Error('rebase conflict'))).toBe(true);
+      expect(isConflictError(new Error('error: could not apply a1b2c3d'))).toBe(true);
+    });
+
+    it('returns false for a dirty tree, which is not a conflict', () => {
+      expect(
+        isConflictError(new Error('error: cannot pull with rebase: You have unstaged changes.'))
+      ).toBe(false);
     });
 
     it('should return false for other errors', () => {

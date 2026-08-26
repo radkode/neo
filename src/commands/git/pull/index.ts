@@ -17,6 +17,7 @@ import {
   isAuthenticationError,
   isNetworkError,
   isConflictError,
+  isUncommittedChangesError,
   isNonFastForwardError,
 } from '@/utils/git-errors.js';
 
@@ -155,8 +156,15 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
       return handleDeletedRemoteBranch(branchName);
     }
 
+    // A refusal to start must win over conflict recovery.
+    if (isUncommittedChangesError(error)) {
+      return failure(GitErrors.uncommittedChanges('pull'));
+    }
+
     if (isConflictError(error)) {
-      return failure(GitErrors.mergeConflict('pull'));
+      return failure(
+        options.rebase ? GitErrors.rebaseConflict('pull') : GitErrors.mergeConflict('pull')
+      );
     }
 
     if (isAuthenticationError(error)) {
@@ -211,6 +219,9 @@ async function handleDivergedPull(
       return success({ cancelled: false } as const);
     } catch (error) {
       rebaseSpinner.stop();
+      if (isUncommittedChangesError(error)) {
+        return failure(GitErrors.uncommittedChanges('pull'));
+      }
       if (isConflictError(error)) {
         return failure(GitErrors.rebaseConflict('pull'));
       }
@@ -246,6 +257,9 @@ async function handleDivergedPull(
     } catch (error) {
       fetchSpinner.stop();
       mergeSpinner.stop();
+      if (isUncommittedChangesError(error)) {
+        return failure(GitErrors.uncommittedChanges('pull'));
+      }
       if (isConflictError(error)) {
         return failure(GitErrors.mergeConflict('pull'));
       }

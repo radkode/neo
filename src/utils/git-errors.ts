@@ -21,6 +21,7 @@ export enum GitErrorCode {
   NETWORK_ERROR = 'GIT_NETWORK_ERROR',
   MERGE_CONFLICT = 'GIT_MERGE_CONFLICT',
   REBASE_CONFLICT = 'GIT_REBASE_CONFLICT',
+  UNCOMMITTED_CHANGES = 'GIT_UNCOMMITTED_CHANGES',
   NON_FAST_FORWARD = 'GIT_NON_FAST_FORWARD',
   NOTHING_TO_COMMIT = 'GIT_NOTHING_TO_COMMIT',
   NO_STAGED_CHANGES = 'GIT_NO_STAGED_CHANGES',
@@ -108,24 +109,65 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     getSuggestions: () => ['Check your internet connection'],
   },
   {
-    code: GitErrorCode.MERGE_CONFLICT,
-    patterns: ['merge conflict', 'automatic merge failed', 'fix conflicts'],
-    message: 'Merge conflicts detected!',
+    // Refusals to start must win over conflict recovery.
+    code: GitErrorCode.UNCOMMITTED_CHANGES,
+    patterns: [
+      'cannot pull with rebase',
+      'please commit or stash them',
+      'your local changes to the following files would be overwritten',
+      'untracked working tree files would be overwritten',
+      'you have unstaged changes',
+      'cannot rebase: your index contains uncommitted changes',
+    ],
+    message: 'You have uncommitted changes.',
     getSuggestions: () => [
-      'Fix conflicts in your editor',
+      'Stash them: git stash push -u',
+      'Or commit them: neo git commit',
+      'Then retry the pull',
+    ],
+  },
+  {
+    // Specific conflict signatures must precede generic merge markers.
+    code: GitErrorCode.STASH_APPLY_CONFLICT,
+    patterns: ['could not apply stash', 'stash entry is kept', 'needs merge'],
+    message: 'Conflicts detected when applying stash!',
+    getSuggestions: () => [
+      'Resolve conflicts manually in your editor',
       'Stage resolved files: git add <files>',
-      'Commit the merge: git commit',
+      'The stash was not dropped - you can retry after resolving',
     ],
   },
   {
     code: GitErrorCode.REBASE_CONFLICT,
-    patterns: ['rebase', 'conflict'],
+    // Patterns are OR-matched, so each entry must identify a real conflict.
+    patterns: [
+      'could not apply',
+      'resolve all conflicts manually',
+      'after resolving the conflicts',
+    ],
     message: 'Rebase hit conflicts.',
     getSuggestions: () => [
       'Fix conflicts in your editor',
       'Stage resolved files: git add <files>',
       'Continue rebase: git rebase --continue',
       'Or abort the rebase: git rebase --abort',
+    ],
+  },
+  {
+    code: GitErrorCode.MERGE_CONFLICT,
+    patterns: [
+      'merge conflict',
+      'automatic merge failed',
+      'fix conflicts',
+      'conflict (',
+      'unmerged files',
+      'unresolved conflict',
+    ],
+    message: 'Merge conflicts detected!',
+    getSuggestions: () => [
+      'Fix conflicts in your editor',
+      'Stage resolved files: git add <files>',
+      'Commit the merge: git commit',
     ],
   },
   {
@@ -179,16 +221,6 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     getSuggestions: () => [
       'Use "neo git stash list" to see available stashes',
       'The stash may have been dropped or applied already',
-    ],
-  },
-  {
-    code: GitErrorCode.STASH_APPLY_CONFLICT,
-    patterns: ['conflict', 'could not apply stash', 'needs merge'],
-    message: 'Conflicts detected when applying stash!',
-    getSuggestions: () => [
-      'Resolve conflicts manually in your editor',
-      'Stage resolved files: git add <files>',
-      'The stash was not dropped - you can retry after resolving',
     ],
   },
   {
@@ -332,6 +364,13 @@ export function isConflictError(error: unknown): boolean {
 }
 
 /**
+ * Check if error is git refusing to start because the working tree is dirty
+ */
+export function isUncommittedChangesError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.UNCOMMITTED_CHANGES);
+}
+
+/**
  * Check if error is non-fast-forward/diverged error
  */
 export function isNonFastForwardError(error: unknown): boolean {
@@ -409,6 +448,21 @@ export const GitErrors = {
         'Or abort the rebase: git rebase --abort',
       ],
     });
+  },
+
+  uncommittedChanges(commandName: string): GitError {
+    return new GitError(
+      'You have uncommitted changes.',
+      GitErrorCode.UNCOMMITTED_CHANGES,
+      commandName,
+      {
+        suggestions: [
+          'Stash them: git stash push -u',
+          'Or commit them: neo git commit',
+          'Then retry the pull',
+        ],
+      }
+    );
   },
 
   nonFastForward(commandName: string): GitError {
