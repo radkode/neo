@@ -34,6 +34,11 @@ describe('git commit command', () => {
       expect(helpText).toContain('--breaking');
       expect(helpText).toContain('--all');
       expect(helpText).toContain('--ai');
+
+      const noVerifyOption = command.options.find((option) => option.long === '--no-verify');
+      expect(noVerifyOption?.short).toBe('-n');
+      expect(noVerifyOption?.attributeName()).toBe('verify');
+      expect(noVerifyOption?.negate).toBe(true);
     });
 
     it('should have --ai option for AI-powered commit messages', async () => {
@@ -168,6 +173,7 @@ describe('git commit command', () => {
         body: 'Detailed description',
         breaking: true,
         all: false,
+        verify: false,
       };
       expect(gitCommitOptionsSchema.parse(allOptions)).toEqual(allOptions);
 

@@ -64,6 +64,12 @@ function formatCommitMessage(
   return commitMsg;
 }
 
+function buildCommitArgs(message: string, options: GitCommitOptions): string[] {
+  const args = ['commit', '-m', message];
+  if (options.verify === false) args.push('--no-verify');
+  return args;
+}
+
 /**
  * Check if there are staged changes
  */
@@ -297,7 +303,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
         spinner.start();
 
         try {
-          await execa('git', ['commit', '-m', formattedMessage]);
+          await execa('git', buildCommitArgs(formattedMessage, options));
           spinner.succeed('Commit created successfully!');
 
           const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
@@ -437,7 +443,7 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
     spinner.start();
 
     try {
-      await execa('git', ['commit', '-m', formattedMessage]);
+      await execa('git', buildCommitArgs(formattedMessage, options));
       spinner.succeed('Commit created successfully!');
 
       const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
@@ -489,6 +495,7 @@ export function createCommitCommand(): Command {
     .option('--breaking', 'mark as breaking change')
     .option('-a, --all', 'automatically stage all modified files')
     .option('--ai', 'generate commit message using AI')
+    .option('-n, --no-verify', 'skip the pre-commit and commit-msg hooks')
     .addHelpText(
       'after',
       `

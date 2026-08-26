@@ -96,6 +96,8 @@ export const gitCommitOptionsSchema = baseOptionsSchema.extend({
   breaking: z.boolean().optional(),
   all: z.boolean().optional(),
   ai: z.boolean().optional(),
+  // Commander maps `-n`/`--no-verify` to `verify: false`.
+  verify: z.boolean().optional(),
 });
 
 /**
