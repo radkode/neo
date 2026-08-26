@@ -2,6 +2,7 @@ import { execa } from 'execa';
 import { execaResult } from '../../utils/test-helpers.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promptSelect } from '@/utils/prompt.js';
+import { GitErrorCode } from '@/utils/git-errors.js';
 
 const spinnerMock = {
   start: vi.fn(),
@@ -192,6 +193,27 @@ describe('git pull command', () => {
         ['merge', '--no-ff', 'origin/feature/diverge'],
         expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
       );
+    });
+  });
+
+  describe('conflict handling', () => {
+    it('returns rebase recovery for an explicit rebase conflict', async () => {
+      const { executePull } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/rebase' }));
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/feature/rebase' }));
+      execaMock.mockRejectedValueOnce(
+        new Error(
+          'CONFLICT (content): Merge conflict in src/a.ts\nerror: could not apply a1b2c3d... some commit'
+        )
+      );
+
+      const result = await executePull({ rebase: true });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe(GitErrorCode.REBASE_CONFLICT);
+      }
     });
   });
 });

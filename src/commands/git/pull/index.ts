@@ -156,15 +156,15 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
       return handleDeletedRemoteBranch(branchName);
     }
 
-    // Before the conflict arm: git refusing to start on a dirty tree is not a
-    // conflict, and the recovery is the opposite (stash or commit, not resolve
-    // and continue).
+    // A refusal to start must win over conflict recovery.
     if (isUncommittedChangesError(error)) {
       return failure(GitErrors.uncommittedChanges('pull'));
     }
 
     if (isConflictError(error)) {
-      return failure(GitErrors.mergeConflict('pull'));
+      return failure(
+        options.rebase ? GitErrors.rebaseConflict('pull') : GitErrors.mergeConflict('pull')
+      );
     }
 
     if (isAuthenticationError(error)) {

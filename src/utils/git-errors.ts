@@ -109,13 +109,13 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     getSuggestions: () => ['Check your internet connection'],
   },
   {
-    // Ahead of the conflict entries on purpose: a refusal to start is not a
-    // conflict, and git says so before any merge or rebase has begun.
+    // Refusals to start must win over conflict recovery.
     code: GitErrorCode.UNCOMMITTED_CHANGES,
     patterns: [
       'cannot pull with rebase',
       'please commit or stash them',
       'your local changes to the following files would be overwritten',
+      'untracked working tree files would be overwritten',
       'you have unstaged changes',
       'cannot rebase: your index contains uncommitted changes',
     ],
@@ -127,24 +127,21 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     ],
   },
   {
-    code: GitErrorCode.MERGE_CONFLICT,
-    patterns: ['merge conflict', 'automatic merge failed', 'fix conflicts'],
-    message: 'Merge conflicts detected!',
+    // Specific conflict signatures must precede generic merge markers.
+    code: GitErrorCode.STASH_APPLY_CONFLICT,
+    patterns: ['could not apply stash', 'stash entry is kept', 'needs merge'],
+    message: 'Conflicts detected when applying stash!',
     getSuggestions: () => [
-      'Fix conflicts in your editor',
+      'Resolve conflicts manually in your editor',
       'Stage resolved files: git add <files>',
-      'Commit the merge: git commit',
+      'The stash was not dropped - you can retry after resolving',
     ],
   },
   {
     code: GitErrorCode.REBASE_CONFLICT,
-    // NOT ['rebase', 'conflict']. These are matched with .some() against the
-    // whole of stderr, so a bare 'rebase' reported every failure of every
-    // rebase-flavoured command as a conflict, suggesting `git rebase
-    // --continue` to people who had no rebase in progress.
+    // Patterns are OR-matched, so each entry must identify a real conflict.
     patterns: [
       'could not apply',
-      'conflict (',
       'resolve all conflicts manually',
       'after resolving the conflicts',
     ],
@@ -154,6 +151,23 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
       'Stage resolved files: git add <files>',
       'Continue rebase: git rebase --continue',
       'Or abort the rebase: git rebase --abort',
+    ],
+  },
+  {
+    code: GitErrorCode.MERGE_CONFLICT,
+    patterns: [
+      'merge conflict',
+      'automatic merge failed',
+      'fix conflicts',
+      'conflict (',
+      'unmerged files',
+      'unresolved conflict',
+    ],
+    message: 'Merge conflicts detected!',
+    getSuggestions: () => [
+      'Fix conflicts in your editor',
+      'Stage resolved files: git add <files>',
+      'Commit the merge: git commit',
     ],
   },
   {
@@ -207,20 +221,6 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     getSuggestions: () => [
       'Use "neo git stash list" to see available stashes',
       'The stash may have been dropped or applied already',
-    ],
-  },
-  {
-    code: GitErrorCode.STASH_APPLY_CONFLICT,
-    // The bare 'conflict' this used to carry was dead: REBASE_CONFLICT's own
-    // bare 'conflict' sat earlier in the array and always won. Narrowing that
-    // entry would have made this one live and started reporting unrelated
-    // failures as stash conflicts, so it is narrowed in the same change.
-    patterns: ['could not apply stash', 'needs merge', 'conflict ('],
-    message: 'Conflicts detected when applying stash!',
-    getSuggestions: () => [
-      'Resolve conflicts manually in your editor',
-      'Stage resolved files: git add <files>',
-      'The stash was not dropped - you can retry after resolving',
     ],
   },
   {
