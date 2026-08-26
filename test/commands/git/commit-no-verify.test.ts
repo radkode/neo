@@ -1,7 +1,7 @@
 import { execa } from 'execa';
 import { execaResult } from '../../utils/test-helpers.js';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { setRuntimeContext } from '@/utils/runtime-context.js';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 import { generateCommitMessage, isAICommitAvailable } from '@/services/ai/index.js';
 
 /**
@@ -46,22 +46,24 @@ vi.mock('@/utils/ui.js', () => ({
   },
 }));
 
-const mockExeca = vi.mocked(execa);
+// Loosely typed on purpose: these tests drive execa by argv rather than by
+// call order, which execa's overloaded signature does not model.
+const mockExeca = execa as unknown as Mock;
 
 /** Stage one file, then let every other git call succeed. */
 function gitSucceeds(): void {
-  mockExeca.mockImplementation((async (_cmd: string, args: readonly string[]) => {
+  mockExeca.mockImplementation(async (_cmd: string, args: readonly string[]) => {
     if (args[0] === 'diff') return execaResult({ stdout: 'a.txt' });
     if (args[0] === 'rev-parse' && args[1] === '--short') {
       return execaResult({ stdout: 'abc1234' });
     }
     return execaResult({ stdout: '' });
-  }) as unknown as typeof execa);
+  });
 }
 
 /** The argv of the single `git commit ...` invocation. */
 function commitArgs(): string[] {
-  const call = mockExeca.mock.calls.find(
+  const call = (mockExeca.mock.calls as unknown[][]).find(
     ([, args]) => Array.isArray(args) && args[0] === 'commit'
   );
   if (!call) throw new Error('git commit was never invoked');
@@ -71,7 +73,7 @@ function commitArgs(): string[] {
 describe('git commit forwards --no-verify to git', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setRuntimeContext({ yes: true, nonInteractive: true });
+    setRuntimeContext(buildRuntimeContext({ yes: true, nonInteractive: true }));
     gitSucceeds();
   });
 
@@ -103,11 +105,11 @@ describe('git commit forwards --no-verify to git', () => {
 
   describe('--ai path', () => {
     beforeEach(() => {
-      vi.mocked(isAICommitAvailable).mockResolvedValue(true);
-      vi.mocked(generateCommitMessage).mockResolvedValue({
+      (isAICommitAvailable as unknown as Mock).mockResolvedValue(true);
+      (generateCommitMessage as unknown as Mock).mockResolvedValue({
         success: true,
         data: { type: 'fix', message: 'drafted', breaking: false },
-      } as Awaited<ReturnType<typeof generateCommitMessage>>);
+      });
     });
 
     it('passes --no-verify from the separate AI call site too', async () => {

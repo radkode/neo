@@ -266,10 +266,10 @@ describe('git commit --no-verify', () => {
 
     const withFlag = createCommitCommand();
     withFlag.parse(['-n'], { from: 'user' });
-    expect(withFlag.opts().verify).toBe(false);
+    expect((withFlag.opts() as { verify?: boolean }).verify).toBe(false);
 
     const without = createCommitCommand();
     without.parse([], { from: 'user' });
-    expect(without.opts().verify).toBe(true);
+    expect((without.opts() as { verify?: boolean }).verify).toBe(true);
   });
 });
