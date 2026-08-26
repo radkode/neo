@@ -1,5 +1,17 @@
 # @radkode/neo
 
+## 1.9.0
+
+### Minor Changes
+
+- [#63](https://github.com/radkode/neo/pull/63) [`c0d3302`](https://github.com/radkode/neo/commit/c0d330237a8b9a6dd04d387609e933ad128d21f8) Thanks [@jacekradko](https://github.com/jacekradko)! - Add `-n` / `--no-verify` to `neo git commit`, forwarded to git on both the quick/interactive and `--ai` paths. Repositories that mandate `git commit -n` previously had to bypass neo entirely to commit.
+
+### Patch Changes
+
+- [#61](https://github.com/radkode/neo/pull/61) [`cce4df1`](https://github.com/radkode/neo/commit/cce4df1c13fb7e4d1fa671fcdb59590ef812147f) Thanks [@jacekradko](https://github.com/jacekradko)! - Correct the shipped neo skill's main-branch push guidance: the bypass flag is `--force-main`, not `--force`, which is not a neo flag and passes through to git as a real force-push. Adds an anti-pattern for falling back to raw git/gh when neo is installed but misbehaving.
+
+- [#64](https://github.com/radkode/neo/pull/64) [`0a8c128`](https://github.com/radkode/neo/commit/0a8c12841a76a45fe55dae06da54e5118311b117) Thanks [@jacekradko](https://github.com/jacekradko)! - Stop reporting a rebase conflict for any git failure whose stderr merely contains "rebase". `neo git pull` on a dirty working tree now says the tree is dirty and suggests stash or commit, instead of suggesting `git rebase --continue` to people with no rebase in progress.
+
 ## 1.8.3
 
 ### Patch Changes
