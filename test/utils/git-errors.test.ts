@@ -198,12 +198,12 @@ describe('detectGitError', () => {
     it('suggests stash or commit, not conflict resolution', () => {
       const error = new Error('error: Please commit or stash them.');
 
-      const suggestions = detectGitError(error, { ...context, commandName: 'pull' })
-        .suggestions ?? [];
+      const suggestions =
+        detectGitError(error, { ...context, commandName: 'pull' }).suggestions ?? [];
 
-      expect(suggestions.some(s => s.includes('stash'))).toBe(true);
-      expect(suggestions.some(s => s.includes('rebase --continue'))).toBe(false);
-      expect(suggestions.some(s => s.includes('git add'))).toBe(false);
+      expect(suggestions.some((s) => s.includes('stash'))).toBe(true);
+      expect(suggestions.some((s) => s.includes('rebase --continue'))).toBe(false);
+      expect(suggestions.some((s) => s.includes('git add'))).toBe(false);
     });
 
     it('classifies a checkout that would clobber local work', () => {
@@ -211,9 +211,7 @@ describe('detectGitError', () => {
         'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/a.ts'
       );
 
-      expect(detectGitError(error, context).gitErrorCode).toBe(
-        GitErrorCode.UNCOMMITTED_CHANGES
-      );
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
     });
   });
 
