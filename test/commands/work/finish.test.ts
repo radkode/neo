@@ -55,6 +55,17 @@ const execaMock = vi.mocked(execa);
 const isAgentInitializedMock = vi.mocked(isAgentInitialized);
 const getAgentDbPathMock = vi.mocked(getAgentDbPath);
 
+const mainAndFeatureWorktrees = [
+  'worktree /repo',
+  `HEAD ${'a'.repeat(40)}`,
+  'branch refs/heads/main',
+  '',
+  'worktree /repo/.worktrees/fix-foo',
+  `HEAD ${'b'.repeat(40)}`,
+  'branch refs/heads/jacek/fix-foo',
+  '',
+].join('\n');
+
 /**
  * Order for the typical "PR merged, current branch is the feature branch":
  *   1. rev-parse --is-inside-work-tree
@@ -64,10 +75,10 @@ const getAgentDbPathMock = vi.mocked(getAgentDbPath);
  *   5. status --porcelain                           → "" (clean) — only when on the branch
  *   6. gh --version                                 → installed
  *   7. gh pr list ...                               → [{state: 'MERGED', url: '...'}]
- *   8. checkout <base>                              → success (only if currentBranch === branch)
- *   9. pull --ff-only origin <base>                 → success (when --no-pull not passed)
- *  10. worktree list --porcelain                    → "" (no worktree)
- *  11. branch -D <branch>                           → success
+ *   8. worktree list --porcelain                    → base and feature worktrees
+ *   9. pull --ff-only origin <base>                 → success in the base worktree
+ *  10. worktree remove <path>                       → success from the base worktree
+ *  11. branch -D <branch>                           → success from the base worktree
  */
 
 describe('executeWorkFinish', () => {
@@ -80,7 +91,7 @@ describe('executeWorkFinish', () => {
     vi.resetAllMocks();
   });
 
-  it('finishes a merged feature branch: switches to base, pulls, deletes branch', async () => {
+  it('finishes a merged feature branch from its linked worktree', async () => {
     execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse
     execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
     execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
@@ -90,9 +101,9 @@ describe('executeWorkFinish', () => {
     execaMock.mockResolvedValueOnce({
       stdout: JSON.stringify([{ state: 'MERGED', url: 'https://github.com/x/y/pull/1' }]),
     } as never); // gh pr list
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // checkout
+    execaMock.mockResolvedValueOnce({ stdout: mainAndFeatureWorktrees } as never); // worktree list
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // pull
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree remove
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // branch -D
 
     const result = await executeWorkFinish(undefined, {});
@@ -103,12 +114,20 @@ describe('executeWorkFinish', () => {
     expect(result.prUrl).toBe('https://github.com/x/y/pull/1');
     expect(result.branchDeleted).toBe(true);
     expect(result.pulled).toBe(true);
-    expect(result.worktreeRemoved).toBe(false);
+    expect(result.worktreeRemoved).toBe(true);
+    expect(execaMock).toHaveBeenCalledWith(
+      'git',
+      ['worktree', 'remove', '/repo/.worktrees/fix-foo'],
+      { cwd: '/repo' }
+    );
 
     const deleteCall = execaMock.mock.calls.find(
       ([_cmd, args]) => Array.isArray(args) && args[0] === 'branch' && args[1] === '-D'
     );
     expect(deleteCall?.[1]).toEqual(['branch', '-D', 'jacek/fix-foo']);
+    expect(execaMock).toHaveBeenCalledWith('git', ['branch', '-D', 'jacek/fix-foo'], {
+      cwd: '/repo',
+    });
   });
 
   it('refuses to delete the base branch', async () => {
@@ -176,8 +195,8 @@ describe('executeWorkFinish', () => {
     execaMock.mockResolvedValueOnce({
       stdout: JSON.stringify([{ state: 'MERGED', url: 'https://github.com/x/y/pull/1' }]),
     } as never); // gh pr list
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // checkout
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: mainAndFeatureWorktrees } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree remove
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // branch -D
 
     const result = await executeWorkFinish(undefined, { pull: false });
@@ -194,26 +213,22 @@ describe('executeWorkFinish', () => {
     execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
     execaMock.mockResolvedValueOnce({ stdout: 'main' } as never); // current branch (NOT the feature branch)
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // show-ref → exists
-    // No dirty-tree check fires when finishing a branch you're not on.
     execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
     execaMock.mockResolvedValueOnce({
       stdout: JSON.stringify([{ state: 'MERGED', url: '' }]),
     } as never); // gh pr list
+    execaMock.mockResolvedValueOnce({ stdout: mainAndFeatureWorktrees } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // target status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // pull
-    execaMock.mockResolvedValueOnce({
-      stdout:
-        'worktree /repo\nbranch refs/heads/main\n\nworktree /repo/.worktrees/fix-foo\nbranch refs/heads/jacek/fix-foo\n',
-    } as never); // worktree list
-    // pathExists(/repo/.worktrees/fix-foo) — uses fs.access, not execa, but the
-    // path is checked via access(). In the test process this path doesn't exist
-    // so the worktree-remove block won't execute. To exercise it we'd need to
-    // stub fs.access; covered by integration scenarios, not here.
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree remove
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // branch -D
 
     const result = await executeWorkFinish('jacek/fix-foo', {});
 
     expect(result.branch).toBe('jacek/fix-foo');
     expect(result.branchDeleted).toBe(true);
+    expect(result.worktreeRemoved).toBe(true);
+    expect(result.worktreePath).toBe('/repo/.worktrees/fix-foo');
   });
 
   it('marks the work item as done in the agent context store', async () => {
@@ -226,9 +241,9 @@ describe('executeWorkFinish', () => {
     execaMock.mockResolvedValueOnce({
       stdout: JSON.stringify([{ state: 'MERGED', url: 'https://github.com/x/y/pull/1' }]),
     } as never); // gh pr list
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // checkout
+    execaMock.mockResolvedValueOnce({ stdout: mainAndFeatureWorktrees } as never); // worktree list
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // pull
-    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree remove
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // branch -D
 
     isAgentInitializedMock.mockResolvedValue(true);

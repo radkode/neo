@@ -12,7 +12,7 @@ export function createWorkCommand(): Command {
 Subcommands:
   start <name>    Create a new prefixed branch (optionally in a worktree)
   ship            Verify + ensure changeset + push + open PR for the current branch
-  finish [branch] After merge: switch to base, pull, delete the local branch + worktree
+  finish [branch] After merge: update base, delete the local branch + worktree
 
 Examples:
   Start a new change:
