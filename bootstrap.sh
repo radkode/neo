@@ -296,7 +296,10 @@ echo -e "\n${GREEN}🚀 Creating executable entry point...${NC}"
 
 cat > bin/cli.js << 'EOL'
 #!/usr/bin/env node
-import('../dist/cli.js');
+import { fileURLToPath } from 'node:url';
+
+process.argv[1] = fileURLToPath(import.meta.url);
+await import('../dist/cli.js');
 EOL
 
 chmod +x bin/cli.js
@@ -375,7 +378,7 @@ export function createCLI(): Command {
 }
 
 // Only run if this is the main module
-if (import.meta.url === \`file://\${process.argv[1]}\`) {
+if (import.meta.url === \`file://\${process.argv[1]}\` || process.argv[1]?.endsWith('cli.js')) {
   const program = createCLI();
   
   program.exitOverride();

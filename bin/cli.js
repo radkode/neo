@@ -1,2 +1,5 @@
 #!/usr/bin/env node
-import('../dist/cli.js');
+import { fileURLToPath } from 'node:url';
+
+process.argv[1] = fileURLToPath(import.meta.url);
+await import('../dist/cli.js');
