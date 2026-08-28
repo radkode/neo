@@ -1,9 +1,9 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
-import { access } from 'node:fs/promises';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { parseWorktreeList, type WorktreeInfo } from '@/commands/git/worktree/utils.js';
 import {
   GitErrors,
   isNotGitRepository,
@@ -32,15 +32,6 @@ interface WorkFinishResult {
   contextUpdated: boolean;
 }
 
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function detectDefaultBranch(): Promise<string> {
   try {
     const { stdout } = await execa('git', ['symbolic-ref', 'refs/remotes/origin/HEAD']);
@@ -65,8 +56,10 @@ async function getCurrentBranch(): Promise<string> {
   return stdout.trim();
 }
 
-async function hasUncommittedChanges(): Promise<boolean> {
-  const { stdout } = await execa('git', ['status', '--porcelain']);
+async function hasUncommittedChanges(cwd?: string): Promise<boolean> {
+  const { stdout } = cwd
+    ? await execa('git', ['status', '--porcelain'], { cwd })
+    : await execa('git', ['status', '--porcelain']);
   return stdout.trim().length > 0;
 }
 
@@ -125,31 +118,18 @@ async function isBranchAncestorOfBase(branch: string, base: string): Promise<boo
   }
 }
 
-async function findWorktreePath(branch: string): Promise<string | null> {
-  try {
-    const { stdout } = await execa('git', ['worktree', 'list', '--porcelain']);
-    // worktree list --porcelain emits blocks separated by blank lines, each
-    // of which includes a `worktree <path>` and a `branch refs/heads/<name>`.
-    let currentPath: string | null = null;
-    for (const line of stdout.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        currentPath = line.slice('worktree '.length).trim();
-      } else if (line.startsWith('branch refs/heads/')) {
-        const name = line.slice('branch refs/heads/'.length).trim();
-        if (name === branch && currentPath) return currentPath;
-      } else if (line.trim() === '') {
-        currentPath = null;
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
+async function getWorktrees(): Promise<WorktreeInfo[]> {
+  const { stdout } = await execa('git', ['worktree', 'list', '--porcelain']);
+  return parseWorktreeList(stdout);
 }
 
-async function markWorkItemDone(branch: string): Promise<boolean> {
-  if (!(await isAgentInitialized())) return false;
+async function resolveAgentDbPath(): Promise<string | null> {
+  if (!(await isAgentInitialized())) return null;
   const dbPath = await getAgentDbPath();
+  return dbPath;
+}
+
+async function markWorkItemDone(branch: string, dbPath: string | null): Promise<boolean> {
   if (!dbPath) return false;
 
   let db: ContextDB | null = null;
@@ -196,8 +176,8 @@ export async function executeWorkFinish(
     throw new Error(`Branch "${branch}" does not exist locally.`);
   }
 
-  // Safety: any dirty tree on the current branch could get wiped by the
-  // checkout-to-base step. Force-flag opt-out is deliberately narrow.
+  // Removing or switching the target worktree can discard local changes.
+  // The force flag is the only opt-out.
   if (currentBranch === branch && (await hasUncommittedChanges()) && !options.force) {
     throw new Error(
       'You have uncommitted changes on the branch being finished. Commit/stash first, or pass --force to override.'
@@ -226,13 +206,44 @@ export async function executeWorkFinish(
     );
   }
 
-  // Switch off the branch before deleting it.
-  if (currentBranch === branch) {
+  const worktrees = await getWorktrees();
+  const primaryWorktree = worktrees[0];
+  const targetWorktree = worktrees.find((worktree) => worktree.branch === branch);
+  const existingBaseWorktree = worktrees.find((worktree) => worktree.branch === base);
+  const targetIsPrimary = targetWorktree?.path === primaryWorktree?.path;
+
+  if (!options.force && currentBranch !== branch && targetWorktree) {
+    if (await hasUncommittedChanges(targetWorktree.path)) {
+      throw new Error(
+        'You have uncommitted changes on the branch being finished. Commit/stash first, or pass --force to override.'
+      );
+    }
+  }
+
+  if (!primaryWorktree) {
+    throw new Error('Could not locate the primary worktree.');
+  }
+
+  if (targetIsPrimary && existingBaseWorktree) {
+    throw new Error(
+      `Cannot finish "${branch}" from the primary worktree because "${base}" is already checked out at ${existingBaseWorktree.path}.`
+    );
+  }
+
+  const agentDbPath = await resolveAgentDbPath();
+  let controlWorktree = existingBaseWorktree ?? primaryWorktree;
+  let baseWorktree = existingBaseWorktree;
+
+  if (targetIsPrimary && targetWorktree) {
     const switchSpinner = ui.spinner(`Switching to ${base}`);
     switchSpinner.start();
     try {
-      await execa('git', ['checkout', base]);
+      await execa('git', ['checkout', ...(options.force ? ['--force'] : []), base], {
+        cwd: targetWorktree.path,
+      });
       switchSpinner.succeed(`Switched to ${base}`);
+      baseWorktree = targetWorktree;
+      controlWorktree = targetWorktree;
     } catch (error) {
       switchSpinner.fail(`Failed to switch to ${base}`);
       throw GitErrors.unknown('work finish', error);
@@ -241,11 +252,11 @@ export async function executeWorkFinish(
 
   // Pull (optional)
   let pulled = false;
-  if (options.pull !== false) {
+  if (options.pull !== false && baseWorktree) {
     const pullSpinner = ui.spinner(`Pulling ${base}`);
     pullSpinner.start();
     try {
-      await execa('git', ['pull', '--ff-only', 'origin', base]);
+      await execa('git', ['pull', '--ff-only', 'origin', base], { cwd: baseWorktree.path });
       pullSpinner.succeed(`Pulled ${base}`);
       pulled = true;
     } catch (error) {
@@ -254,25 +265,26 @@ export async function executeWorkFinish(
       if (isNetworkError(error)) throw GitErrors.networkError('work finish');
       throw GitErrors.unknown('work finish', error);
     }
+  } else if (options.pull !== false) {
+    ui.warn(`Skipped pulling ${base} because no worktree has it checked out.`);
   }
 
   // Remove worktree (if any)
   let worktreeRemoved = false;
   let worktreePath: string | undefined;
-  if (options.keepWorktree !== true) {
-    const wt = await findWorktreePath(branch);
-    if (wt && (await pathExists(wt))) {
-      worktreePath = wt;
-      const wtSpinner = ui.spinner(`Removing worktree ${wt}`);
-      wtSpinner.start();
-      try {
-        await execa('git', ['worktree', 'remove', wt, '--force']);
-        wtSpinner.succeed(`Removed worktree ${wt}`);
-        worktreeRemoved = true;
-      } catch (error) {
-        wtSpinner.fail(`Failed to remove worktree ${wt}`);
-        throw GitErrors.unknown('work finish', error);
-      }
+  if (options.keepWorktree !== true && targetWorktree && !targetIsPrimary) {
+    worktreePath = targetWorktree.path;
+    const wtSpinner = ui.spinner(`Removing worktree ${targetWorktree.path}`);
+    wtSpinner.start();
+    try {
+      const removeArgs = ['worktree', 'remove', targetWorktree.path];
+      if (options.force) removeArgs.push('--force');
+      await execa('git', removeArgs, { cwd: controlWorktree.path });
+      wtSpinner.succeed(`Removed worktree ${targetWorktree.path}`);
+      worktreeRemoved = true;
+    } catch (error) {
+      wtSpinner.fail(`Failed to remove worktree ${targetWorktree.path}`);
+      throw GitErrors.unknown('work finish', error);
     }
   }
 
@@ -282,7 +294,7 @@ export async function executeWorkFinish(
   delSpinner.start();
   let branchDeleted: boolean;
   try {
-    await execa('git', ['branch', '-D', branch]);
+    await execa('git', ['branch', '-D', branch], { cwd: controlWorktree.path });
     delSpinner.succeed(`Deleted ${branch}`);
     branchDeleted = true;
   } catch (error) {
@@ -290,7 +302,7 @@ export async function executeWorkFinish(
     throw GitErrors.unknown('work finish', error);
   }
 
-  const contextUpdated = await markWorkItemDone(branch);
+  const contextUpdated = await markWorkItemDone(branch, agentDbPath);
 
   const result: WorkFinishResult = {
     branch,
@@ -310,13 +322,11 @@ export function createWorkFinishCommand(): Command {
   const command = new Command('finish');
 
   command
-    .description(
-      'After a PR merges: switch to base, pull, delete the local branch, remove any worktree'
-    )
+    .description('After a PR merges: update the base, delete the local branch, remove any worktree')
     .argument('[branch]', 'branch to finish (default: current branch)')
     .option('--base <branch>', 'base branch (default: origin HEAD)')
-    .option('--force', 'finish even if PR is not merged or cannot be confirmed')
-    .option('--no-pull', 'do not pull the base branch after switching')
+    .option('--force', 'finish unconfirmed work and allow discarding target worktree changes')
+    .option('--no-pull', 'do not pull the base branch')
     .option('--keep-worktree', 'leave the associated worktree in place')
     .addHelpText(
       'after',
@@ -355,7 +365,10 @@ Examples:
           {
             text: () => {
               ui.newline();
-              ui.success(`Finished ${result.branch} → on ${result.base}`);
+              ui.success(`Finished ${result.branch}`);
+              ui.muted(
+                `Base branch: ${result.base} (${result.pulled ? 'updated' : 'not updated'})`
+              );
               if (result.worktreeRemoved && result.worktreePath) {
                 ui.muted(`Removed worktree: ${result.worktreePath}`);
               }
