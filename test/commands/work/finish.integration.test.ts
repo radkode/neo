@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
@@ -84,6 +84,7 @@ async function runFinish(cwd: string, args: string[], env: NodeJS.ProcessEnv) {
     branchDeleted: boolean;
     pulled: boolean;
     worktreeRemoved: boolean;
+    worktreePath?: string;
   };
 }
 
@@ -114,6 +115,113 @@ describe.skipIf(process.platform === 'win32')('work finish worktree integration'
       await git(fixture.repoPath, ['worktree', 'list', '--porcelain'], fixture.env)
     ).not.toContain(fixture.featurePath);
     await expect(access(fixture.featurePath)).rejects.toThrow();
+    await expect(
+      execa('git', ['show-ref', '--verify', '--quiet', 'refs/heads/jacek/finished'], {
+        cwd: fixture.repoPath,
+        env: fixture.env,
+      })
+    ).rejects.toThrow();
+  }, 30_000);
+
+  it('rejects a locked linked worktree before pulling the base', async () => {
+    const fixture = await createFixture();
+    await git(fixture.repoPath, ['worktree', 'lock', fixture.featurePath], fixture.env);
+
+    await expect(
+      runFinish(fixture.repoPath, ['jacek/finished', '--base', 'main'], fixture.env)
+    ).rejects.toThrow(/locked/);
+
+    expect(await git(fixture.repoPath, ['rev-parse', 'main'], fixture.env)).toBe(
+      fixture.initialCommit
+    );
+    await expect(access(fixture.featurePath)).resolves.toBeUndefined();
+    expect(
+      await git(
+        fixture.repoPath,
+        ['show-ref', '--verify', 'refs/heads/jacek/finished'],
+        fixture.env
+      )
+    ).not.toBe('');
+  }, 30_000);
+
+  it('keeps a linked worktree and its checked-out branch', async () => {
+    const fixture = await createFixture();
+
+    const result = await runFinish(
+      fixture.featurePath,
+      ['--base', 'main', '--keep-worktree'],
+      fixture.env
+    );
+
+    expect(result).toMatchObject({
+      branchDeleted: false,
+      pulled: true,
+      worktreeRemoved: false,
+    });
+    expect(result.worktreePath).toBe(await realpath(fixture.featurePath));
+    expect(await git(fixture.repoPath, ['rev-parse', 'main'], fixture.env)).toBe(
+      fixture.featureCommit
+    );
+    await expect(access(fixture.featurePath)).resolves.toBeUndefined();
+    expect(await git(fixture.featurePath, ['branch', '--show-current'], fixture.env)).toBe(
+      'jacek/finished'
+    );
+    expect(await git(fixture.featurePath, ['rev-parse', 'HEAD'], fixture.env)).toBe(
+      fixture.featureCommit
+    );
+    expect(
+      await git(
+        fixture.repoPath,
+        ['show-ref', '--verify', 'refs/heads/jacek/finished'],
+        fixture.env
+      )
+    ).not.toBe('');
+  }, 30_000);
+
+  it('preserves dirty changes in a kept linked worktree', async () => {
+    const fixture = await createFixture();
+    await writeFile(join(fixture.featurePath, 'initial.txt'), 'dirty\n');
+    await writeFile(join(fixture.featurePath, 'uncommitted.txt'), 'keep me\n');
+
+    const result = await runFinish(
+      fixture.featurePath,
+      ['--base', 'main', '--keep-worktree'],
+      fixture.env
+    );
+
+    expect(result).toMatchObject({
+      branchDeleted: false,
+      pulled: true,
+      worktreeRemoved: false,
+    });
+    expect(result.worktreePath).toBe(await realpath(fixture.featurePath));
+    expect(await readFile(join(fixture.featurePath, 'initial.txt'), 'utf8')).toBe('dirty\n');
+    expect(await readFile(join(fixture.featurePath, 'uncommitted.txt'), 'utf8')).toBe('keep me\n');
+    const status = await git(fixture.featurePath, ['status', '--porcelain'], fixture.env);
+    expect(status).toContain('initial.txt');
+    expect(status).toContain('uncommitted.txt');
+    expect(await git(fixture.featurePath, ['branch', '--show-current'], fixture.env)).toBe(
+      'jacek/finished'
+    );
+  }, 30_000);
+
+  it('still finishes a primary worktree when --keep-worktree is passed', async () => {
+    const fixture = await createFixture();
+    await git(fixture.repoPath, ['worktree', 'remove', fixture.featurePath], fixture.env);
+    await git(fixture.repoPath, ['switch', 'jacek/finished'], fixture.env);
+
+    const result = await runFinish(
+      fixture.repoPath,
+      ['--base', 'main', '--keep-worktree'],
+      fixture.env
+    );
+
+    expect(result).toMatchObject({
+      branchDeleted: true,
+      pulled: true,
+      worktreeRemoved: false,
+    });
+    expect(await git(fixture.repoPath, ['branch', '--show-current'], fixture.env)).toBe('main');
     await expect(
       execa('git', ['show-ref', '--verify', '--quiet', 'refs/heads/jacek/finished'], {
         cwd: fixture.repoPath,
