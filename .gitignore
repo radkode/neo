@@ -5,6 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Worktrees
+.worktrees/
+
 # Logs
 *.log
 npm-debug.log*
