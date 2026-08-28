@@ -176,9 +176,8 @@ export async function executeWorkFinish(
     throw new Error(`Branch "${branch}" does not exist locally.`);
   }
 
-  // Removing or switching the target worktree can discard local changes.
-  // The force flag is the only opt-out.
-  if (currentBranch === branch && (await hasUncommittedChanges()) && !options.force) {
+  const currentTargetHandledEarly = currentBranch === branch && options.keepWorktree !== true;
+  if (!options.force && currentTargetHandledEarly && (await hasUncommittedChanges())) {
     throw new Error(
       'You have uncommitted changes on the branch being finished. Commit/stash first, or pass --force to override.'
     );
@@ -211,8 +210,18 @@ export async function executeWorkFinish(
   const targetWorktree = worktrees.find((worktree) => worktree.branch === branch);
   const existingBaseWorktree = worktrees.find((worktree) => worktree.branch === base);
   const targetIsPrimary = targetWorktree?.path === primaryWorktree?.path;
+  const keptWorktree =
+    options.keepWorktree === true && targetWorktree && !targetIsPrimary
+      ? targetWorktree
+      : undefined;
 
-  if (!options.force && currentBranch !== branch && targetWorktree) {
+  if (targetWorktree?.isLocked && !keptWorktree && !targetIsPrimary) {
+    throw new Error(
+      `Worktree "${targetWorktree.path}" is locked. Unlock it first, or pass --keep-worktree to retain it.`
+    );
+  }
+
+  if (!options.force && targetWorktree && !keptWorktree && !currentTargetHandledEarly) {
     if (await hasUncommittedChanges(targetWorktree.path)) {
       throw new Error(
         'You have uncommitted changes on the branch being finished. Commit/stash first, or pass --force to override.'
@@ -271,8 +280,8 @@ export async function executeWorkFinish(
 
   // Remove worktree (if any)
   let worktreeRemoved = false;
-  let worktreePath: string | undefined;
-  if (options.keepWorktree !== true && targetWorktree && !targetIsPrimary) {
+  let worktreePath = keptWorktree?.path;
+  if (!keptWorktree && targetWorktree && !targetIsPrimary) {
     worktreePath = targetWorktree.path;
     const wtSpinner = ui.spinner(`Removing worktree ${targetWorktree.path}`);
     wtSpinner.start();
@@ -290,16 +299,18 @@ export async function executeWorkFinish(
 
   // Delete branch. `-D` covers squash-merged branches that `git branch -d`
   // would refuse because the ref tree doesn't match base.
-  const delSpinner = ui.spinner(`Deleting local branch ${branch}`);
-  delSpinner.start();
-  let branchDeleted: boolean;
-  try {
-    await execa('git', ['branch', '-D', branch], { cwd: controlWorktree.path });
-    delSpinner.succeed(`Deleted ${branch}`);
-    branchDeleted = true;
-  } catch (error) {
-    delSpinner.fail(`Failed to delete ${branch}`);
-    throw GitErrors.unknown('work finish', error);
+  let branchDeleted = false;
+  if (!keptWorktree) {
+    const delSpinner = ui.spinner(`Deleting local branch ${branch}`);
+    delSpinner.start();
+    try {
+      await execa('git', ['branch', '-D', branch], { cwd: controlWorktree.path });
+      delSpinner.succeed(`Deleted ${branch}`);
+      branchDeleted = true;
+    } catch (error) {
+      delSpinner.fail(`Failed to delete ${branch}`);
+      throw GitErrors.unknown('work finish', error);
+    }
   }
 
   const contextUpdated = await markWorkItemDone(branch, agentDbPath);
@@ -327,7 +338,7 @@ export function createWorkFinishCommand(): Command {
     .option('--base <branch>', 'base branch (default: origin HEAD)')
     .option('--force', 'finish unconfirmed work and allow discarding target worktree changes')
     .option('--no-pull', 'do not pull the base branch')
-    .option('--keep-worktree', 'leave the associated worktree in place')
+    .option('--keep-worktree', 'keep a linked worktree and its checked-out branch')
     .addHelpText(
       'after',
       `
@@ -371,6 +382,9 @@ Examples:
               );
               if (result.worktreeRemoved && result.worktreePath) {
                 ui.muted(`Removed worktree: ${result.worktreePath}`);
+              }
+              if (!result.branchDeleted && result.worktreePath) {
+                ui.muted(`Kept worktree and local branch: ${result.worktreePath}`);
               }
               if (result.contextUpdated) {
                 ui.muted('Marked work item as done in agent context DB');
