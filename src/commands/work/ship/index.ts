@@ -7,6 +7,7 @@ import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
+import { CommandError } from '@/core/errors/index.js';
 import {
   GitErrors,
   isNotGitRepository,
@@ -252,7 +253,16 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
     const vr = await executeVerify(cwd, {});
     verifyDurationMs = vr.totalDurationMs;
     if (!vr.ok) {
-      throw new Error('Verify failed — fix the failing scripts before shipping.');
+      throw new CommandError(
+        'Verify failed. Fix the failing scripts before shipping.',
+        'work ship',
+        {
+          context: {
+            command: 'work ship',
+            verification: vr,
+          },
+        }
+      );
     }
     verified = true;
   }

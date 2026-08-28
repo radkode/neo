@@ -6,7 +6,8 @@ import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
-type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun';
+const PACKAGE_MANAGERS = ['pnpm', 'npm', 'yarn', 'bun'] as const;
+type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 const LOCKFILES: Array<{ file: string; pm: PackageManager }> = [
   { file: 'pnpm-lock.yaml', pm: 'pnpm' },
@@ -17,7 +18,8 @@ const LOCKFILES: Array<{ file: string; pm: PackageManager }> = [
 ];
 
 const DEFAULT_SCRIPTS = ['build', 'test', 'lint', 'typecheck'] as const;
-type Script = (typeof DEFAULT_SCRIPTS)[number];
+const OUTPUT_TAIL_LINES = 20;
+const OUTPUT_TAIL_CHARS = 8_000;
 
 interface VerifyOptions {
   pm?: string;
@@ -25,18 +27,25 @@ interface VerifyOptions {
   skip?: string;
 }
 
-interface ScriptResult {
+export interface ScriptResult {
   script: string;
   status: 'passed' | 'failed' | 'skipped';
   durationMs: number;
   exitCode?: number;
+  stdoutTail?: string;
+  stderrTail?: string;
 }
 
-interface VerifyResult {
+export interface VerifyResult {
   packageManager: PackageManager;
   results: ScriptResult[];
   ok: boolean;
   totalDurationMs: number;
+}
+
+interface PackageManifest {
+  scripts: Record<string, string>;
+  verifyScript?: unknown;
 }
 
 async function pathExists(p: string): Promise<boolean> {
@@ -67,14 +76,30 @@ async function detectPackageManager(cwd: string): Promise<PackageManager> {
   return found[0]!;
 }
 
-async function readScripts(cwd: string): Promise<Record<string, string>> {
+function parsePackageManager(value: string): PackageManager {
+  const packageManager = PACKAGE_MANAGERS.find((candidate) => candidate === value);
+  if (!packageManager) {
+    throw new Error(
+      `Unsupported package manager "${value}". Expected one of: ${PACKAGE_MANAGERS.join(', ')}.`
+    );
+  }
+  return packageManager;
+}
+
+async function readPackageManifest(cwd: string): Promise<PackageManifest> {
   const pkgPath = join(cwd, 'package.json');
   if (!(await pathExists(pkgPath))) {
     throw new Error('No package.json in current directory.');
   }
   const raw = await readFile(pkgPath, 'utf-8');
-  const pkg = JSON.parse(raw) as { scripts?: Record<string, string> };
-  return pkg.scripts ?? {};
+  const pkg = JSON.parse(raw) as {
+    scripts?: Record<string, string>;
+    neo?: { verify?: unknown };
+  };
+  return {
+    scripts: pkg.scripts ?? {},
+    verifyScript: pkg.neo?.verify,
+  };
 }
 
 function parseFilter(value: string | undefined): string[] | null {
@@ -85,14 +110,41 @@ function parseFilter(value: string | undefined): string[] | null {
     .filter(Boolean);
 }
 
-function pickScripts(
+function selectScripts(
   scripts: Record<string, string>,
+  verifyScript: unknown,
   only: string[] | null,
   skip: string[] | null
-): Script[] {
-  const base = only ?? DEFAULT_SCRIPTS;
+): string[] {
+  let base: readonly string[];
+  if (only !== null) {
+    const missing = only.find((script) => !Object.hasOwn(scripts, script));
+    if (missing) {
+      throw new Error(`Requested verification script "${missing}" is not defined in package.json.`);
+    }
+    base = only;
+  } else if (verifyScript !== undefined) {
+    if (typeof verifyScript !== 'string' || verifyScript.trim() === '') {
+      throw new Error('package.json#neo.verify must be a non-empty script name.');
+    }
+    const configured = verifyScript.trim();
+    if (!Object.hasOwn(scripts, configured)) {
+      throw new Error(
+        `Configured verification script "${configured}" is not defined in package.json.`
+      );
+    }
+    base = [configured];
+  } else {
+    base = DEFAULT_SCRIPTS;
+  }
+
+  const optionLike = base.find((script) => script.startsWith('-'));
+  if (optionLike) {
+    throw new Error(`Verification script names cannot start with "-": ${optionLike}.`);
+  }
+
   const skipSet = new Set(skip ?? []);
-  return (base as readonly string[]).filter((s): s is Script => s in scripts && !skipSet.has(s));
+  return base.filter((script) => Object.hasOwn(scripts, script) && !skipSet.has(script));
 }
 
 function pmArgs(pm: PackageManager, script: string): string[] {
@@ -101,20 +153,31 @@ function pmArgs(pm: PackageManager, script: string): string[] {
   return ['run', script];
 }
 
+function outputTail(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const lines = trimmed.split('\n').slice(-OUTPUT_TAIL_LINES).join('\n');
+  return lines.slice(-OUTPUT_TAIL_CHARS);
+}
+
 export async function executeVerify(cwd: string, options: VerifyOptions): Promise<VerifyResult> {
   const only = parseFilter(options.only);
   const skip = parseFilter(options.skip);
 
-  const pm: PackageManager = options.pm
-    ? (options.pm as PackageManager)
-    : await detectPackageManager(cwd);
+  const pm = options.pm ? parsePackageManager(options.pm) : await detectPackageManager(cwd);
 
-  const scripts = await readScripts(cwd);
-  const toRun = pickScripts(scripts, only, skip);
+  const manifest = await readPackageManifest(cwd);
+  const toRun = selectScripts(manifest.scripts, manifest.verifyScript, only, skip);
 
   if (toRun.length === 0) {
+    const requested =
+      only ??
+      (typeof manifest.verifyScript === 'string'
+        ? [manifest.verifyScript.trim()]
+        : DEFAULT_SCRIPTS);
     throw new Error(
-      `No matching scripts found in package.json. Looked for: ${(only ?? DEFAULT_SCRIPTS).join(', ')}.`
+      `No matching scripts found in package.json. Looked for: ${requested.join(', ')}.`
     );
   }
 
@@ -140,13 +203,18 @@ export async function executeVerify(cwd: string, options: VerifyOptions): Promis
           ? (error as { exitCode: number }).exitCode
           : 1;
       scriptSpinner.fail(`${script} failed (${Math.round(durationMs / 100) / 10}s)`);
-      // Surface captured stderr so the user can see what broke without
-      // re-running manually. Keep it muted so it doesn't drown the summary.
-      const stderr = (error as { stderr?: string }).stderr ?? '';
-      const stdout = (error as { stdout?: string }).stdout ?? '';
-      const tail = (stderr || stdout).trim().split('\n').slice(-20).join('\n');
-      if (tail) ui.muted(tail);
-      results.push({ script, status: 'failed', durationMs, exitCode });
+      const stderrTail = outputTail((error as { stderr?: unknown }).stderr);
+      const stdoutTail = outputTail((error as { stdout?: unknown }).stdout);
+      const visibleTail = stderrTail ?? stdoutTail;
+      if (visibleTail) ui.muted(visibleTail);
+      results.push({
+        script,
+        status: 'failed',
+        durationMs,
+        exitCode,
+        ...(stdoutTail !== undefined ? { stdoutTail } : {}),
+        ...(stderrTail !== undefined ? { stderrTail } : {}),
+      });
     }
   }
 
@@ -160,7 +228,7 @@ export function createVerifyCommand(): Command {
   const command = new Command('verify');
 
   command
-    .description('Run build, test, lint, and typecheck scripts and summarize results')
+    .description('Run repository verification scripts and summarize results')
     .option('--pm <name>', 'force a specific package manager (pnpm|npm|yarn|bun)')
     .option('--only <scripts>', 'comma-separated subset to run (e.g. build,test)')
     .option('--skip <scripts>', 'comma-separated scripts to skip')
@@ -170,6 +238,8 @@ export function createVerifyCommand(): Command {
 Examples:
   Run every verify step the repo defines:
     $ neo verify
+
+  package.json can set neo.verify to one repository verification script.
 
   Just build and test:
     $ neo verify --only build,test

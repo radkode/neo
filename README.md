@@ -85,6 +85,24 @@ neo git commit --ai       # Draft a message from the staged diff (Anthropic API)
 
 The AI path uses `claude-haiku-4-5` by default and caches the system prompt. Set your key with `neo config set ai.apiKey` or `ANTHROPIC_API_KEY`.
 
+### `neo verify`
+
+Runs the `build`, `test`, `lint`, and `typecheck` package scripts that the repository defines. A repository can select one shared verification gate in `package.json`:
+
+```json
+{
+  "scripts": {
+    "build:restricted": "next build --webpack",
+    "verify:neo": "pnpm run build:restricted && pnpm run quality:check"
+  },
+  "neo": {
+    "verify": "verify:neo"
+  }
+}
+```
+
+Neo invokes the configured value as a package script. Use an umbrella script when verification needs multiple commands or environment-specific options. `neo verify --only build,test` overrides the repository setting for one run, and `--skip` filters the selected scripts.
+
 ### `neo config`
 
 Key-value configuration with secure secrets storage and profiles.
