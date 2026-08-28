@@ -9,6 +9,7 @@
 import { getRuntimeContext } from './runtime-context.js';
 import { ui } from './ui.js';
 import type { AppError } from '@/core/errors/index.js';
+import { GitError } from './git-errors.js';
 
 export interface EmitOptions {
   /** If supplied, called in text mode to render the human-friendly form. */
@@ -61,12 +62,32 @@ export function emitError(error: AppError | Error, options: EmitOptions = {}): v
     options.text();
     return;
   }
-  ui.error(error.message);
+  ui.error(textErrorMessage(error));
   const suggestions = (error as AppError).suggestions;
   if (suggestions && suggestions.length > 0) {
     ui.warn('Suggestions:');
     ui.list(suggestions);
   }
+}
+
+function textErrorMessage(error: AppError | Error): string {
+  if (!(error instanceof GitError)) {
+    return error.message;
+  }
+
+  const details: string[] = [];
+  const command = error.context?.['command'];
+  if (typeof command === 'string') details.push(`Command: ${command}`);
+
+  const stderr = error.context?.['stderr'];
+  const fallback = error.context?.['error'];
+  if (typeof stderr === 'string') {
+    details.push(stderr);
+  } else if (typeof fallback === 'string' && fallback !== error.message) {
+    details.push(fallback);
+  }
+
+  return details.length > 0 ? `${error.message}\n${details.join('\n')}` : error.message;
 }
 
 function serializeError(error: AppError | Error): SerializedError {

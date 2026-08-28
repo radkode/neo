@@ -3,6 +3,7 @@
  * Provides consistent error detection and handling across all git commands
  */
 
+import { stripVTControlCharacters } from 'node:util';
 import {
   AppError,
   ErrorSeverity,
@@ -76,6 +77,18 @@ export interface GitErrorContext {
   branchName?: string;
   error?: unknown;
 }
+
+const GIT_DETAIL_MAX_LINES = 20;
+const GIT_DETAIL_MAX_CHARS = 8_000;
+const GIT_COMMAND_MAX_CHARS = 2_000;
+
+type GitProcessError = Error & {
+  command?: unknown;
+  escapedCommand?: unknown;
+  exitCode?: unknown;
+  shortMessage?: unknown;
+  stderr?: unknown;
+};
 
 /**
  * Common git error patterns
@@ -265,6 +278,107 @@ function extractErrorMessage(error: unknown): string {
   return String(error).toLowerCase();
 }
 
+function redactCredentials(value: string): string {
+  return value
+    .replace(/\b([a-z][a-z\d+.-]*:\/\/)([^/\s@]+)@/gi, '$1***@')
+    .replace(/([?&](?:access_token|auth|password|token|x-amz-signature)=)[^&#\s'"]+/gi, '$1***')
+    .replace(
+      /((?:authorization|job-token|private-token|proxy-authorization|x-auth-token)\s*[:=]\s*(?:basic|bearer)?\s*)[^\s'"]+/gi,
+      '$1***'
+    );
+}
+
+function sanitizeText(value: string): string {
+  const sanitized: string[] = [];
+  for (const character of stripVTControlCharacters(value)) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (
+      codePoint === 0x09 ||
+      codePoint === 0x0a ||
+      (codePoint >= 0x20 && codePoint !== 0x7f && (codePoint < 0x80 || codePoint > 0x9f))
+    ) {
+      sanitized.push(character);
+    }
+  }
+  return sanitized.join('');
+}
+
+function maskMessageArguments(value: string): string {
+  return value
+    .replace(/(^|\s)--message(?:=|\s+)[\s\S]*$/g, '$1--message=***')
+    .replace(/(^|\s)-m(?:\s+|\S)[\s\S]*$/g, '$1-m ***');
+}
+
+function formatCommand(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = maskMessageArguments(
+    redactCredentials(sanitizeText(value)).trim().replace(/\n/g, '\\n')
+  );
+  if (!cleaned) return undefined;
+  const suffix = ' [truncated]';
+  return cleaned.length > GIT_COMMAND_MAX_CHARS
+    ? `${cleaned.slice(0, GIT_COMMAND_MAX_CHARS - suffix.length)}${suffix}`
+    : cleaned;
+}
+
+function outputTail(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = maskMessageArguments(redactCredentials(sanitizeText(value))).trim();
+  if (!cleaned) return undefined;
+  const lines = cleaned.split('\n').slice(-GIT_DETAIL_MAX_LINES).join('\n');
+  return lines.slice(-GIT_DETAIL_MAX_CHARS);
+}
+
+function gitErrorContext(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    const detail = outputTail(String(error));
+    return detail ? { error: detail } : {};
+  }
+
+  const processError = error as GitProcessError;
+  const context: Record<string, unknown> = {};
+  const command = formatCommand(processError.escapedCommand) ?? formatCommand(processError.command);
+  if (command) context['command'] = command;
+  if (typeof processError.exitCode === 'number' && Number.isInteger(processError.exitCode)) {
+    context['exitCode'] = processError.exitCode;
+  }
+
+  const stderr = outputTail(processError.stderr);
+  if (stderr) {
+    context['stderr'] = stderr;
+    context['error'] = stderr;
+    return context;
+  }
+
+  const shortMessage =
+    typeof processError.shortMessage === 'string' ? processError.shortMessage : undefined;
+  const messageWithoutPrefix =
+    shortMessage && error.message.startsWith(shortMessage)
+      ? error.message.slice(shortMessage.length).trim()
+      : error.message;
+  const detail = outputTail(messageWithoutPrefix) ?? outputTail(shortMessage);
+  if (detail) context['error'] = detail;
+  return context;
+}
+
+function gitErrorOptions(
+  suggestions: string[],
+  error?: unknown
+): {
+  suggestions: string[];
+  context?: Record<string, unknown>;
+  originalError?: Error;
+} {
+  const options: {
+    suggestions: string[];
+    context?: Record<string, unknown>;
+    originalError?: Error;
+  } = { suggestions };
+  if (error !== undefined) options.context = gitErrorContext(error);
+  if (error instanceof Error) options.originalError = error;
+  return options;
+}
+
 /**
  * Detect git error type from error object
  */
@@ -280,7 +394,7 @@ export function detectGitError(error: unknown, context: GitErrorContext): GitErr
         originalError?: Error;
       } = {
         suggestions: pattern.getSuggestions(context),
-        context: { error: error instanceof Error ? error.message : String(error) },
+        context: gitErrorContext(error),
       };
       if (error instanceof Error) {
         options.originalError = error;
@@ -294,7 +408,7 @@ export function detectGitError(error: unknown, context: GitErrorContext): GitErr
     context: Record<string, unknown>;
     originalError?: Error;
   } = {
-    context: { error: error instanceof Error ? error.message : String(error) },
+    context: gitErrorContext(error),
   };
   if (error instanceof Error) {
     unknownOptions.originalError = error;
@@ -402,16 +516,22 @@ export function isNothingToStashError(error: unknown): boolean {
  * Create specific git errors with appropriate messages and suggestions
  */
 export const GitErrors = {
-  notARepository(commandName: string): GitError {
-    return new GitError('Not a git repository!', GitErrorCode.NOT_A_REPOSITORY, commandName, {
-      suggestions: ['Make sure you are in a git repository directory'],
-    });
+  notARepository(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Not a git repository!',
+      GitErrorCode.NOT_A_REPOSITORY,
+      commandName,
+      gitErrorOptions(['Make sure you are in a git repository directory'], error)
+    );
   },
 
-  authenticationFailed(commandName: string): GitError {
-    return new GitError('Authentication failed!', GitErrorCode.AUTHENTICATION_FAILED, commandName, {
-      suggestions: ['Check your git credentials or SSH keys'],
-    });
+  authenticationFailed(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Authentication failed!',
+      GitErrorCode.AUTHENTICATION_FAILED,
+      commandName,
+      gitErrorOptions(['Check your git credentials or SSH keys'], error)
+    );
   },
 
   noUpstream(commandName: string, branchName?: string): GitError {
@@ -423,45 +543,57 @@ export const GitErrors = {
     });
   },
 
-  networkError(commandName: string): GitError {
-    return new GitError('Network error!', GitErrorCode.NETWORK_ERROR, commandName, {
-      suggestions: ['Check your internet connection'],
-    });
+  networkError(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Network error!',
+      GitErrorCode.NETWORK_ERROR,
+      commandName,
+      gitErrorOptions(['Check your internet connection'], error)
+    );
   },
 
-  mergeConflict(commandName: string): GitError {
-    return new GitError('Merge conflicts detected!', GitErrorCode.MERGE_CONFLICT, commandName, {
-      suggestions: [
-        'Fix conflicts in your editor',
-        'Stage resolved files: git add <files>',
-        'Commit the merge: git commit',
-      ],
-    });
+  mergeConflict(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Merge conflicts detected!',
+      GitErrorCode.MERGE_CONFLICT,
+      commandName,
+      gitErrorOptions(
+        [
+          'Fix conflicts in your editor',
+          'Stage resolved files: git add <files>',
+          'Commit the merge: git commit',
+        ],
+        error
+      )
+    );
   },
 
-  rebaseConflict(commandName: string): GitError {
-    return new GitError('Rebase hit conflicts.', GitErrorCode.REBASE_CONFLICT, commandName, {
-      suggestions: [
-        'Fix conflicts in your editor',
-        'Stage resolved files: git add <files>',
-        'Continue rebase: git rebase --continue',
-        'Or abort the rebase: git rebase --abort',
-      ],
-    });
+  rebaseConflict(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Rebase hit conflicts.',
+      GitErrorCode.REBASE_CONFLICT,
+      commandName,
+      gitErrorOptions(
+        [
+          'Fix conflicts in your editor',
+          'Stage resolved files: git add <files>',
+          'Continue rebase: git rebase --continue',
+          'Or abort the rebase: git rebase --abort',
+        ],
+        error
+      )
+    );
   },
 
-  uncommittedChanges(commandName: string): GitError {
+  uncommittedChanges(commandName: string, error?: unknown): GitError {
     return new GitError(
       'You have uncommitted changes.',
       GitErrorCode.UNCOMMITTED_CHANGES,
       commandName,
-      {
-        suggestions: [
-          'Stash them: git stash push -u',
-          'Or commit them: neo git commit',
-          'Then retry the pull',
-        ],
-      }
+      gitErrorOptions(
+        ['Stash them: git stash push -u', 'Or commit them: neo git commit', 'Then retry the pull'],
+        error
+      )
     );
   },
 
@@ -516,7 +648,7 @@ export const GitErrors = {
       originalError?: Error;
     } = {};
     if (error) {
-      options.context = { error: error instanceof Error ? error.message : String(error) };
+      options.context = gitErrorContext(error);
     }
     if (error instanceof Error) {
       options.originalError = error;

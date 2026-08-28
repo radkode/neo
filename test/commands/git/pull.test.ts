@@ -202,17 +202,49 @@ describe('git pull command', () => {
 
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/rebase' }));
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/feature/rebase' }));
-      execaMock.mockRejectedValueOnce(
-        new Error(
-          'CONFLICT (content): Merge conflict in src/a.ts\nerror: could not apply a1b2c3d... some commit'
-        )
-      );
+      const conflict = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git pull --rebase',
+        exitCode: 1,
+        stderr:
+          'CONFLICT (content): Merge conflict in src/a.ts\nerror: could not apply a1b2c3d... some commit',
+      });
+      execaMock.mockRejectedValueOnce(conflict);
 
       const result = await executePull({ rebase: true });
 
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.code).toBe(GitErrorCode.REBASE_CONFLICT);
+        expect(result.error.context?.command).toBe('git pull --rebase');
+        expect(result.error.context?.stderr).toContain('error: could not apply');
+        expect(result.error.originalError).toBe(conflict);
+      }
+    });
+
+    it('preserves Git details when a dirty tree blocks rebase', async () => {
+      const { executePull } = await import('../../../src/commands/git/pull/index.js');
+
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/rebase' }));
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/feature/rebase' }));
+      const refusal = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git pull --rebase',
+        exitCode: 128,
+        stderr:
+          'error: cannot pull with rebase: You have unstaged changes.\nerror: Please commit or stash them.',
+      });
+      execaMock.mockRejectedValueOnce(refusal);
+
+      const result = await executePull({ rebase: true });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe(GitErrorCode.UNCOMMITTED_CHANGES);
+        expect(result.error.context).toMatchObject({
+          command: 'git pull --rebase',
+          exitCode: 128,
+          stderr: expect.stringContaining('Please commit or stash them.'),
+        });
+        expect(result.error.originalError).toBe(refusal);
       }
     });
   });

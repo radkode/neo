@@ -628,6 +628,94 @@ describe('GitErrors factory', () => {
       expect(error.gitErrorCode).toBe(GitErrorCode.UNKNOWN);
       expect(error.context?.error).toBe('String error');
     });
+
+    it('captures structured process details without duplicating the composed message', () => {
+      const originalError = Object.assign(
+        new Error(
+          'Command failed with exit code 128: git show missing\n\nfatal: invalid reference: missing'
+        ),
+        {
+          escapedCommand: 'git show missing',
+          exitCode: 128,
+          shortMessage: 'Command failed with exit code 128: git show missing',
+          stderr: 'fatal: invalid reference: missing',
+        }
+      );
+
+      const error = GitErrors.unknown('show', originalError);
+
+      expect(error.context).toEqual({
+        command: 'git show missing',
+        exitCode: 128,
+        stderr: 'fatal: invalid reference: missing',
+        error: 'fatal: invalid reference: missing',
+      });
+    });
+
+    it('bounds and sanitizes captured process details', () => {
+      const longStderr = Array.from(
+        { length: 30 },
+        (_, index) => `line-${index.toString().padStart(2, '0')}:${'x'.repeat(500)}`
+      ).join('\n');
+      const originalError = Object.assign(new Error('Command failed'), {
+        escapedCommand:
+          "git push 'https://user:secret@example.com/repo?access_token=query-secret' -c 'http.extraHeader=Authorization: Bearer client-secret'",
+        exitCode: 1,
+        stderr: `\u001B[31mAuthorization: Bearer server-secret\u001B[0m\n${longStderr}`,
+      });
+
+      const error = GitErrors.unknown('push', originalError);
+      const command = error.context?.command as string;
+      const stderr = error.context?.stderr as string;
+
+      expect(command).toContain('https://***@example.com/repo');
+      expect(command).toContain('access_token=***');
+      expect(command).toContain('Authorization: Bearer ***');
+      expect(command).not.toContain('secret');
+      expect(stderr.length).toBeLessThanOrEqual(8_000);
+      expect(stderr.split('\n').length).toBeLessThanOrEqual(20);
+      expect(stderr).toContain('line-29');
+      expect(stderr).not.toContain('line-00');
+      expect(stderr).not.toContain('\u001B');
+      expect(stderr).not.toContain('server-secret');
+    });
+
+    it('keeps the command prefix while bounding multiline argv', () => {
+      const originalError = Object.assign(new Error('Command failed'), {
+        escapedCommand: `git show first-line\n${'x'.repeat(3_000)}`,
+        stderr: 'fatal: failed',
+      });
+
+      const error = GitErrors.unknown('show', originalError);
+      const command = error.context?.command as string;
+
+      expect(command).toMatch(/^git show first-line\\n/);
+      expect(command).toHaveLength(2_000);
+      expect(command).toMatch(/ \[truncated\]$/);
+    });
+
+    it('masks commit and stash message arguments', () => {
+      const originalError = Object.assign(new Error('Command failed'), {
+        escapedCommand: "git commit -m 'it'\\''s very secret' --no-verify",
+        stderr: 'fatal: failed',
+      });
+
+      const error = GitErrors.unknown('commit', originalError);
+
+      expect(error.context?.command).toBe('git commit -m ***');
+      expect(error.context?.command).not.toContain('secret');
+    });
+
+    it('removes terminal control characters from Git output', () => {
+      const originalError = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git show missing',
+        stderr: 'fatal: before\rOVERWRITE\bX\u0000end\n\tkept',
+      });
+
+      const error = GitErrors.unknown('show', originalError);
+
+      expect(error.context?.stderr).toBe('fatal: beforeOVERWRITEXend\n\tkept');
+    });
   });
 
   describe('stashNotFound', () => {
