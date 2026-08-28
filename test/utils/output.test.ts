@@ -12,6 +12,7 @@ import { emitJson, emitError } from '@/utils/output.js';
 import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 import { AppError, ErrorCategory, ErrorSeverity } from '@/core/errors/index.js';
 import { ui } from '@/utils/ui.js';
+import { GitErrors } from '@/utils/git-errors.js';
 
 class TestAppError extends AppError {
   readonly code = 'TEST_ERR';
@@ -81,6 +82,26 @@ describe('output', () => {
       expect(parsed.error.suggestions).toEqual(['try --force', 'check network']);
     });
 
+    it('writes structured Git process details in json mode', () => {
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      const cause = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git show missing',
+        exitCode: 128,
+        stderr: 'fatal: invalid reference: missing',
+      });
+
+      emitError(GitErrors.unknown('show', cause));
+
+      const payload = stdoutWriteSpy.mock.calls[0]?.[0] as string;
+      const parsed = JSON.parse(payload);
+      expect(parsed.error.context).toEqual({
+        command: 'git show missing',
+        exitCode: 128,
+        stderr: 'fatal: invalid reference: missing',
+        error: 'fatal: invalid reference: missing',
+      });
+    });
+
     it('assigns UNKNOWN code when error is a plain Error', () => {
       setRuntimeContext(buildRuntimeContext({ json: true }));
       emitError(new Error('raw'));
@@ -106,6 +127,42 @@ describe('output', () => {
       expect(ui.error).toHaveBeenCalledWith('boom');
       expect(ui.warn).toHaveBeenCalledWith('Suggestions:');
       expect(ui.list).toHaveBeenCalledWith(['first', 'second']);
+    });
+
+    it('renders details for an unclassified Git failure', () => {
+      setRuntimeContext(buildRuntimeContext({ json: false, quiet: true }));
+      const cause = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git show missing',
+        exitCode: 128,
+        stderr: 'fatal: invalid reference: missing',
+      });
+
+      emitError(GitErrors.unknown('show', cause));
+
+      expect(ui.error).toHaveBeenCalledWith(
+        'Git command failed: show\nCommand: git show missing\nfatal: invalid reference: missing'
+      );
+    });
+
+    it('renders classified Git details but not non-Git context', () => {
+      setRuntimeContext(buildRuntimeContext({ json: false }));
+      const cause = Object.assign(new Error('Command failed'), {
+        escapedCommand: 'git fetch origin',
+        stderr: 'fatal: connection closed',
+      });
+      const classified = GitErrors.networkError('fetch', cause);
+      const nonGit = new TestAppError('Other error', {
+        context: { stderr: 'internal app detail' },
+      });
+
+      emitError(classified);
+      emitError(nonGit);
+
+      expect(ui.error).toHaveBeenNthCalledWith(
+        1,
+        'Network error!\nCommand: git fetch origin\nfatal: connection closed'
+      );
+      expect(ui.error).toHaveBeenNthCalledWith(2, 'Other error');
     });
 
     it('text renderer overrides default ui rendering in text mode', () => {

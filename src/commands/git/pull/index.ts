@@ -149,7 +149,7 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
 
     // Use shared git error detection
     if (isNotGitRepository(error)) {
-      return failure(GitErrors.notARepository('pull'));
+      return failure(GitErrors.notARepository('pull', error));
     }
 
     if (isRemoteBranchDeletedError(error)) {
@@ -158,21 +158,23 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
 
     // A refusal to start must win over conflict recovery.
     if (isUncommittedChangesError(error)) {
-      return failure(GitErrors.uncommittedChanges('pull'));
+      return failure(GitErrors.uncommittedChanges('pull', error));
     }
 
     if (isConflictError(error)) {
       return failure(
-        options.rebase ? GitErrors.rebaseConflict('pull') : GitErrors.mergeConflict('pull')
+        options.rebase
+          ? GitErrors.rebaseConflict('pull', error)
+          : GitErrors.mergeConflict('pull', error)
       );
     }
 
     if (isAuthenticationError(error)) {
-      return failure(GitErrors.authenticationFailed('pull'));
+      return failure(GitErrors.authenticationFailed('pull', error));
     }
 
     if (isNetworkError(error)) {
-      return failure(GitErrors.networkError('pull'));
+      return failure(GitErrors.networkError('pull', error));
     }
 
     return failure(GitErrors.unknown('pull', error));
@@ -220,10 +222,10 @@ async function handleDivergedPull(
     } catch (error) {
       rebaseSpinner.stop();
       if (isUncommittedChangesError(error)) {
-        return failure(GitErrors.uncommittedChanges('pull'));
+        return failure(GitErrors.uncommittedChanges('pull', error));
       }
       if (isConflictError(error)) {
-        return failure(GitErrors.rebaseConflict('pull'));
+        return failure(GitErrors.rebaseConflict('pull', error));
       }
       return failure(GitErrors.unknown('pull', error));
     }
@@ -258,10 +260,10 @@ async function handleDivergedPull(
       fetchSpinner.stop();
       mergeSpinner.stop();
       if (isUncommittedChangesError(error)) {
-        return failure(GitErrors.uncommittedChanges('pull'));
+        return failure(GitErrors.uncommittedChanges('pull', error));
       }
       if (isConflictError(error)) {
-        return failure(GitErrors.mergeConflict('pull'));
+        return failure(GitErrors.mergeConflict('pull', error));
       }
       return failure(GitErrors.unknown('pull', error));
     }
