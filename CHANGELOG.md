@@ -1,5 +1,21 @@
 # @radkode/neo
 
+## 1.9.1
+
+### Patch Changes
+
+- [#69](https://github.com/radkode/neo/pull/69) [`192c7be`](https://github.com/radkode/neo/commit/192c7be62d372f75749fd3dc6575d388768e0f7e) Thanks [@jacekradko](https://github.com/jacekradko)! - Make `neo git commit --all` include untracked files in the commit.
+
+- [#66](https://github.com/radkode/neo/pull/66) [`6073bca`](https://github.com/radkode/neo/commit/6073bcacfa8a50386fe51de116fdbdd5c679f136) Thanks [@jacekradko](https://github.com/jacekradko)! - Fix npm global installations so the symlinked `neo` binary starts the CLI.
+
+- [#68](https://github.com/radkode/neo/pull/68) [`25911ab`](https://github.com/radkode/neo/commit/25911ab6b62ec514fe7dd3cd476a6a7c7cd24423) Thanks [@jacekradko](https://github.com/jacekradko)! - Let repositories select a verification script and include failing output in `work ship --json` errors.
+
+- [#70](https://github.com/radkode/neo/pull/70) [`9836932`](https://github.com/radkode/neo/commit/98369325996a5a3c01996239eae4c4741dd8b706) Thanks [@jacekradko](https://github.com/jacekradko)! - Show sanitized command and stderr details for unclassified Git failures and classified pull failures.
+
+- [#73](https://github.com/radkode/neo/pull/73) [`75d4a41`](https://github.com/radkode/neo/commit/75d4a41511dfda7c4bde2bbea858eaf16093b8a7) Thanks [@jacekradko](https://github.com/jacekradko)! - Keep linked worktrees and their branches together during `work finish`, and reject locked targets before updating the base.
+
+- [#72](https://github.com/radkode/neo/pull/72) [`2cb1efb`](https://github.com/radkode/neo/commit/2cb1efbb9f9b54bd0d48c3850a43fe22ca493abc) Thanks [@jacekradko](https://github.com/jacekradko)! - Make `work finish` update the base from its owning worktree without mutating unrelated caller branches.
+
 ## 1.9.0
 
 ### Minor Changes
