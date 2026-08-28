@@ -195,11 +195,11 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
 
     // Stage all files if --all flag is provided
     if (options.all) {
-      const spinner = ui.spinner('Staging modified files');
+      const spinner = ui.spinner('Staging all changes');
       spinner.start();
       try {
-        await execa('git', ['add', '-u']);
-        spinner.succeed('Staged all modified files');
+        await execa('git', ['add', '--all']);
+        spinner.succeed('Staged all changes');
       } catch (error) {
         spinner.fail('Failed to stage files');
         return failure(GitErrors.unknown('commit', error));
@@ -493,7 +493,7 @@ export function createCommitCommand(): Command {
     .option('-m, --message <message>', 'commit message description')
     .option('-b, --body <body>', 'commit body (optional)')
     .option('--breaking', 'mark as breaking change')
-    .option('-a, --all', 'automatically stage all modified files')
+    .option('-a, --all', 'automatically stage all changes, including untracked files')
     .option('--ai', 'generate commit message using AI')
     .option('-n, --no-verify', 'skip the pre-commit and commit-msg hooks')
     .addHelpText(
