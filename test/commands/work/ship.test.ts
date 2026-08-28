@@ -60,11 +60,12 @@ vi.mock('node:fs/promises', async () => {
 });
 
 import { access, readdir } from 'node:fs/promises';
-import { executeWorkShip } from '@/commands/work/ship/index.js';
+import { createWorkShipCommand, executeWorkShip } from '@/commands/work/ship/index.js';
 import { executeVerify } from '@/commands/verify/index.js';
 import { executeChangeset } from '@/commands/changeset/index.js';
 import { executeAiPr } from '@/commands/ai/pr/index.js';
 import { ui } from '@/utils/ui.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 
 const execaMock = vi.mocked(execa);
 const verifyMock = vi.mocked(executeVerify);
@@ -109,6 +110,7 @@ describe('executeWorkShip', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+    setRuntimeContext(buildRuntimeContext());
   });
 
   it('throws when not in a git repository', async () => {
@@ -170,6 +172,68 @@ describe('executeWorkShip', () => {
     verifyMock.mockResolvedValueOnce({ ok: false, totalDurationMs: 1234 } as never);
 
     await expect(executeWorkShip({})).rejects.toThrow(/Verify failed/);
+  });
+
+  it('emits failing verification output from JSON ship mode', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'true' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never);
+    execaMock.mockResolvedValueOnce({ stdout: '1' } as never);
+
+    verifyMock.mockResolvedValueOnce({
+      packageManager: 'pnpm',
+      ok: false,
+      results: [
+        {
+          script: 'quality:check',
+          status: 'failed',
+          durationMs: 12,
+          exitCode: 1,
+          stdoutTail: 'test output',
+          stderrTail: 'assertion failed',
+        },
+      ],
+      totalDurationMs: 12,
+    } as never);
+
+    setRuntimeContext(buildRuntimeContext({ json: true }));
+    const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+    try {
+      await createWorkShipCommand().parseAsync([], { from: 'user' });
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(stdoutWriteSpy).toHaveBeenCalledOnce();
+      const payload = JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]));
+      expect(payload.error).toMatchObject({
+        code: 'COMMAND_ERROR',
+        context: {
+          command: 'work ship',
+          verification: {
+            packageManager: 'pnpm',
+            ok: false,
+            results: [
+              {
+                script: 'quality:check',
+                status: 'failed',
+                stdoutTail: 'test output',
+                stderrTail: 'assertion failed',
+              },
+            ],
+          },
+        },
+      });
+      expect(execaMock).toHaveBeenCalledTimes(7);
+      expect(changesetMock).not.toHaveBeenCalled();
+      expect(aiPrMock).not.toHaveBeenCalled();
+    } finally {
+      stdoutWriteSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
   });
 
   it('skips verify when --no-verify is passed', async () => {
