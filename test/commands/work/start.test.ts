@@ -41,16 +41,14 @@ vi.mock('@/storage/db.js', () => ({
 vi.mock('@/utils/agent.js', () => ({
   isAgentInitialized: vi.fn(),
   getAgentDbPath: vi.fn(),
-  getProjectRoot: vi.fn(),
 }));
 
 import { executeWorkStart } from '@/commands/work/start/index.js';
-import { isAgentInitialized, getAgentDbPath, getProjectRoot } from '@/utils/agent.js';
+import { isAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 
 const execaMock = vi.mocked(execa);
 const isAgentInitializedMock = vi.mocked(isAgentInitialized);
 const getAgentDbPathMock = vi.mocked(getAgentDbPath);
-const getProjectRootMock = vi.mocked(getProjectRoot);
 
 /**
  * Build the canonical execa response sequence for the "happy path" of a
@@ -170,10 +168,12 @@ describe('executeWorkStart', () => {
     execaMock.mockResolvedValueOnce({ stdout: 'main' } as never); // current branch
     execaMock.mockResolvedValueOnce({ stdout: 'Jacek Radko' } as never); // user.name
     execaMock.mockRejectedValueOnce(new Error('no such ref')); // branchExistsLocally
+    execaMock.mockResolvedValueOnce({
+      stdout: '/repo/.git\n/repo/.git\n/repo',
+    } as never); // primary worktree metadata
     execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree add
-    getProjectRootMock.mockResolvedValue('/repo');
 
     const result = await executeWorkStart('fix-foo', { worktree: true });
 
