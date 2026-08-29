@@ -166,7 +166,7 @@ cat > package.json << EOL
     "unlink-local": "pnpm remove --global $FULL_PACKAGE_NAME"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.10.0",
     "pnpm": ">=8.0.0"
   },
   "packageManager": "pnpm@8.15.0"
@@ -338,7 +338,7 @@ import chalk from 'chalk';
 import { showBanner } from './utils/banner.js';
 import { logger } from './utils/logger.js';
 import { registerCommands } from './commands/index.js';
-import packageJson from '../package.json' assert { type: 'json' };
+import packageJson from '../package.json' with { type: 'json' };
 
 export function createCLI(): Command {
   const program = new Command();
