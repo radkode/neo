@@ -1,7 +1,7 @@
 import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import { access } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -11,7 +11,7 @@ import {
   isAuthenticationError,
   isNetworkError,
 } from '@/utils/git-errors.js';
-import { getProjectRoot, isAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
+import { isAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 import { ContextDB } from '@/storage/db.js';
 
 interface WorkStartOptions {
@@ -121,6 +121,28 @@ async function branchExistsLocally(branch: string): Promise<boolean> {
   }
 }
 
+async function resolvePrimaryWorktreeRoot(): Promise<string> {
+  const { stdout } = await execa('git', [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-dir',
+    '--git-common-dir',
+    '--show-toplevel',
+  ]);
+  const [gitDir, commonDir, currentRoot] = stdout.trim().split(/\r?\n/);
+  if (!gitDir || !commonDir || !currentRoot) {
+    throw new Error('Could not locate the primary worktree from Git metadata.');
+  }
+
+  const absoluteGitDir = resolve(gitDir);
+  const absoluteCommonDir = resolve(commonDir);
+  if (absoluteGitDir === absoluteCommonDir) return resolve(currentRoot);
+
+  if (basename(absoluteCommonDir) === '.git') return dirname(absoluteCommonDir);
+
+  throw new Error('Could not locate the primary worktree from Git metadata.');
+}
+
 async function recordWorkItemInAgentDb(payload: {
   branch: string;
   base: string;
@@ -172,6 +194,7 @@ export async function executeWorkStart(
     );
   }
 
+  const projectRoot = options.worktree ? await resolvePrimaryWorktreeRoot() : undefined;
   const base = options.from ?? `origin/${await detectDefaultBranch()}`;
 
   // Fetch the base explicitly so we branch off the freshest tip. Skip when
@@ -193,10 +216,7 @@ export async function executeWorkStart(
 
   let worktreePath: string | undefined;
 
-  if (options.worktree) {
-    const projectRoot =
-      (await getProjectRoot()) ??
-      (await execa('git', ['rev-parse', '--show-toplevel'])).stdout.trim();
+  if (projectRoot) {
     // Last path segment only — "jacek/fix-foo" → "fix-foo" for the dir name.
     const lastSegment = branch.split('/').pop() ?? branch;
     const wtAbs = resolve(projectRoot, '.worktrees', lastSegment);
