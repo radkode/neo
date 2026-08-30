@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { chmod, mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execa } from 'execa';
 import ts from 'typescript';
 import { createTempDir, type TempDir } from './utils/test-helpers.js';
@@ -249,5 +249,34 @@ esac
       expect(result.stdout).not.toContain('NEO CLI');
       expect(result.stderr).toBe('');
     }
+
+    const rejectionPreloadPath = join(fixture.projectPath, '..', 'reject-timeout.mjs');
+    await writeFile(
+      rejectionPreloadPath,
+      "globalThis.setTimeout = () => { throw new Error('ASYNC_ACTION_FAILURE'); };\n"
+    );
+    const rejectionEnv: NodeJS.ProcessEnv = { ...fixture.env, NO_COLOR: '1' };
+    delete rejectionEnv['FORCE_COLOR'];
+    const rejectedAction = await execa(
+      process.execPath,
+      [
+        '--import',
+        pathToFileURL(rejectionPreloadPath).href,
+        join(fixture.projectPath, 'dist', 'cli.js'),
+        '--no-color',
+        '--no-banner',
+        'deploy',
+        'production',
+        '--skip-build',
+      ],
+      {
+        cwd: fixture.projectPath,
+        env: rejectionEnv,
+        extendEnv: false,
+        reject: false,
+      }
+    );
+    expect(rejectedAction.exitCode).toBe(1);
+    expect(rejectedAction.stderr).toContain('✖ ASYNC_ACTION_FAILURE');
   }, 30_000);
 });
