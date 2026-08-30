@@ -125,7 +125,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   });
 
   createCLI()
-    .then((program) => {
+    .then(async (program) => {
       if (process.argv.length <= 2) {
         program.help();
       }
@@ -133,7 +133,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
       program.exitOverride();
 
       try {
-        program.parse();
+        await program.parseAsync();
       } catch (err: unknown) {
         if (err && typeof err === 'object' && 'code' in err) {
           if (err.code === 'commander.helpDisplayed' || err.code === 'commander.help') {
