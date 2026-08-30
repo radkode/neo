@@ -233,7 +233,7 @@ export class GlobalInstaller {
     try {
       logger.debug(`Updating ${this.packageName} globally...`);
 
-      const { stdout, stderr } = await execa('pnpm', ['update', '-g', this.packageName]);
+      const { stdout, stderr } = await execa('pnpm', ['add', '-g', `${this.packageName}@latest`]);
 
       logger.debug(`pnpm stdout: ${stdout}`);
       if (stderr) {

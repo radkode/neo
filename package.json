@@ -40,7 +40,7 @@
     "dev": "tsx src/cli.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "link-local": "pnpm run build && pnpm add --global .",
+    "link-local": "pnpm run build && node scripts/link-local.mjs",
     "lint": "eslint src test",
     "prepublishOnly": "pnpm run build && pnpm run test",
     "release": "pnpm run build && pnpm run test && changeset publish",

@@ -197,6 +197,16 @@ esac
     expect(bootstrap.exitCode, `${bootstrap.stdout}\n${bootstrap.stderr}`).toBe(0);
     expect(bootstrap.stdout).toContain('SUCCESS!');
 
+    const generatedPackage = JSON.parse(
+      await readFile(join(fixture.projectPath, 'package.json'), 'utf8')
+    ) as { scripts: { 'link-local': string } };
+    expect(generatedPackage.scripts['link-local']).toBe(
+      'pnpm run build && node scripts/link-local.mjs'
+    );
+    expect(await readFile(join(fixture.projectPath, 'scripts', 'link-local.mjs'), 'utf8')).toBe(
+      await readFile(join(repoRoot, 'scripts', 'link-local.mjs'), 'utf8')
+    );
+
     const { stdout: commitCount } = await execa('git', ['rev-list', '--count', 'HEAD'], {
       cwd: fixture.projectPath,
       env: fixture.env,
