@@ -34,7 +34,6 @@ export const gitPushOptionsSchema = baseOptionsSchema.extend({
  */
 export const gitPullOptionsSchema = baseOptionsSchema.extend({
   rebase: z.boolean().optional(),
-  noRebase: z.boolean().optional(),
 });
 
 /**
