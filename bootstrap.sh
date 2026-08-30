@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # ============================================
 # RADKODE CLI BOOTSTRAP SCRIPT
 # ============================================
@@ -40,6 +42,8 @@ mkdir -p .github/workflows
 # STEP 2: Initialize Git
 # ============================================
 echo -e "\n${GREEN}🔧 Initializing Git repository...${NC}"
+
+git init --initial-branch=main
 
 # Create .gitignore
 cat > .gitignore << 'EOL'
@@ -310,14 +314,14 @@ chmod +x bin/cli.js
 echo -e "\n${GREEN}📝 Creating source files...${NC}"
 
 # Create ASCII banner utility
-cat > src/utils/banner.ts << EOL
+cat > src/utils/banner.ts << 'EOL'
 import chalk from 'chalk';
 
-export function showBanner(): void {
-  const banner = \`
-${YELLOW}⚡ ZAP CLI${NC}
-  ${BLUE}\${chalk.dim('Radkode\'s Lightning-Fast CLI Framework')}${NC}
-  \`;
+export function showBanner(name: string): void {
+  const banner = `
+${chalk.yellow.bold(`⚡ ${name.toUpperCase()} CLI`)}
+  ${chalk.blue.dim("Radkode's Lightning-Fast CLI Framework")}
+  `;
   console.log(banner);
 }
 EOL
@@ -353,21 +357,21 @@ export function createCLI(): Command {
     .option('--no-banner', 'hide banner')
     .hook('preAction', (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
-      
-      // Show banner unless disabled
-      if (opts.banner !== false && !opts.version && !opts.help) {
-        showBanner();
+
+      // Disable colors before rendering output
+      if (opts.color === false) {
+        chalk.level = 0;
       }
-      
+
+      // Show banner unless disabled
+      if (opts.banner !== false) {
+        showBanner(thisCommand.name());
+      }
+
       // Configure logger
       if (opts.verbose) {
         logger.setVerbose(true);
         logger.debug(\`Executing command: \${actionCommand.name()}\`);
-      }
-      
-      // Disable colors if requested
-      if (opts.noColor) {
-        chalk.level = 0;
       }
     });
 
@@ -386,7 +390,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\` || process.argv[1]?.endsW
   try {
     program.parse();
   } catch (err: any) {
-    if (err.code === 'commander.helpDisplayed') {
+    if (err.code === 'commander.helpDisplayed' || err.code === 'commander.version') {
       process.exit(0);
     }
     logger.error(err.message);
@@ -690,7 +694,7 @@ function createConfigListCommand(): Command {
 EOL
 
 # Create a test file
-cat > test/cli.test.ts << 'EOL'
+cat > test/cli.test.ts << EOL
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Command } from '@commander-js/extra-typings';
 import { createCLI } from '../src/cli.js';
