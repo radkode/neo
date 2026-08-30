@@ -146,6 +146,20 @@ describe('executeWorkStart', () => {
     await expect(executeWorkStart('fix-foo', {})).rejects.toThrow(/git repository/i);
   });
 
+  it('rejects a bare repository before running worktree commands', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'false' } as never);
+
+    await expect(
+      executeWorkStart('fix-foo', { worktree: true, prefix: false, from: 'main' })
+    ).rejects.toMatchObject({
+      code: 'COMMAND_ERROR',
+      message: 'neo work start requires a working tree; bare repositories are not supported.',
+      suggestions: ['Run this command from a non-bare clone or linked worktree'],
+    });
+    expect(execaMock).toHaveBeenCalledTimes(1);
+    expect(execaMock).toHaveBeenCalledWith('git', ['rev-parse', '--is-inside-work-tree']);
+  });
+
   it('throws when the resolved branch already exists locally', async () => {
     execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse
     execaMock.mockResolvedValueOnce({ stdout: 'main' } as never); // current branch

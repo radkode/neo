@@ -13,6 +13,7 @@ import {
 } from '@/utils/git-errors.js';
 import { isAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 import { ContextDB } from '@/storage/db.js';
+import { CommandError } from '@/core/errors/index.js';
 
 interface WorkStartOptions {
   /**
@@ -178,11 +179,20 @@ export async function executeWorkStart(
   rawName: string,
   options: WorkStartOptions
 ): Promise<WorkStartResult> {
+  let workTreeStatus: string;
   try {
-    await execa('git', ['rev-parse', '--is-inside-work-tree']);
+    const { stdout } = await execa('git', ['rev-parse', '--is-inside-work-tree']);
+    workTreeStatus = stdout.trim();
   } catch (error) {
     if (isNotGitRepository(error)) throw GitErrors.notARepository('work start');
     throw GitErrors.unknown('work start', error);
+  }
+  if (workTreeStatus !== 'true') {
+    throw new CommandError(
+      'neo work start requires a working tree; bare repositories are not supported.',
+      'work start',
+      { suggestions: ['Run this command from a non-bare clone or linked worktree'] }
+    );
   }
 
   const previousBranch = await getCurrentBranch();
