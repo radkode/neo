@@ -1,5 +1,19 @@
 # @radkode/neo
 
+## 1.9.2
+
+### Patch Changes
+
+- [#75](https://github.com/radkode/neo/pull/75) [`1082839`](https://github.com/radkode/neo/commit/10828399a36e2d58dec0b2cd6fde0e8bf16735f6) Thanks [@jacekradko](https://github.com/jacekradko)! - Place worktrees started from linked checkouts under the primary repository's `.worktrees` directory.
+
+- [#78](https://github.com/radkode/neo/pull/78) [`aa5c134`](https://github.com/radkode/neo/commit/aa5c134395fa74b90c19e487d396fff17cb8768c) Thanks [@jacekradko](https://github.com/jacekradko)! - Honor configured upstreams and multi-head pulls during recovery, and make `--no-rebase` select merge reconciliation.
+
+- [#81](https://github.com/radkode/neo/pull/81) [`a427357`](https://github.com/radkode/neo/commit/a427357768bdb825098af98884218c5ac546a094) Thanks [@jacekradko](https://github.com/jacekradko)! - Await Commander hooks and actions at the CLI entrypoint so async failures use Neo's normal error handling.
+
+- [#83](https://github.com/radkode/neo/pull/83) [`7f5e3af`](https://github.com/radkode/neo/commit/7f5e3af4c853b541f4eadfd38790b37e3ea0c05c) Thanks [@jacekradko](https://github.com/jacekradko)! - Keep package imports inert while preserving direct and installed CLI entrypoints.
+
+- [#84](https://github.com/radkode/neo/pull/84) [`aac5723`](https://github.com/radkode/neo/commit/aac57234f4b27a5529c12df9c3650b4c7260e941) Thanks [@jacekradko](https://github.com/jacekradko)! - Reject `work start` in bare repositories with a clear working-tree error.
+
 ## 1.9.1
 
 ### Patch Changes
