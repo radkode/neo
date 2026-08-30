@@ -302,8 +302,9 @@ cat > bin/cli.js << 'EOL'
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 
-process.argv[1] = fileURLToPath(import.meta.url);
-await import('../dist/cli.js');
+const cliUrl = new URL('../dist/cli.js', import.meta.url);
+process.argv[1] = fileURLToPath(cliUrl);
+await import(cliUrl.href);
 EOL
 
 chmod +x bin/cli.js
@@ -337,6 +338,8 @@ EOL
 
 # Create cli.ts
 cat > src/cli.ts << EOL
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
 import { showBanner } from './utils/banner.js';
@@ -382,7 +385,20 @@ export function createCLI(): Command {
 }
 
 // Only run if this is the main module
-if (import.meta.url === \`file://\${process.argv[1]}\` || process.argv[1]?.endsWith('cli.js')) {
+function isMainModule(): boolean {
+  const entryPath = process.argv[1];
+  const modulePath = fileURLToPath(import.meta.url);
+  if (entryPath === modulePath) return true;
+  if (entryPath === undefined) return false;
+
+  try {
+    return realpathSync(entryPath) === realpathSync(modulePath);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   const program = createCLI();
   
   program.exitOverride();
