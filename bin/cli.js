@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 
-process.argv[1] = fileURLToPath(import.meta.url);
-await import('../dist/cli.js');
+const cliUrl = new URL('../dist/cli.js', import.meta.url);
+process.argv[1] = fileURLToPath(cliUrl);
+await import(cliUrl.href);

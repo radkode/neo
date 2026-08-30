@@ -20,8 +20,8 @@ afterEach(async () => {
 });
 
 describe.skipIf(process.platform === 'win32')('npm bin launcher', () => {
-  it('starts Neo through an npm-style symlink', async () => {
-    const prefix = await mkdtemp(join(tmpdir(), 'neo-npm-bin-'));
+  it('starts Neo through npm and module symlinks', async () => {
+    const prefix = await mkdtemp(join(tmpdir(), 'neo npm bin '));
     tempPrefixes.push(prefix);
 
     const binDir = join(prefix, 'bin');
@@ -29,14 +29,79 @@ describe.skipIf(process.platform === 'win32')('npm bin launcher', () => {
 
     const launcher = join(binDir, 'neo');
     await symlink(join(repoRoot, 'bin', 'cli.js'), launcher);
+    const moduleLauncher = join(prefix, 'neo cli.js');
+    await symlink(join(repoRoot, 'dist', 'cli.js'), moduleLauncher);
 
-    const { stdout } = await execa(launcher, ['--version']);
+    const [binResult, moduleResult] = await Promise.all([
+      execa(launcher, ['--version'], { reject: false }),
+      execa(process.execPath, [moduleLauncher, '--version'], { reject: false }),
+    ]);
 
-    expect(stdout).toBe(packageJson.version);
+    for (const result of [binResult, moduleResult]) {
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(packageJson.version);
+      expect(result.stderr).toBe('');
+    }
   });
 });
 
 describe('CLI entrypoint', () => {
+  it('stays inert when the package entry is imported', async () => {
+    const prefix = await mkdtemp(join(tmpdir(), 'neo consumer '));
+    tempPrefixes.push(prefix);
+
+    const packageScopePath = join(prefix, 'node_modules', '@radkode');
+    await mkdir(packageScopePath, { recursive: true });
+    await symlink(
+      repoRoot,
+      join(packageScopePath, 'neo'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+    const consumerPath = join(prefix, 'consumer-cli.js');
+    await writeFile(join(prefix, 'package.json'), JSON.stringify({ type: 'module' }));
+    await writeFile(consumerPath, "import '@radkode/neo';\n\nconsole.log('CONSUMER_IMPORT_OK');\n");
+
+    const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' };
+    delete env['FORCE_COLOR'];
+    const [consumer, stdinConsumer, directModule, binModule] = await Promise.all([
+      execa(process.execPath, [consumerPath, '--version'], {
+        cwd: prefix,
+        env,
+        extendEnv: false,
+        reject: false,
+      }),
+      execa(process.execPath, ['--input-type=module', '-'], {
+        cwd: prefix,
+        env,
+        extendEnv: false,
+        input: "await import('@radkode/neo');\nconsole.log('STDIN_IMPORT_OK');\n",
+        reject: false,
+      }),
+      execa(process.execPath, [join(repoRoot, 'dist', 'cli.js'), '--version'], {
+        env,
+        extendEnv: false,
+        reject: false,
+      }),
+      execa(process.execPath, [join(repoRoot, 'bin', 'cli.js'), '--version'], {
+        env,
+        extendEnv: false,
+        reject: false,
+      }),
+    ]);
+
+    expect(consumer.exitCode).toBe(0);
+    expect(consumer.stdout).toBe('CONSUMER_IMPORT_OK');
+    expect(consumer.stderr).toBe('');
+    expect(stdinConsumer.exitCode).toBe(0);
+    expect(stdinConsumer.stdout).toBe('STDIN_IMPORT_OK');
+    expect(stdinConsumer.stderr).toBe('');
+    for (const result of [directModule, binModule]) {
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(packageJson.version);
+      expect(result.stderr).toBe('');
+    }
+  });
+
   it('routes rejected async hooks through the CLI error handler', async () => {
     const prefix = await mkdtemp(join(tmpdir(), 'neo-async-hook-'));
     tempPrefixes.push(prefix);
