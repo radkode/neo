@@ -16,6 +16,22 @@ interface WorkStartFixture {
   repoPath: string;
 }
 
+function createGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    CI: '1',
+    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    NO_COLOR: '1',
+    TSX_TSCONFIG_PATH: join(repoRoot, 'tsconfig.json'),
+  };
+  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) {
+    delete env[name];
+  }
+  delete env['FORCE_COLOR'];
+  return env;
+}
+
 async function git(cwd: string, args: string[], env: NodeJS.ProcessEnv): Promise<string> {
   const { stdout } = await execa('git', args, { cwd, env });
   return stdout.trim();
@@ -27,17 +43,7 @@ async function createFixture(): Promise<WorkStartFixture> {
 
   const repoPath = join(tempDir.path, 'repo');
   const callerPath = join(repoPath, '.worktrees', 'caller');
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    CI: '1',
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_NOSYSTEM: '1',
-    NO_COLOR: '1',
-    TSX_TSCONFIG_PATH: join(repoRoot, 'tsconfig.json'),
-  };
-  for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']) {
-    delete env[name];
-  }
+  const env = createGitEnv();
 
   await execa('git', ['init', '--initial-branch=main', repoPath], { env });
   await git(repoPath, ['config', 'user.name', 'Neo Test'], env);
@@ -76,6 +82,44 @@ async function runStart(cwd: string, env: NodeJS.ProcessEnv) {
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((tempDir) => tempDir.cleanup()));
+});
+
+describe('work start repository validation', () => {
+  it('rejects a bare repository before starting work', async () => {
+    const tempDir = await createTempDir('neo-work-start-bare-');
+    tempDirs.push(tempDir);
+    const barePath = join(tempDir.path, 'repo.git');
+    const env = createGitEnv();
+    await execa('git', ['init', '--bare', '--initial-branch=main', barePath], { env });
+
+    const result = await execa(
+      process.execPath,
+      [
+        '--import',
+        tsxImport,
+        cliPath,
+        'work',
+        'start',
+        'child',
+        '--no-prefix',
+        '--from',
+        'main',
+        '--json',
+        '--yes',
+      ],
+      { cwd: barePath, env, extendEnv: false, reject: false }
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      error: {
+        code: 'COMMAND_ERROR',
+        message: 'neo work start requires a working tree; bare repositories are not supported.',
+        suggestions: ['Run this command from a non-bare clone or linked worktree'],
+      },
+    });
+  }, 30_000);
 });
 
 describe.skipIf(process.platform === 'win32')('work start worktree integration', () => {
