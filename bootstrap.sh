@@ -388,7 +388,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\` || process.argv[1]?.endsW
   program.exitOverride();
   
   try {
-    program.parse();
+    await program.parseAsync();
   } catch (err: any) {
     if (err.code === 'commander.helpDisplayed' || err.code === 'commander.version') {
       process.exit(0);
