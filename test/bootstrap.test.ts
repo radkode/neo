@@ -27,7 +27,7 @@ async function createBootstrapFixture(pnpmScript: string): Promise<BootstrapFixt
   tempDirs.push(tempDir);
 
   const fakeBinPath = join(tempDir.path, 'bin');
-  const projectPath = join(tempDir.path, 'project');
+  const projectPath = join(tempDir.path, 'project with spaces');
   await mkdir(fakeBinPath);
   await mkdir(projectPath);
   const workspaceModulesPath = join(repoRoot, 'node_modules');
@@ -217,9 +217,31 @@ esac
     });
     expect(branch).toBe('main');
 
+    const consumerPath = join(fixture.projectPath, 'consumer-cli.js');
+    await writeFile(
+      consumerPath,
+      "import './dist/cli.js';\n\nconsole.log('CONSUMER_IMPORT_OK');\n"
+    );
+    const linkedBinDirectory = join(fixture.projectPath, 'npm bin');
+    const linkedBinPath = join(linkedBinDirectory, 'neo');
+    await mkdir(linkedBinDirectory);
+    await symlink(join(fixture.projectPath, 'bin', 'cli.js'), linkedBinPath);
+
     const colorEnv: NodeJS.ProcessEnv = { ...fixture.env, FORCE_COLOR: '1' };
     delete colorEnv['NO_COLOR'];
-    const [normal, noColor, noBanner, version, shortVersion, help, shortHelp] = await Promise.all([
+    const [
+      normal,
+      noColor,
+      noBanner,
+      version,
+      shortVersion,
+      help,
+      shortHelp,
+      binVersion,
+      linkedBinVersion,
+      consumer,
+      stdinConsumer,
+    ] = await Promise.all([
       runGeneratedCli(fixture, ['config', 'list'], colorEnv),
       runGeneratedCli(fixture, ['--no-color', 'config', 'list'], colorEnv),
       runGeneratedCli(fixture, ['--no-banner', 'config', 'list'], colorEnv),
@@ -227,6 +249,31 @@ esac
       runGeneratedCli(fixture, ['-V'], colorEnv),
       runGeneratedCli(fixture, ['--help'], colorEnv),
       runGeneratedCli(fixture, ['-h'], colorEnv),
+      execa(process.execPath, [join(fixture.projectPath, 'bin', 'cli.js'), '--version'], {
+        cwd: fixture.projectPath,
+        env: colorEnv,
+        extendEnv: false,
+        reject: false,
+      }),
+      execa(linkedBinPath, ['--version'], {
+        cwd: fixture.projectPath,
+        env: colorEnv,
+        extendEnv: false,
+        reject: false,
+      }),
+      execa(process.execPath, [consumerPath, '--version'], {
+        cwd: fixture.projectPath,
+        env: colorEnv,
+        extendEnv: false,
+        reject: false,
+      }),
+      execa(process.execPath, ['--input-type=module', '-'], {
+        cwd: fixture.projectPath,
+        env: colorEnv,
+        extendEnv: false,
+        input: "await import('./dist/cli.js');\nconsole.log('STDIN_IMPORT_OK');\n",
+        reject: false,
+      }),
     ]);
 
     expect(normal.exitCode).toBe(0);
@@ -243,6 +290,18 @@ esac
       expect(result.stdout).toBe('0.1.0');
       expect(result.stderr).toBe('');
     }
+    expect(binVersion.exitCode).toBe(0);
+    expect(binVersion.stdout).toBe('0.1.0');
+    expect(binVersion.stderr).toBe('');
+    expect(linkedBinVersion.exitCode).toBe(0);
+    expect(linkedBinVersion.stdout).toBe('0.1.0');
+    expect(linkedBinVersion.stderr).toBe('');
+    expect(consumer.exitCode).toBe(0);
+    expect(consumer.stdout).toBe('CONSUMER_IMPORT_OK');
+    expect(consumer.stderr).toBe('');
+    expect(stdinConsumer.exitCode).toBe(0);
+    expect(stdinConsumer.stdout).toBe('STDIN_IMPORT_OK');
+    expect(stdinConsumer.stderr).toBe('');
     for (const result of [help, shortHelp]) {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('Usage: neo');
