@@ -19,7 +19,6 @@ export interface GitPushOptions extends BaseOptions {
 
 export interface GitPullOptions extends BaseOptions {
   rebase?: boolean;
-  noRebase?: boolean;
 }
 
 export interface UpdateOptions extends BaseOptions {

@@ -94,11 +94,8 @@ describe('schemas', () => {
 
   describe('gitPullOptionsSchema', () => {
     it('should validate valid git pull options', () => {
-      const valid = {
-        rebase: true,
-        noRebase: false,
-      };
-      expect(gitPullOptionsSchema.safeParse(valid).success).toBe(true);
+      expect(gitPullOptionsSchema.parse({ rebase: true })).toEqual({ rebase: true });
+      expect(gitPullOptionsSchema.parse({ rebase: false })).toEqual({ rebase: false });
     });
   });
 

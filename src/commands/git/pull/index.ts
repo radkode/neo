@@ -94,9 +94,10 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
 
     // Try normal pull first
     logger.debug('Attempting normal pull...');
+    const pullArgs = options.rebase === false ? ['pull', '--no-rebase'] : ['pull'];
 
     try {
-      const { stdout } = await execa('git', ['pull'], {
+      const { stdout } = await execa('git', pullArgs, {
         encoding: 'utf8',
         stdio: 'pipe',
       });
@@ -109,37 +110,32 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
 
       return success({ cancelled: false } as const);
     } catch (error: unknown) {
+      if (isMultipleBranchesError(error)) {
+        if (options.rebase !== false) {
+          throw error;
+        }
+
+        logger.debug('Multiple upstream branches configured, retrying with merge');
+        spinner.text = 'Merging configured upstream branches...';
+
+        const { stdout } = await execa('git', ['pull', '--no-rebase', '--no-ff'], {
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+
+        spinner.succeed('Successfully merged configured upstream branches!');
+
+        if (stdout.trim()) {
+          ui.muted(stdout);
+        }
+
+        return success({ cancelled: false } as const);
+      }
+
       // Check for diverged branches
       if (isNonFastForwardError(error)) {
         spinner.stop();
-        return handleDivergedPull(branchName, options);
-      }
-
-      // Handle "Cannot fast-forward to multiple branches" by retrying with explicit branch
-      if (isMultipleBranchesError(error)) {
-        logger.debug(`Multiple branches error, retrying with explicit branch: ${branchName}`);
-        spinner.text = `Pulling from origin/${branchName}...`;
-
-        try {
-          const { stdout } = await execa('git', ['pull', 'origin', branchName], {
-            encoding: 'utf8',
-            stdio: 'pipe',
-          });
-
-          spinner.succeed('Successfully pulled from remote!');
-
-          if (stdout.trim()) {
-            ui.muted(stdout);
-          }
-
-          return success({ cancelled: false } as const);
-        } catch (retryError: unknown) {
-          if (isNonFastForwardError(retryError)) {
-            spinner.stop();
-            return handleDivergedPull(branchName, options);
-          }
-          throw retryError;
-        }
+        return handleDivergedPull(options);
       }
 
       throw error;
@@ -181,14 +177,11 @@ export async function executePull(options: GitPullOptions): Promise<Result<PullO
   }
 }
 
-async function handleDivergedPull(
-  branchName: string,
-  options: GitPullOptions
-): Promise<Result<PullOutcome>> {
+async function handleDivergedPull(options: GitPullOptions): Promise<Result<PullOutcome>> {
   ui.error('Local and remote branches have diverged.');
   ui.warn('Choose how to reconcile the branches.');
 
-  const defaultStrategy: 'merge' | 'rebase' = options.noRebase ? 'merge' : 'rebase';
+  const defaultStrategy: 'merge' | 'rebase' = options.rebase === false ? 'merge' : 'rebase';
 
   const strategy = await promptSelect({
     choices: [
@@ -234,17 +227,16 @@ async function handleDivergedPull(
   if (strategy === 'merge') {
     const fetchSpinner = ui.spinner('Fetching latest changes');
     const mergeSpinner = ui.spinner('Merging remote into current branch');
-    const remoteRef = branchName || 'HEAD';
     try {
       fetchSpinner.start();
-      await execa('git', ['fetch', 'origin', remoteRef], {
+      await execa('git', ['fetch'], {
         encoding: 'utf8',
         stdio: 'pipe',
       });
       fetchSpinner.succeed('Fetched remote updates');
 
       mergeSpinner.start();
-      const { stdout } = await execa('git', ['merge', '--no-ff', `origin/${remoteRef}`], {
+      const { stdout } = await execa('git', ['merge', '--no-ff', '@{upstream}'], {
         encoding: 'utf8',
         stdio: 'pipe',
       });

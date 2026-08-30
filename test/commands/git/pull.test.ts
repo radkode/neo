@@ -96,49 +96,47 @@ describe('git pull command', () => {
   });
 
   describe('multiple branches error', () => {
-    it('retries with explicit branch when pull fails with multiple branches error', async () => {
-      const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
+    it('preserves the Git refusal when merge was not explicitly selected', async () => {
+      const { executePull } = await import('../../../src/commands/git/pull/index.js');
 
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' })); // branch name
       execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
       execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
-      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'Already up to date.' })); // retry with explicit branch
 
-      const command = createPullCommand();
-      await command.parseAsync([], { from: 'user' });
+      const result = await executePull({});
 
-      expect(execaMock).toHaveBeenCalledWith(
-        'git',
-        ['pull', 'origin', 'main'],
-        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
-      );
-      expect(exitMock).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe(GitErrorCode.UNKNOWN);
+        expect(result.error.originalError).toBe(multiBranchError);
+      }
+      expect(execaMock).toHaveBeenCalledTimes(3);
     });
 
-    it('handles divergence on retry after multiple branches error', async () => {
+    it('merges every configured upstream when rebase is disabled', async () => {
       const { createPullCommand } = await import('../../../src/commands/git/pull/index.js');
 
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/test' })); // branch name
       execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // upstream check
       const multiBranchError = new Error('fatal: Cannot fast-forward to multiple branches.');
       execaMock.mockRejectedValueOnce(multiBranchError); // initial pull
-      const divergenceError = new Error('Not possible to fast-forward');
-      (divergenceError as { shortMessage?: string }).shortMessage = 'not possible to fast-forward';
-      execaMock.mockRejectedValueOnce(divergenceError); // retry also diverges
-      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'rebased' })); // rebase pull
-
-      promptSelectMock.mockResolvedValueOnce('rebase');
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'merged' })); // merge retry
 
       const command = createPullCommand();
-      await command.parseAsync([], { from: 'user' });
+      await command.parseAsync(['--no-rebase'], { from: 'user' });
 
       expect(execaMock).toHaveBeenCalledWith(
         'git',
-        ['pull', 'origin', 'feature/test'],
+        ['pull', '--no-rebase'],
         expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
       );
-      expect(promptSelectMock).toHaveBeenCalled();
+      expect(execaMock).toHaveBeenCalledWith(
+        'git',
+        ['pull', '--no-rebase', '--no-ff'],
+        expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
+      );
+      expect(exitMock).not.toHaveBeenCalled();
     });
   });
 
@@ -185,12 +183,12 @@ describe('git pull command', () => {
       expect(promptSelectMock).toHaveBeenCalled();
       expect(execaMock).toHaveBeenCalledWith(
         'git',
-        ['fetch', 'origin', 'feature/diverge'],
+        ['fetch'],
         expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
       );
       expect(execaMock).toHaveBeenCalledWith(
         'git',
-        ['merge', '--no-ff', 'origin/feature/diverge'],
+        ['merge', '--no-ff', '@{upstream}'],
         expect.objectContaining({ encoding: 'utf8', stdio: 'pipe' })
       );
     });
