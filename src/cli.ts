@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from '@commander-js/extra-typings';
 import chalk from 'chalk';
 import { displayBanner } from '@/utils/banner.js';
@@ -115,7 +117,20 @@ Learn more:
   return program;
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('cli.js')) {
+function isMainModule(): boolean {
+  const entryPath = process.argv[1];
+  const modulePath = fileURLToPath(import.meta.url);
+  if (entryPath === modulePath) return true;
+  if (entryPath === undefined) return false;
+
+  try {
+    return realpathSync(entryPath) === realpathSync(modulePath);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   process.on('SIGINT', () => {
     process.exit(130);
   });
