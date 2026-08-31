@@ -1,5 +1,15 @@
 # @radkode/neo
 
+## 1.10.0
+
+### Minor Changes
+
+- [#88](https://github.com/radkode/neo/pull/88) [`805d9ad`](https://github.com/radkode/neo/commit/805d9ada6b8620138c2931c04251b856f2816b6b) Thanks [@jacekradko](https://github.com/jacekradko)! - Add guarded pull request merging with auto-merge, structured output, and safe remote branch cleanup.
+
+### Patch Changes
+
+- [#85](https://github.com/radkode/neo/pull/85) [`b13c7dd`](https://github.com/radkode/neo/commit/b13c7dd828a7c23df85659f076bcc12824192ef0) Thanks [@jacekradko](https://github.com/jacekradko)! - Keep local CLI builds runnable after their source worktree is removed.
+
 ## 1.9.2
 
 ### Patch Changes
