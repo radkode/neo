@@ -13,6 +13,7 @@ import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.
 import { AppError, ErrorCategory, ErrorSeverity } from '@/core/errors/index.js';
 import { ui } from '@/utils/ui.js';
 import { GitErrors } from '@/utils/git-errors.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
 
 class TestAppError extends AppError {
   readonly code = 'TEST_ERR';
@@ -109,6 +110,18 @@ describe('output', () => {
       const parsed = JSON.parse(payload);
       expect(parsed.error.code).toBe('UNKNOWN');
       expect(parsed.error.message).toBe('raw');
+    });
+
+    it('includes the missing flag for non-interactive errors', () => {
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      emitError(new NonInteractiveError('merge confirmation', '--yes'));
+
+      const payload = stdoutWriteSpy.mock.calls[0]?.[0] as string;
+      expect(JSON.parse(payload).error).toMatchObject({
+        code: 'NEO_NON_INTERACTIVE',
+        flag: '--yes',
+        prompt: 'merge confirmation',
+      });
     });
 
     it('calls ui.error in text mode (no text renderer)', () => {
