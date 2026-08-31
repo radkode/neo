@@ -411,7 +411,7 @@ describe('GlobalInstaller', () => {
 
       expect(result.success).toBe(true);
       expect(result.version).toBe('2.0.0');
-      expect(execaMock).toHaveBeenCalledWith('pnpm', ['update', '-g', '@radkode/neo']);
+      expect(execaMock).toHaveBeenCalledWith('pnpm', ['add', '-g', '@radkode/neo@latest']);
     });
 
     it('should handle update error', async () => {
