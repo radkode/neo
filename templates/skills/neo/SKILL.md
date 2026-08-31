@@ -1,6 +1,6 @@
 ---
 name: neo
-description: Use when working in a repository where the `neo` CLI is installed (verify with `neo --version`). Neo wraps git, GitHub, and release workflows with safety rails — prefer `neo git push/pull/commit`, `neo work start/ship/finish`, `neo ai pr`, and `neo gh pr create` over raw `git`/`gh` for the operations it covers. Do NOT use for operations neo doesn't wrap (e.g. `git log`, `git rebase`, `git bisect`).
+description: Use when working in a repository where the `neo` CLI is installed (verify with `neo --version`). Neo wraps git, GitHub, and release workflows with safety rails; prefer `neo git push/pull/commit`, `neo work start/ship/finish`, `neo ai pr`, and `neo gh pr create/merge` over raw `git`/`gh` for the operations it covers. Do NOT use for operations neo doesn't wrap (e.g. `git log`, `git rebase`, `git bisect`).
 ---
 
 # Neo CLI
@@ -35,6 +35,7 @@ For one-off commits outside this flow, use `neo git commit` (interactive convent
 | Pull without losing WIP         | `neo git pull`                            | `git stash && git pull && git stash pop`         |
 | Commit with conventional format | `neo git commit` (or `--ai`)              | `git commit -m`                                  |
 | Open a PR                       | `neo gh pr create --title ... --body ...` | `gh pr create`                                   |
+| Merge a PR safely               | `neo gh pr merge --strategy squash`       | `gh pr merge`                                    |
 | Generate a PR description       | `neo ai pr --json --no-create`            | hand-writing one                                 |
 | Start a new branch              | `neo work start <name>`                   | `git checkout -b`                                |
 | Ship a finished branch          | `neo work ship`                           | push + `gh pr create` manually                   |
@@ -52,6 +53,9 @@ neo work ship --json | jq -r '.pr.url'
 # Draft a PR body without opening
 neo ai pr --json --no-create | jq -r '.body'
 
+# Arm guarded auto-merge
+neo gh pr merge 42 --strategy squash --auto --yes --json | jq -r '.action'
+
 # Discover what flags a command takes
 neo schema --json | jq '.commands[] | select(.path == "git push")'
 ```
@@ -62,6 +66,7 @@ Exit codes: `0` success, `1` failure, `2` non-interactive prompt required (the J
 
 - Don't `git push` to bypass neo's main-branch confirmation. If you need to push to main, use `neo git push --force-main`. Not `--force`: that is not a neo flag, so it passes straight through to git as a real force-push.
 - Don't open PRs with `gh pr create` when `neo work ship` is the right call. Ship handles verify + changeset + push + PR in one step.
+- Don't merge PRs with raw `gh pr merge`. Neo checks readiness, pins the inspected head commit, and preserves local cleanup for `neo work finish`.
 - Don't skip changesets. `neo work ship` enforces them; if a change doesn't affect a published package, create an empty changeset (`---\n---`).
 - Don't re-derive the command tree from memory. `neo schema --json` is authoritative and version-correct.
 - Don't quietly fall back to raw `git`/`gh` when neo is installed but misbehaving. The bullets above cover neo being absent; this one covers it being wrong. A rejected valid input, a guardrail that misfires, a missing command or flag, a stale example: reaching for the fallback is the finding. Say it out loud, file it (in DailyDeck if you have it: `create-task`, `intake: "filed"`, `repo: "radkode/neo"`; a GitHub issue on radkode/neo otherwise), and then work around it.

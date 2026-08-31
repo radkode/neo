@@ -279,6 +279,17 @@ export const ghPrCreateOptionsSchema = baseOptionsSchema.extend({
 export type GhPrCreateOptions = z.infer<typeof ghPrCreateOptionsSchema>;
 
 /**
+ * GitHub PR merge command options schema
+ */
+export const ghPrMergeOptionsSchema = baseOptionsSchema.extend({
+  strategy: z.enum(['merge', 'squash', 'rebase']).optional(),
+  auto: z.boolean().optional(),
+  deleteRemoteBranch: z.boolean().optional(),
+});
+
+export type GhPrMergeOptions = z.infer<typeof ghPrMergeOptionsSchema>;
+
+/**
  * Profile name schema
  * Must be alphanumeric with hyphens and underscores
  */

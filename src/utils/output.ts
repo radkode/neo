@@ -40,6 +40,8 @@ export interface SerializedError {
   message: string;
   category?: string;
   severity?: string;
+  flag?: string;
+  prompt?: string;
   suggestions?: string[];
   context?: Record<string, unknown>;
 }
@@ -98,6 +100,9 @@ function serializeError(error: AppError | Error): SerializedError {
   };
   if (appError.category) serialized.category = String(appError.category);
   if (appError.severity) serialized.severity = String(appError.severity);
+  const promptError = error as Error & { flag?: unknown; prompt?: unknown };
+  if (typeof promptError.flag === 'string') serialized.flag = promptError.flag;
+  if (typeof promptError.prompt === 'string') serialized.prompt = promptError.prompt;
   if (appError.suggestions && appError.suggestions.length > 0) {
     serialized.suggestions = appError.suggestions;
   }
