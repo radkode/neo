@@ -1,6 +1,6 @@
 {
   "name": "@radkode/neo",
-  "version": "1.9.2",
+  "version": "1.10.0",
   "description": "Modern CLI toolkit with intelligent git workflows and configuration management",
   "keywords": [
     "cli",
