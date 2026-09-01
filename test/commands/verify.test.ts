@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { execa } from 'execa';
-import { executeVerify } from '@/commands/verify/index.js';
-import { createTempDir, type TempDir } from '../utils/test-helpers.js';
+import { createVerifyCommand, executeVerify } from '@/commands/verify/index.js';
+import { CommandError } from '@/core/errors/index.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
+import { createTempDir, mockProcessExit, type TempDir } from '../utils/test-helpers.js';
 
 vi.mock('execa', () => ({ execa: vi.fn() }));
 
@@ -18,10 +20,17 @@ vi.mock('@/utils/ui.js', () => ({
   },
 }));
 
+import { ui } from '@/utils/ui.js';
+
 const execaMock = vi.mocked(execa);
+const warnMock = vi.mocked(ui.warn);
 
 async function writePackage(tempDir: TempDir, manifest: Record<string, unknown>): Promise<void> {
   await writeFile(`${tempDir.path}/package.json`, JSON.stringify(manifest));
+}
+
+async function writeLockfile(tempDir: TempDir, name: string): Promise<void> {
+  await writeFile(`${tempDir.path}/${name}`, '');
 }
 
 describe('executeVerify', () => {
@@ -184,5 +193,142 @@ describe('executeVerify', () => {
       }),
     ]);
     expect(result.results[0]?.stdoutTail?.length).toBeLessThanOrEqual(8_000);
+  });
+
+  it.each([
+    { lockfile: 'pnpm-lock.yaml', pm: 'pnpm' },
+    { lockfile: 'yarn.lock', pm: 'yarn' },
+    { lockfile: 'bun.lock', pm: 'bun' },
+    { lockfile: 'bun.lockb', pm: 'bun' },
+    { lockfile: 'package-lock.json', pm: 'npm' },
+  ])('detects $pm from $lockfile when --pm is omitted', async ({ lockfile, pm }) => {
+    await writePackage(tempDir, { scripts: { build: 'build' } });
+    await writeLockfile(tempDir, lockfile);
+
+    const result = await executeVerify(tempDir.path, {});
+
+    expect(result.packageManager).toBe(pm);
+    expect(execaMock).toHaveBeenCalledWith(pm, ['run', 'build'], {
+      cwd: tempDir.path,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it('warns and picks the first lockfile match when several are present', async () => {
+    await writePackage(tempDir, { scripts: { build: 'build' } });
+    await writeLockfile(tempDir, 'package-lock.json');
+    await writeLockfile(tempDir, 'pnpm-lock.yaml');
+
+    const result = await executeVerify(tempDir.path, {});
+
+    expect(warnMock).toHaveBeenCalledWith(
+      'Multiple lockfiles detected (pnpm, npm). Using pnpm. Pass --pm to disambiguate.'
+    );
+    expect(result.packageManager).toBe('pnpm');
+    expect(execaMock).toHaveBeenCalledWith('pnpm', ['run', 'build'], expect.any(Object));
+  });
+
+  it('does not warn when both bun lockfiles resolve to the same package manager', async () => {
+    await writePackage(tempDir, { scripts: { build: 'build' } });
+    await writeLockfile(tempDir, 'bun.lock');
+    await writeLockfile(tempDir, 'bun.lockb');
+
+    const result = await executeVerify(tempDir.path, {});
+
+    expect(result.packageManager).toBe('bun');
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects with VERIFY_NO_LOCKFILE when no lockfile is present', async () => {
+    await writePackage(tempDir, { scripts: { build: 'build' } });
+
+    const error = await executeVerify(tempDir.path, {}).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(CommandError);
+    expect(error).toMatchObject({
+      code: 'VERIFY_NO_LOCKFILE',
+      category: 'CONFIGURATION',
+      message:
+        'No lockfile found. Expected one of: pnpm-lock.yaml, yarn.lock, bun.lock, package-lock.json.',
+      context: {
+        expected: ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json'],
+      },
+    });
+    expect(execaMock).not.toHaveBeenCalled();
+  });
+
+  it('--skip drops the named scripts from the default order', async () => {
+    await writePackage(tempDir, {
+      scripts: {
+        build: 'build',
+        test: 'test',
+        lint: 'lint',
+        typecheck: 'typecheck',
+      },
+    });
+
+    const result = await executeVerify(tempDir.path, { pm: 'pnpm', skip: 'lint, typecheck' });
+
+    expect(result.results.map(({ script }) => script)).toEqual(['build', 'test']);
+    expect(execaMock.mock.calls.map(([, args]) => args)).toEqual([
+      ['run', 'build'],
+      ['run', 'test'],
+    ]);
+  });
+});
+
+describe('createVerifyCommand', () => {
+  let tempDir: TempDir;
+  let previousExitCode: typeof process.exitCode;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    tempDir = await createTempDir('neo-verify-command-');
+    previousExitCode = process.exitCode;
+    execaMock.mockResolvedValue({ stdout: '', stderr: '' } as never);
+  });
+
+  afterEach(async () => {
+    process.exitCode = previousExitCode;
+    setRuntimeContext(buildRuntimeContext());
+    await tempDir.cleanup();
+  });
+
+  it('emits the verify payload and sets exit code 1 when a script fails', async () => {
+    await writePackage(tempDir, { scripts: { build: 'build', test: 'test' } });
+    await writeLockfile(tempDir, 'pnpm-lock.yaml');
+    execaMock.mockResolvedValueOnce({ stdout: '', stderr: '' } as never);
+    execaMock.mockRejectedValueOnce(
+      Object.assign(new Error('failed'), { exitCode: 2, stdout: '', stderr: 'assertion failed' })
+    );
+
+    setRuntimeContext(buildRuntimeContext({ json: true }));
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tempDir.path);
+    const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const exitSpy = mockProcessExit();
+
+    try {
+      await createVerifyCommand().parseAsync([], { from: 'user' });
+
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(1);
+      expect(stdoutWriteSpy).toHaveBeenCalledOnce();
+      const payload = JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]));
+      expect(payload).toMatchObject({
+        ok: false,
+        command: 'verify',
+        packageManager: 'pnpm',
+        results: [
+          { script: 'build', status: 'passed' },
+          { script: 'test', status: 'failed', exitCode: 2, stderrTail: 'assertion failed' },
+        ],
+      });
+      expect(payload.error).toBeUndefined();
+    } finally {
+      cwdSpy.mockRestore();
+      stdoutWriteSpy.mockRestore();
+      exitSpy.mockRestore();
+    }
   });
 });

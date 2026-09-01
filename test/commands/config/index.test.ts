@@ -57,17 +57,6 @@ vi.mock('@/utils/prompt.js', () => ({
   },
 }));
 
-vi.mock('@/commands/config/profile/index.js', async () => {
-  const { Command } = await import('@commander-js/extra-typings');
-  return {
-    createProfileCommand: vi.fn().mockImplementation(() => {
-      const cmd = new Command('profile');
-      cmd.description('Manage profiles');
-      return cmd;
-    }),
-  };
-});
-
 import { ui } from '@/utils/ui.js';
 import { configManager } from '@/utils/config.js';
 import { secretsManager } from '@/utils/secrets.js';
@@ -124,6 +113,22 @@ describe('createConfigCommand', () => {
       const subcommands = command.commands.map((c) => c.name());
 
       expect(subcommands).toContain('profile');
+    });
+
+    it('should wire the real profile subcommands', () => {
+      const command = createConfigCommand();
+      const profile = command.commands.find((c) => c.name() === 'profile');
+
+      expect(profile?.description()).toBe('Manage configuration profiles');
+      expect(profile?.commands.map((c) => c.name())).toEqual([
+        'list',
+        'create',
+        'use',
+        'delete',
+        'show',
+        'export',
+        'import',
+      ]);
     });
   });
 

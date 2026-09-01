@@ -104,6 +104,18 @@ describe('CLI', () => {
       expect(gitCommand).toBeDefined();
     });
 
+    it('should have gh command', () => {
+      const commands = program.commands;
+      const ghCommand = commands.find((cmd) => cmd.name() === 'gh');
+      expect(ghCommand).toBeDefined();
+    });
+
+    it('should have work command', () => {
+      const commands = program.commands;
+      const workCommand = commands.find((cmd) => cmd.name() === 'work');
+      expect(workCommand).toBeDefined();
+    });
+
     it('should have update command', () => {
       const commands = program.commands;
       const updateCommand = commands.find((cmd) => cmd.name() === 'update');
