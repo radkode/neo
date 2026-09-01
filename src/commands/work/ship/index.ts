@@ -152,8 +152,12 @@ async function hasPendingChangeset(cwd: string, base: string): Promise<string | 
 }
 
 async function getProjectRoot(): Promise<string> {
-  const { stdout } = await execa('git', ['rev-parse', '--show-toplevel']);
-  return stdout.trim();
+  try {
+    const { stdout } = await execa('git', ['rev-parse', '--show-toplevel']);
+    return stdout.trim();
+  } catch (error) {
+    throw GitErrors.unknown('work ship', error);
+  }
 }
 
 function inferPrTitle(branch: string, commits: string[]): string {
@@ -287,11 +291,15 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
       changesetPath = cs.path;
       // Stage and amend so the changeset travels with the branch tip. If
       // there's nothing to amend onto (bare branch), fall back to a new commit.
-      await execa('git', ['add', cs.path]);
       try {
-        await execa('git', ['commit', '--amend', '--no-edit', '-n']);
-      } catch {
-        await execa('git', ['commit', '-n', '-m', 'chore: add changeset']);
+        await execa('git', ['add', cs.path]);
+        try {
+          await execa('git', ['commit', '--amend', '--no-edit', '-n']);
+        } catch {
+          await execa('git', ['commit', '-n', '-m', 'chore: add changeset']);
+        }
+      } catch (error) {
+        throw GitErrors.unknown('work ship', error);
       }
     }
   }

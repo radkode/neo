@@ -307,7 +307,19 @@ export async function executeCommit(options: GitCommitOptions): Promise<Result<v
           spinner.succeed('Commit created successfully!');
 
           const { stdout: commitHash } = await execa('git', ['rev-parse', '--short', 'HEAD']);
-          ui.info(`Commit: ${commitHash.trim()}`);
+          emitJson(
+            {
+              ok: true,
+              command: 'git.commit',
+              commit: commitHash.trim(),
+              type: commitType,
+              scope: commitScope ?? null,
+              message: commitMessage,
+              breaking: isBreaking,
+              files: stagedFiles,
+            },
+            { text: () => ui.info(`Commit: ${commitHash.trim()}`) }
+          );
 
           return success(undefined);
         } catch (error) {

@@ -30,6 +30,9 @@ export interface AppErrorOptions {
   context?: Record<string, unknown>;
   suggestions?: string[];
   originalError?: Error;
+  code?: string;
+  category?: ErrorCategory;
+  severity?: ErrorSeverity;
 }
 
 export abstract class AppError extends Error {
@@ -53,9 +56,9 @@ export abstract class AppError extends Error {
 }
 
 export class CommandError extends AppError {
-  readonly code = 'COMMAND_ERROR';
-  readonly severity = ErrorSeverity.MEDIUM;
-  readonly category = ErrorCategory.COMMAND;
+  readonly code: string;
+  readonly severity: ErrorSeverity;
+  readonly category: ErrorCategory;
 
   constructor(
     message: string,
@@ -63,6 +66,9 @@ export class CommandError extends AppError {
     options?: AppErrorOptions
   ) {
     super(message, options);
+    this.code = options?.code ?? 'COMMAND_ERROR';
+    this.severity = options?.severity ?? ErrorSeverity.MEDIUM;
+    this.category = options?.category ?? ErrorCategory.COMMAND;
   }
 }
 

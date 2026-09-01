@@ -1,4 +1,4 @@
-import { Command } from '@commander-js/extra-typings';
+import { Command, Option } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import { confirm } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
@@ -7,6 +7,8 @@ import { ui } from '@/utils/ui.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { validate } from '@/utils/validation.js';
+import { gitPushOptionsSchema, type GitPushOptions } from '@/types/schemas.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
 import {
   GitErrors,
@@ -283,9 +285,11 @@ export function createPushCommand(): Command {
     .argument('[args...]', 'git push arguments (remote, branch, and options like -u)')
     .option('--dry-run', 'show what would be pushed without actually pushing')
     .option('--force-main', 'skip main-branch safety prompt')
-    .option(
-      '--on-reject <strategy>',
-      'resolution when push is rejected non-fast-forward (pull-rebase|force|cancel)'
+    .addOption(
+      new Option(
+        '--on-reject <strategy>',
+        'resolution when push is rejected non-fast-forward (pull-rebase|force|cancel)'
+      ).choices(['pull-rebase', 'force', 'cancel'])
     )
     .addHelpText(
       'after',
@@ -328,18 +332,18 @@ Examples:
         const remote = positionalArgs[0];
         const branch = positionalArgs[1];
 
-        const typedOpts = opts as {
-          dryRun?: boolean;
-          forceMain?: boolean;
-          onReject?: 'pull-rebase' | 'force' | 'cancel';
-        };
+        const validatedOptions: GitPushOptions = validate(
+          gitPushOptionsSchema,
+          opts,
+          'git push options'
+        );
         const options: PushOptions = {
-          dryRun: typedOpts.dryRun,
+          dryRun: validatedOptions.dryRun,
           passthrough,
           remote,
           branch,
-          forceMain: typedOpts.forceMain,
-          onReject: typedOpts.onReject,
+          forceMain: validatedOptions.forceMain,
+          onReject: validatedOptions.onReject,
         };
 
         logger.debug(`Options: ${JSON.stringify(options)}`);

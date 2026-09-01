@@ -3,7 +3,14 @@ import { execa } from 'execa';
 import { select, input, confirm as confirmPrompt, Separator } from '@inquirer/prompts';
 import { ui } from '@/utils/ui.js';
 import { type Result, success, failure, isFailure } from '@/core/errors/index.js';
-import { GitErrors, isNotGitRepository } from '@/utils/git-errors.js';
+import {
+  GitErrors,
+  GitErrorCode,
+  detectGitError,
+  isNotGitRepository,
+  isStashApplyConflictError,
+  isConflictError,
+} from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -418,11 +425,23 @@ async function handleStashAction(stash: StashEntry): Promise<Result<'back' | 'do
     await execa('git', ['stash', action, stash.ref]);
     spinner.succeed(action === 'apply' ? 'Stash applied (still saved)' : 'Stash popped');
     return success('done');
-  } catch {
-    spinner.fail('Conflicts detected');
-    ui.warn('Resolve conflicts manually, then:');
-    ui.list(['Stage resolved files: git add <files>', 'The stash is still available']);
-    return failure(GitErrors.stashApplyConflict(`stash ${action}`));
+  } catch (error) {
+    if (isStashApplyConflictError(error) || isConflictError(error)) {
+      spinner.fail('Conflicts detected');
+      ui.warn('Resolve conflicts manually, then:');
+      ui.list(['Stage resolved files: git add <files>', 'The stash is still available']);
+      return failure(GitErrors.stashApplyConflict(`stash ${action}`));
+    }
+
+    // Classify against the ordered pattern list rather than the not-found predicate:
+    // the failed command embeds the stash ref, which on its own matches not-found.
+    const gitError = detectGitError(error, { commandName: `stash ${action}` });
+    spinner.fail(
+      gitError.gitErrorCode === GitErrorCode.STASH_NOT_FOUND
+        ? 'Stash not found'
+        : `Failed to ${action} stash`
+    );
+    return failure(gitError);
   }
 }
 

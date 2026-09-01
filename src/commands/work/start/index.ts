@@ -123,14 +123,21 @@ async function branchExistsLocally(branch: string): Promise<boolean> {
 }
 
 async function resolvePrimaryWorktreeRoot(): Promise<string> {
-  const { stdout } = await execa('git', [
-    'rev-parse',
-    '--path-format=absolute',
-    '--git-dir',
-    '--git-common-dir',
-    '--show-toplevel',
-  ]);
-  const [gitDir, commonDir, currentRoot] = stdout.trim().split(/\r?\n/);
+  let revParseOutput: string;
+  try {
+    const { stdout } = await execa('git', [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-dir',
+      '--git-common-dir',
+      '--show-toplevel',
+    ]);
+    revParseOutput = stdout.trim();
+  } catch (error) {
+    throw GitErrors.unknown('work start', error);
+  }
+
+  const [gitDir, commonDir, currentRoot] = revParseOutput.split(/\r?\n/);
   if (!gitDir || !commonDir || !currentRoot) {
     throw new Error('Could not locate the primary worktree from Git metadata.');
   }
