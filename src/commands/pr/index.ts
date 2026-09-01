@@ -18,6 +18,20 @@ export function createPrAliasCommand(): Command {
     .option('-r, --reviewer <reviewers...>', 'request reviewers')
     .option('-l, --label <labels...>', 'add labels')
     .option('-w, --web', 'open PR in browser after creation')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  Interactive wizard:
+    $ neo pr
+
+  Fully-specified:
+    $ neo pr --title "Add X" --body "..." --base main
+
+  Agent-friendly (auto-fills title from commit + pushes first):
+    $ neo pr --yes --json
+`
+    )
     .action(
       runAction(async (options: unknown) => {
         const validatedOptions: GhPrCreateOptions = validate(

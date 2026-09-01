@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { checkbox, input } from '@inquirer/prompts';
 import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -29,8 +30,16 @@ async function pathExists(p: string): Promise<boolean> {
   try {
     await access(p);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    const errno = (error as NodeJS.ErrnoException).code;
+    if (errno === 'ENOENT' || errno === 'ENOTDIR') return false;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CommandError(`Cannot access ${p}: ${detail}`, 'changeset', {
+      code: 'CHANGESET_PATH_UNREADABLE',
+      category: ErrorCategory.FILESYSTEM,
+      context: { path: p, errno },
+      suggestions: [`Check read permissions on ${p} and its parent directories`],
+    });
   }
 }
 
@@ -87,7 +96,12 @@ async function discoverPackages(cwd: string): Promise<string[]> {
   if (workspacePatterns.length === 0) {
     if (rootPkg.name && !rootPkg.private) return [rootPkg.name];
     if (rootPkg.name) return [rootPkg.name];
-    throw new Error('Root package.json is missing a "name" field.');
+    throw new CommandError('Root package.json is missing a "name" field.', 'changeset', {
+      code: 'CHANGESET_ROOT_NAME_MISSING',
+      category: ErrorCategory.CONFIGURATION,
+      context: { cwd },
+      suggestions: [`Add a "name" field to ${join(cwd, 'package.json')}`],
+    });
   }
 
   const names = new Set<string>();
@@ -109,14 +123,23 @@ async function discoverPackages(cwd: string): Promise<string[]> {
       try {
         const pkg = await readJson<{ name?: string; private?: boolean }>(pkgPath);
         if (pkg.name && !pkg.private) names.add(pkg.name);
-      } catch {
+      } catch (error) {
+        ui.warn(`Skipping ${pkgPath}: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }
   }
 
   if (names.size === 0) {
-    throw new Error('No publishable packages found in workspaces.');
+    throw new CommandError('No publishable packages found in workspaces.', 'changeset', {
+      code: 'CHANGESET_NO_PACKAGES',
+      category: ErrorCategory.CONFIGURATION,
+      context: { cwd, workspacePatterns },
+      suggestions: [
+        'Remove "private": true from a package that should be published',
+        'Or fix the workspace globs in package.json / pnpm-workspace.yaml',
+      ],
+    });
   }
   return [...names];
 }
@@ -218,7 +241,15 @@ function parseBump(raw: string | undefined): BumpType | undefined {
   if ((BUMP_VALUES as readonly string[]).includes(normalized)) {
     return normalized as BumpType;
   }
-  throw new Error(`Invalid --bump "${raw}". Expected one of: ${BUMP_VALUES.join(', ')}.`);
+  throw new CommandError(
+    `Invalid --bump "${raw}". Expected one of: ${BUMP_VALUES.join(', ')}.`,
+    'changeset',
+    {
+      code: 'CHANGESET_INVALID_BUMP',
+      category: ErrorCategory.VALIDATION,
+      context: { bump: raw, expected: BUMP_VALUES },
+    }
+  );
 }
 
 async function ensureUniquePath(cwd: string): Promise<string> {
@@ -245,7 +276,15 @@ export async function executeChangeset(
 ): Promise<ChangesetResult> {
   const configPath = join(cwd, '.changeset', 'config.json');
   if (!(await pathExists(configPath))) {
-    throw new Error('No .changeset/config.json found. Run `pnpm dlx @changesets/cli init` first.');
+    throw new CommandError('No .changeset/config.json found.', 'changeset', {
+      code: 'CHANGESET_NO_CONFIG',
+      category: ErrorCategory.CONFIGURATION,
+      context: { cwd, configPath },
+      suggestions: [
+        'Initialize changesets: pnpm dlx @changesets/cli init',
+        'Or run neo changeset from the repository root',
+      ],
+    });
   }
 
   const ctx = getRuntimeContext();
@@ -276,8 +315,14 @@ export async function executeChangeset(
         .filter(Boolean);
       const unknown = requested.filter((name) => !discovered.includes(name));
       if (unknown.length > 0) {
-        throw new Error(
-          `Unknown package(s): ${unknown.join(', ')}. Known: ${discovered.join(', ')}.`
+        throw new CommandError(
+          `Unknown package(s): ${unknown.join(', ')}. Known: ${discovered.join(', ')}.`,
+          'changeset',
+          {
+            code: 'CHANGESET_UNKNOWN_PACKAGE',
+            category: ErrorCategory.VALIDATION,
+            context: { unknown, discovered },
+          }
         );
       }
       packages = requested;

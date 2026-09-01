@@ -14,6 +14,7 @@ import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { join } from 'path';
 
 export function createInitCommand(): Command {
@@ -89,9 +90,15 @@ export function createInitCommand(): Command {
 
             if (!installStatus.pnpmInstalled) {
               installSpinner.fail('pnpm is not installed');
-              ui.error('Please install pnpm first: https://pnpm.io/installation');
-              ui.info('Then run this command again');
-              return;
+              throw new CommandError('pnpm is not installed', 'init', {
+                code: 'INIT_PNPM_MISSING',
+                category: ErrorCategory.CONFIGURATION,
+                suggestions: [
+                  'Please install pnpm first: https://pnpm.io/installation',
+                  'Then run this command again',
+                  'Or configure without installing: neo init --skip-install',
+                ],
+              });
             }
 
             logger.debug(`pnpm version: ${installStatus.pnpmVersion}`);
@@ -102,8 +109,13 @@ export function createInitCommand(): Command {
 
               if (!updateResult.success) {
                 installSpinner.fail('Failed to update Neo CLI');
-                ui.error(updateResult.error || 'Unknown error occurred');
-                return;
+                throw new CommandError(updateResult.error || 'Unknown error occurred', 'init', {
+                  code: 'INIT_UPDATE_FAILED',
+                  suggestions: [
+                    'Retry manually: pnpm add -g @radkode/neo@latest',
+                    'Or skip the global install: neo init --skip-install',
+                  ],
+                });
               }
 
               installSpinner.succeed(`Neo CLI updated to v${updateResult.version}`);
@@ -112,8 +124,13 @@ export function createInitCommand(): Command {
 
               if (!installResult.success) {
                 installSpinner.fail('Failed to install Neo CLI globally');
-                ui.error(installResult.error || 'Unknown error occurred');
-                return;
+                throw new CommandError(installResult.error || 'Unknown error occurred', 'init', {
+                  code: 'INIT_INSTALL_FAILED',
+                  suggestions: [
+                    'Retry manually: pnpm add -g @radkode/neo',
+                    'Or skip the global install: neo init --skip-install',
+                  ],
+                });
               }
 
               installSpinner.succeed(`Neo CLI v${installResult.version} installed globally`);
@@ -227,7 +244,8 @@ export function createInitCommand(): Command {
         } catch (error: unknown) {
           // A NonInteractiveError is a contract signal, not a failure — let it
           // propagate to runAction without painting "Initialization failed" red.
-          if (error instanceof NonInteractiveError) throw error;
+          // A CommandError already named its own failure; runAction renders it.
+          if (error instanceof NonInteractiveError || error instanceof CommandError) throw error;
           spinner.fail('Initialization failed');
           ui.error(`Error: ${error}`);
           throw error;

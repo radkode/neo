@@ -2,6 +2,7 @@ import { Command } from '@commander-js/extra-typings';
 import { execa } from 'execa';
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -64,8 +65,15 @@ async function detectPackageManager(cwd: string): Promise<PackageManager> {
   const found = [...new Set(present.filter((x): x is PackageManager => x !== null))];
 
   if (found.length === 0) {
-    throw new Error(
-      'No lockfile found. Expected one of: pnpm-lock.yaml, yarn.lock, bun.lock, package-lock.json. Pass --pm <name> to override.'
+    throw new CommandError(
+      'No lockfile found. Expected one of: pnpm-lock.yaml, yarn.lock, bun.lock, package-lock.json.',
+      'verify',
+      {
+        code: 'VERIFY_NO_LOCKFILE',
+        category: ErrorCategory.CONFIGURATION,
+        context: { expected: LOCKFILES.map(({ file }) => file) },
+        suggestions: ['Pass --pm <name> to override, e.g. neo verify --pm pnpm'],
+      }
     );
   }
   if (found.length > 1) {
@@ -89,7 +97,12 @@ function parsePackageManager(value: string): PackageManager {
 async function readPackageManifest(cwd: string): Promise<PackageManifest> {
   const pkgPath = join(cwd, 'package.json');
   if (!(await pathExists(pkgPath))) {
-    throw new Error('No package.json in current directory.');
+    throw new CommandError('No package.json in current directory.', 'verify', {
+      code: 'VERIFY_NO_PACKAGE_JSON',
+      category: ErrorCategory.CONFIGURATION,
+      context: { cwd },
+      suggestions: ['Run neo verify from the directory that holds package.json'],
+    });
   }
   const raw = await readFile(pkgPath, 'utf-8');
   const pkg = JSON.parse(raw) as {
@@ -176,8 +189,18 @@ export async function executeVerify(cwd: string, options: VerifyOptions): Promis
       (typeof manifest.verifyScript === 'string'
         ? [manifest.verifyScript.trim()]
         : DEFAULT_SCRIPTS);
-    throw new Error(
-      `No matching scripts found in package.json. Looked for: ${requested.join(', ')}.`
+    throw new CommandError(
+      `No matching scripts found in package.json. Looked for: ${requested.join(', ')}.`,
+      'verify',
+      {
+        code: 'VERIFY_NO_MATCHING_SCRIPTS',
+        category: ErrorCategory.CONFIGURATION,
+        context: { requested },
+        suggestions: [
+          'Add one of those scripts to package.json#scripts',
+          'Or set package.json#neo.verify to a script the repo defines',
+        ],
+      }
     );
   }
 

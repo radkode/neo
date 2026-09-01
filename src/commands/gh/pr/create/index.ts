@@ -9,7 +9,15 @@ import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
 import { ghPrCreateOptionsSchema } from '@/types/schemas.js';
 import type { GhPrCreateOptions } from '@/types/schemas.js';
-import { type Result, success, failure, isFailure, CommandError } from '@/core/errors/index.js';
+import {
+  type Result,
+  success,
+  failure,
+  isFailure,
+  CommandError,
+  AppError,
+} from '@/core/errors/index.js';
+import { detectGitError } from '@/utils/git-errors.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
@@ -42,8 +50,12 @@ async function isGhAuthenticated(): Promise<boolean> {
  * Get the current branch name
  */
 async function getCurrentBranch(): Promise<string> {
-  const { stdout } = await execa('git', ['branch', '--show-current']);
-  return stdout.trim();
+  try {
+    const { stdout } = await execa('git', ['branch', '--show-current']);
+    return stdout.trim();
+  } catch (error) {
+    throw detectGitError(error, { commandName: 'gh-pr-create' });
+  }
 }
 
 /**
@@ -230,12 +242,10 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
             await execa('git', ['push', 'origin', currentBranch]);
           }
           pushSpinner.succeed('Pushed to remote');
-        } catch {
+        } catch (error) {
           pushSpinner.fail('Failed to push to remote');
           return failure(
-            new CommandError('Failed to push changes to remote', 'gh-pr-create', {
-              suggestions: ['Resolve any conflicts and try again'],
-            })
+            detectGitError(error, { commandName: 'gh-pr-create', branchName: currentBranch })
           );
         }
       } else {
@@ -392,6 +402,10 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
       );
     }
   } catch (error: unknown) {
+    // Already-classified errors carry their own code and suggestions.
+    if (error instanceof AppError) {
+      return failure(error);
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     return failure(new CommandError(`Unexpected error: ${errorMessage}`, 'gh-pr-create'));
   }

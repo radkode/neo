@@ -3,6 +3,7 @@ import { execa } from 'execa';
 import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import {
   GitErrors,
   isAuthenticationError,
@@ -44,9 +45,14 @@ async function detectDefaultBranch(): Promise<string> {
         continue;
       }
     }
-    throw new Error(
-      'Could not detect default branch. Run `git remote set-head origin --auto`, or pass --branch <name>.'
-    );
+    throw new CommandError('Could not detect default branch.', 'sync', {
+      code: 'SYNC_NO_DEFAULT_BRANCH',
+      category: ErrorCategory.CONFIGURATION,
+      suggestions: [
+        'Run: git remote set-head origin --auto',
+        'Or pass the base explicitly: neo sync --branch <name>',
+      ],
+    });
   }
 }
 
@@ -81,7 +87,13 @@ export async function executeSync(options: SyncOptions): Promise<SyncResult> {
 
   const currentBranch = await getCurrentBranch();
   if (!currentBranch) {
-    throw new Error('Detached HEAD — check out a branch before syncing.');
+    throw new CommandError('Detached HEAD.', 'sync', {
+      code: 'SYNC_DETACHED_HEAD',
+      suggestions: [
+        'Check out a branch: git checkout <branch>',
+        'Or create one at the current commit: git switch -c <name>',
+      ],
+    });
   }
 
   const targetBranch = options.branch ?? (await detectDefaultBranch());
@@ -91,9 +103,10 @@ export async function executeSync(options: SyncOptions): Promise<SyncResult> {
   let stashed = false;
   if (await isTreeDirty()) {
     if (!allowStash) {
-      throw new Error(
-        'Working tree has uncommitted changes. Commit them first, or drop --no-stash to auto-stash.'
-      );
+      throw new CommandError('Working tree has uncommitted changes.', 'sync', {
+        code: 'SYNC_UNCOMMITTED_CHANGES',
+        suggestions: ['Commit them first: neo git commit', 'Or drop --no-stash to auto-stash'],
+      });
     }
     const stashSpinner = ui.spinner('Stashing local changes');
     stashSpinner.start();

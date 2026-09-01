@@ -5,6 +5,8 @@ import { ui } from '@/utils/ui.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 import { NonInteractiveError, mayPrompt } from '@/utils/prompt.js';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
+import { detectGitError } from '@/utils/git-errors.js';
 import { generatePrDescription, type AIPrRequest } from '@/services/ai/index.js';
 
 interface AiPrOptions {
@@ -36,19 +38,29 @@ async function detectDefaultBranch(): Promise<string> {
         continue;
       }
     }
-    throw new Error(
-      'Could not detect default branch. Pass --base <name> or run `git remote set-head origin --auto`.'
-    );
+    throw new CommandError('Could not detect default branch.', 'ai-pr', {
+      code: 'AI_PR_NO_DEFAULT_BRANCH',
+      category: ErrorCategory.CONFIGURATION,
+      suggestions: ['Pass --base <name>', 'Or run: git remote set-head origin --auto'],
+    });
+  }
+}
+
+async function gitRead(args: string[]): Promise<string> {
+  try {
+    const { stdout } = await execa('git', args);
+    return stdout;
+  } catch (error) {
+    throw detectGitError(error, { commandName: 'ai-pr' });
   }
 }
 
 async function getCurrentBranch(): Promise<string> {
-  const { stdout } = await execa('git', ['branch', '--show-current']);
-  return stdout.trim();
+  return (await gitRead(['branch', '--show-current'])).trim();
 }
 
 async function getCommits(base: string): Promise<string[]> {
-  const { stdout } = await execa('git', [
+  const stdout = await gitRead([
     'log',
     `origin/${base}..HEAD`,
     '--pretty=format:%h %s%n%b',
@@ -58,13 +70,11 @@ async function getCommits(base: string): Promise<string[]> {
 }
 
 async function getDiffStat(base: string): Promise<string> {
-  const { stdout } = await execa('git', ['diff', `origin/${base}...HEAD`, '--stat']);
-  return stdout.trim();
+  return (await gitRead(['diff', `origin/${base}...HEAD`, '--stat'])).trim();
 }
 
 async function getDiff(base: string): Promise<string> {
-  const { stdout } = await execa('git', ['diff', `origin/${base}...HEAD`]);
-  return stdout;
+  return gitRead(['diff', `origin/${base}...HEAD`]);
 }
 
 async function existingPrUrl(): Promise<string | null> {
@@ -91,12 +101,28 @@ async function ghInstalled(): Promise<boolean> {
 export async function executeAiPr(options: AiPrOptions): Promise<AiPrResult> {
   const branch = await getCurrentBranch();
   if (!branch) {
-    throw new Error('Detached HEAD — check out a branch before running `neo ai pr`.');
+    throw new CommandError(
+      'Detached HEAD — check out a branch before running `neo ai pr`.',
+      'ai-pr',
+      {
+        code: 'AI_PR_DETACHED_HEAD',
+        category: ErrorCategory.VALIDATION,
+        suggestions: ['Check out a branch: git checkout <branch>'],
+      }
+    );
   }
 
   const base = options.base ?? (await detectDefaultBranch());
   if (branch === base) {
-    throw new Error(`Already on base branch "${base}" — nothing to describe.`);
+    throw new CommandError(`Already on base branch "${base}" — nothing to describe.`, 'ai-pr', {
+      code: 'AI_PR_ON_BASE_BRANCH',
+      category: ErrorCategory.VALIDATION,
+      context: { base },
+      suggestions: [
+        'Check out your feature branch: git checkout <branch>',
+        'Or start one: neo work start <name>',
+      ],
+    });
   }
 
   const [commits, diffStat, diff] = await Promise.all([
@@ -106,8 +132,15 @@ export async function executeAiPr(options: AiPrOptions): Promise<AiPrResult> {
   ]);
 
   if (commits.length === 0) {
-    throw new Error(
-      `No commits on ${branch} that aren't already on origin/${base}. Commit and push first.`
+    throw new CommandError(
+      `No commits on ${branch} that aren't already on origin/${base}.`,
+      'ai-pr',
+      {
+        code: 'AI_PR_NO_COMMITS',
+        category: ErrorCategory.VALIDATION,
+        context: { branch, base },
+        suggestions: ['Commit your work: neo git commit', 'Then push it: neo git push'],
+      }
     );
   }
 
@@ -188,10 +221,27 @@ export async function executeAiPr(options: AiPrOptions): Promise<AiPrResult> {
   } catch (error) {
     createSpinner.fail('Failed to create PR');
     const stderr = (error as { stderr?: string }).stderr ?? '';
-    if (stderr) ui.muted(stderr.trim().split('\n').slice(-10).join('\n'));
-    throw new Error('gh pr create failed. Run with --json to inspect the generated title/body.', {
-      cause: error,
-    });
+    const tail = stderr.trim().split('\n').slice(-10).join('\n');
+    if (stderr) ui.muted(tail);
+    throw new CommandError(
+      'gh pr create failed. Run with --json to inspect the generated title/body.',
+      'ai-pr',
+      {
+        code: 'AI_PR_GH_CREATE_FAILED',
+        category: ErrorCategory.COMMAND,
+        context: {
+          base,
+          branch,
+          exitCode: (error as { exitCode?: number }).exitCode,
+          stderr: tail,
+        },
+        suggestions: [
+          'Check gh auth: gh auth status',
+          `Verify the base branch exists on the remote: git ls-remote --heads origin ${base}`,
+        ],
+        ...(error instanceof Error ? { originalError: error } : {}),
+      }
+    );
   }
 }
 

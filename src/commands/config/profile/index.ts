@@ -14,6 +14,7 @@ import type {
   ProfileExportOptions,
   ProfileImportOptions,
 } from '@/types/schemas.js';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 
@@ -301,7 +302,25 @@ function createProfileExportCommand(): Command {
         const jsonContent = await profileManager.export(name);
 
         if (validatedOptions.output) {
-          await writeFile(validatedOptions.output, jsonContent, 'utf-8');
+          try {
+            await writeFile(validatedOptions.output, jsonContent, 'utf-8');
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            throw new CommandError(
+              `Failed to write profile export to ${validatedOptions.output}: ${msg}`,
+              'config-profile-export',
+              {
+                code: 'PROFILE_EXPORT_WRITE_FAILED',
+                category: ErrorCategory.FILESYSTEM,
+                context: { name, output: validatedOptions.output },
+                suggestions: [
+                  'Check the output directory exists and is writable',
+                  'Pass a different -o <file> path, or omit -o to print the JSON to stdout',
+                ],
+                ...(error instanceof Error ? { originalError: error } : {}),
+              }
+            );
+          }
           emitJson(
             {
               ok: true,

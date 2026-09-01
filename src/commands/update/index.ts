@@ -12,6 +12,7 @@ import { compareVersions, fetchLatestCliVersion } from '@/utils/update-check.js'
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { emitJson } from '@/utils/output.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
+import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { runAction } from '@/utils/run-action.js';
 
 /**
@@ -112,11 +113,14 @@ export function createUpdateCommand(): Command {
         let latestVersion: string;
         try {
           latestVersion = await getLatestVersion();
-        } catch {
+        } catch (error: unknown) {
           spinner.fail('Failed to check for updates');
-          throw new Error(
-            'Could not connect to npm registry. Please check your internet connection.'
-          );
+          throw new CommandError('Could not connect to npm registry.', 'update', {
+            code: 'UPDATE_REGISTRY_UNREACHABLE',
+            category: ErrorCategory.NETWORK,
+            suggestions: ['Check your internet connection, then rerun `neo update`'],
+            ...(error instanceof Error ? { originalError: error } : {}),
+          });
         }
 
         logger.debug(`Latest version: ${latestVersion}`);
@@ -229,14 +233,22 @@ export function createUpdateCommand(): Command {
 
           const errorMessage = error instanceof Error ? error.message : String(error);
           const installCmd = `${packageManager} ${packageManager === 'npm' ? 'install' : 'add'} -g @radkode/neo@latest`;
+          const cause = error instanceof Error ? { originalError: error } : {};
 
           if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
-            throw new Error(`Permission denied. Try running with sudo: sudo ${installCmd}`, {
-              cause: error,
+            throw new CommandError('Permission denied.', 'update', {
+              code: 'UPDATE_PERMISSION_DENIED',
+              category: ErrorCategory.PERMISSION,
+              context: { packageManager },
+              suggestions: [`Try running with sudo: sudo ${installCmd}`],
+              ...cause,
             });
           }
-          throw new Error(`Update failed: ${errorMessage}. Try updating manually: ${installCmd}`, {
-            cause: error,
+          throw new CommandError(`Update failed: ${errorMessage}`, 'update', {
+            code: 'UPDATE_INSTALL_FAILED',
+            context: { packageManager },
+            suggestions: [`Try updating manually: ${installCmd}`],
+            ...cause,
           });
         }
       })
