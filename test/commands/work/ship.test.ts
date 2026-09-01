@@ -64,13 +64,16 @@ import { createWorkShipCommand, executeWorkShip } from '@/commands/work/ship/ind
 import { executeVerify } from '@/commands/verify/index.js';
 import { executeChangeset } from '@/commands/changeset/index.js';
 import { executeAiPr } from '@/commands/ai/pr/index.js';
+import { isAICommitAvailable } from '@/services/ai/index.js';
 import { ui } from '@/utils/ui.js';
+import { NonInteractiveError } from '@/utils/prompt.js';
 import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 
 const execaMock = vi.mocked(execa);
 const verifyMock = vi.mocked(executeVerify);
 const changesetMock = vi.mocked(executeChangeset);
 const aiPrMock = vi.mocked(executeAiPr);
+const aiAvailableMock = vi.mocked(isAICommitAvailable);
 
 /**
  * Canonical execa-call order in executeWorkShip:
@@ -455,5 +458,106 @@ describe('executeWorkShip', () => {
 
     const warned = vi.mocked(ui.warn).mock.calls.map(([msg]) => String(msg));
     expect(warned.some((m) => /close this PR/i.test(m))).toBe(false);
+  });
+
+  describe('AI PR generation', () => {
+    /** Walk the mocks up to (and including) the `gh pr view` that finds no PR. */
+    function mockUpToPrLookup(): void {
+      execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse --is-inside-work-tree
+      execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never); // rev-parse --show-toplevel
+      execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
+      execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
+      execaMock.mockResolvedValueOnce({ stdout: '2' } as never); // rev-list --count
+      execaMock.mockRejectedValueOnce(new Error('no upstream')); // hasUpstream
+      execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push -u
+      execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
+      execaMock.mockRejectedValueOnce(new Error('no PR yet')); // gh pr view → none
+    }
+
+    function ghPrCreateArgs(): readonly unknown[] | undefined {
+      const call = execaMock.mock.calls.find(
+        ([cmd, args]) =>
+          cmd === 'gh' && Array.isArray(args) && args[0] === 'pr' && args[1] === 'create'
+      );
+      return call?.[1] as readonly unknown[] | undefined;
+    }
+
+    it('throws NonInteractiveError when AI PR creation is unconfirmed', async () => {
+      aiAvailableMock.mockResolvedValue(true);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true, yes: false }));
+      mockUpToPrLookup();
+
+      const error = await executeWorkShip({ verify: false, changeset: false }).catch(
+        (e: unknown) => e
+      );
+
+      expect(error).toBeInstanceOf(NonInteractiveError);
+      expect((error as NonInteractiveError).prompt).toBe(
+        'PR creation needs confirmation (neo work ship)'
+      );
+      expect((error as NonInteractiveError).flag).toBe(
+        '--yes (or --no-ai-pr to skip AI generation)'
+      );
+      expect(aiPrMock).not.toHaveBeenCalled();
+      expect(ghPrCreateArgs()).toBeUndefined();
+    });
+
+    it('delegates PR creation to executeAiPr when --yes clears the guard', async () => {
+      aiAvailableMock.mockResolvedValue(true);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true, yes: true }));
+      mockUpToPrLookup();
+
+      const result = await executeWorkShip({ verify: false, changeset: false });
+
+      expect(aiPrMock).toHaveBeenCalledTimes(1);
+      expect(aiPrMock).toHaveBeenCalledWith({ base: 'main', create: true });
+      expect(result.prUrl).toBe('https://github.com/x/y/pull/1');
+      expect(result.prCreated).toBe(true);
+      expect(ghPrCreateArgs()).toBeUndefined();
+    });
+
+    it('forwards --draft to executeAiPr', async () => {
+      aiAvailableMock.mockResolvedValue(true);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: false }));
+      mockUpToPrLookup();
+
+      const result = await executeWorkShip({ verify: false, changeset: false, draft: true });
+
+      expect(aiPrMock).toHaveBeenCalledWith({ base: 'main', create: true, draft: true });
+      expect(result.prUrl).toBe('https://github.com/x/y/pull/1');
+    });
+
+    it('never consults AI when --no-ai-pr is passed, guard included', async () => {
+      aiAvailableMock.mockResolvedValue(true);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true, yes: false }));
+      mockUpToPrLookup();
+      execaMock.mockResolvedValueOnce({ stdout: 'feat: add foo' } as never); // git log
+      execaMock.mockResolvedValueOnce({
+        stdout: 'https://github.com/x/y/pull/7',
+      } as never); // gh pr create
+
+      const result = await executeWorkShip({ verify: false, changeset: false, aiPr: false });
+
+      expect(aiAvailableMock).not.toHaveBeenCalled();
+      expect(aiPrMock).not.toHaveBeenCalled();
+      expect(result.prUrl).toBe('https://github.com/x/y/pull/7');
+      expect(result.prCreated).toBe(true);
+    });
+
+    it('adds --draft to gh pr create when AI is unavailable', async () => {
+      aiAvailableMock.mockResolvedValue(false);
+      mockUpToPrLookup();
+      execaMock.mockResolvedValueOnce({ stdout: 'feat: add foo' } as never); // git log
+      execaMock.mockResolvedValueOnce({
+        stdout: 'https://github.com/x/y/pull/7',
+      } as never); // gh pr create
+
+      await executeWorkShip({ verify: false, changeset: false, draft: true });
+
+      expect(aiPrMock).not.toHaveBeenCalled();
+      expect(ghPrCreateArgs()).toContain('--draft');
+    });
   });
 });

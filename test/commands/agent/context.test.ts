@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createAgentContextCommand } from '../../../src/commands/agent/context/index.js';
 import { mockProcessExit, createSpinnerMock } from '../../utils/test-helpers.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 
 // Mock all dependencies
 vi.mock('@/utils/ui.js', () => ({
@@ -50,10 +51,12 @@ describe('createAgentContextCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     exitMock = mockProcessExit();
+    setRuntimeContext(buildRuntimeContext());
   });
 
   afterEach(() => {
     exitMock.mockRestore();
+    setRuntimeContext(buildRuntimeContext());
   });
 
   describe('command structure', () => {
@@ -142,6 +145,45 @@ describe('createAgentContextCommand', () => {
         tags: [],
         priority: 'high',
       });
+    });
+
+    it('should emit the agent.context.add envelope in json mode', async () => {
+      const mockDb = {
+        addContext: vi.fn().mockReturnValue({
+          id: 'ctx-123',
+          content: 'Test context',
+          tags: ['test'],
+          priority: 'medium',
+          created_at: new Date('2024-01-01T00:00:00.000Z'),
+        }),
+        close: vi.fn(),
+      };
+      vi.mocked(getAgentDbPath).mockResolvedValue('/test/path/agent.db');
+      vi.mocked(ContextDB.create).mockResolvedValue(mockDb as never);
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const command = createAgentContextCommand();
+        await command.parseAsync(['add', 'Test context', '--tag', 'test'], { from: 'user' });
+
+        expect(exitMock).not.toHaveBeenCalled();
+        expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          ok: true,
+          command: 'agent.context.add',
+          context: {
+            id: 'ctx-123',
+            content: 'Test context',
+            tags: ['test'],
+            priority: 'medium',
+            created_at: '2024-01-01T00:00:00.000Z',
+          },
+        });
+        expect(ui.keyValue).not.toHaveBeenCalled();
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
     });
 
     it('should exit when database path not found', async () => {

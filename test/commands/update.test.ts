@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockProcessExit, createSpinnerMock, execaResult } from '../utils/test-helpers.js';
+import { buildRuntimeContext, setRuntimeContext } from '@/utils/runtime-context.js';
 
 // Mock all dependencies
 vi.mock('execa', () => ({
@@ -29,7 +30,7 @@ vi.mock('@/utils/ui.js', () => ({
     keyValue: vi.fn(),
     section: vi.fn(),
     list: vi.fn(),
-    spinner: vi.fn(() => createSpinnerMock()),
+    spinner: vi.fn(() => ({ ...createSpinnerMock(), warn: vi.fn() })),
     newline: vi.fn(),
     plain: vi.fn(),
   },
@@ -56,10 +57,12 @@ describe('createUpdateCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     exitMock = mockProcessExit();
+    setRuntimeContext(buildRuntimeContext());
   });
 
   afterEach(() => {
     exitMock.mockRestore();
+    setRuntimeContext(buildRuntimeContext());
   });
 
   describe('command structure', () => {
@@ -102,7 +105,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.info).toHaveBeenCalledWith(expect.stringContaining('Current version'));
     });
@@ -115,7 +118,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.keyValue).toHaveBeenCalled();
     });
@@ -128,7 +131,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.muted).toHaveBeenCalledWith('Update cancelled');
     });
@@ -152,7 +155,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.error).toHaveBeenCalledWith(expect.stringContaining('npm registry'));
       expect(exitMock).toHaveBeenCalledWith(1);
@@ -171,7 +174,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(execa).toHaveBeenCalledWith(
         'pnpm',
@@ -192,7 +195,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(execa).toHaveBeenCalledWith(
         'yarn',
@@ -213,7 +216,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(execa).toHaveBeenCalledWith(
         'npm',
@@ -255,7 +258,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.error).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
       expect(exitMock).toHaveBeenCalledWith(1);
@@ -273,7 +276,7 @@ describe('createUpdateCommand', () => {
       const { createUpdateCommand } = await import('../../src/commands/update/index.js');
       const command = createUpdateCommand();
 
-      await command.parseAsync([''], { from: 'user' });
+      await command.parseAsync([], { from: 'user' });
 
       expect(ui.error).toHaveBeenCalledWith(expect.stringContaining('Update failed'));
       expect(exitMock).toHaveBeenCalledWith(1);
@@ -292,6 +295,248 @@ describe('createUpdateCommand', () => {
 
       // With check-only, no prompts should happen when on newer version
       expect(confirm).not.toHaveBeenCalled();
+    });
+
+    it('should exit 2 when a downgrade needs --force in non-interactive mode', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('0.9.0');
+      vi.mocked(compareVersions).mockReturnValue(-1);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true }));
+
+      const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+      const command = createUpdateCommand();
+
+      await command.parseAsync([], { from: 'user' });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(execa).not.toHaveBeenCalled();
+      expect(exitMock).toHaveBeenNthCalledWith(1, 2);
+      expect(ui.error).toHaveBeenCalledWith(
+        expect.stringContaining('requires explicit --force". Pass --force to bypass.')
+      );
+    });
+
+    it('should exit 2 when a downgrade is requested with --yes but no --force', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('0.9.0');
+      vi.mocked(compareVersions).mockReturnValue(-1);
+      setRuntimeContext(buildRuntimeContext({ yes: true }));
+
+      const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+      const command = createUpdateCommand();
+
+      await command.parseAsync([], { from: 'user' });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(execa).not.toHaveBeenCalled();
+      expect(exitMock).toHaveBeenNthCalledWith(1, 2);
+    });
+
+    it('should serialize the downgrade refusal with flag --force in json mode', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('0.9.0');
+      vi.mocked(compareVersions).mockReturnValue(-1);
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+        const command = createUpdateCommand();
+
+        await command.parseAsync([], { from: 'user' });
+
+        expect(exitMock).toHaveBeenNthCalledWith(1, 2);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          error: {
+            code: 'NEO_NON_INTERACTIVE',
+            message: expect.stringContaining('Interactive prompt required in non-interactive mode'),
+            flag: '--force',
+            prompt: expect.stringContaining('to 0.9.0 requires explicit --force'),
+          },
+        });
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
+    });
+
+    it('should downgrade without prompting when --force is passed in non-interactive mode', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('0.9.0');
+      vi.mocked(compareVersions).mockReturnValue(-1);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true }));
+      vi.mocked(execa)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(execaResult({}));
+
+      const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+      const command = createUpdateCommand();
+
+      await command.parseAsync(['--force'], { from: 'user' });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(exitMock).not.toHaveBeenCalled();
+      expect(execa).toHaveBeenCalledWith(
+        'npm',
+        ['install', '-g', '@radkode/neo@latest', '--force'],
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('non-interactive update confirmation', () => {
+    it('should exit 2 when an update needs --yes in non-interactive mode', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
+      vi.mocked(compareVersions).mockReturnValue(1);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true }));
+
+      const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+      const command = createUpdateCommand();
+
+      await command.parseAsync([], { from: 'user' });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(execa).not.toHaveBeenCalled();
+      expect(exitMock).toHaveBeenNthCalledWith(1, 2);
+      expect(ui.error).toHaveBeenCalledWith(
+        expect.stringContaining('Update to 2.0.0 requires confirmation". Pass --yes to bypass.')
+      );
+    });
+
+    it('should serialize the confirmation refusal with flag --yes in json mode', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
+      vi.mocked(compareVersions).mockReturnValue(1);
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+        const command = createUpdateCommand();
+
+        await command.parseAsync([], { from: 'user' });
+
+        expect(exitMock).toHaveBeenNthCalledWith(1, 2);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          error: {
+            code: 'NEO_NON_INTERACTIVE',
+            message: expect.stringContaining('Pass --yes to bypass.'),
+            flag: '--yes',
+            prompt: 'Update to 2.0.0 requires confirmation',
+          },
+        });
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
+    });
+
+    it('should install without prompting when --yes wins over non-interactive', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
+      vi.mocked(compareVersions).mockReturnValue(1);
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true, yes: true }));
+      vi.mocked(execa)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce(execaResult({}));
+
+      const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+      const command = createUpdateCommand();
+
+      await command.parseAsync([], { from: 'user' });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(exitMock).not.toHaveBeenCalled();
+      expect(execa).toHaveBeenCalledWith(
+        'npm',
+        ['install', '-g', '@radkode/neo@latest'],
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('structured error payloads', () => {
+    it('should emit UPDATE_REGISTRY_UNREACHABLE when the registry lookup fails', async () => {
+      vi.mocked(fetchLatestCliVersion).mockRejectedValue(new Error('Network error'));
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+        const command = createUpdateCommand();
+
+        await command.parseAsync([], { from: 'user' });
+
+        expect(exitMock).toHaveBeenCalledWith(1);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          error: {
+            code: 'UPDATE_REGISTRY_UNREACHABLE',
+            message: 'Could not connect to npm registry.',
+            category: 'NETWORK',
+            severity: 'medium',
+            suggestions: ['Check your internet connection, then rerun `neo update`'],
+          },
+        });
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
+    });
+
+    it('should emit UPDATE_PERMISSION_DENIED when the installer hits EACCES', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
+      vi.mocked(compareVersions).mockReturnValue(1);
+      setRuntimeContext(buildRuntimeContext({ json: true, yes: true }));
+      vi.mocked(execa)
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockRejectedValueOnce(new Error('EACCES: permission denied'));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+        const command = createUpdateCommand();
+
+        await command.parseAsync([], { from: 'user' });
+
+        expect(exitMock).toHaveBeenCalledWith(1);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          error: {
+            code: 'UPDATE_PERMISSION_DENIED',
+            message: 'Permission denied.',
+            category: 'PERMISSION',
+            severity: 'medium',
+            suggestions: ['Try running with sudo: sudo npm install -g @radkode/neo@latest'],
+            context: { packageManager: 'npm' },
+          },
+        });
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
+    });
+
+    it('should emit UPDATE_INSTALL_FAILED when the installer fails for any other reason', async () => {
+      vi.mocked(fetchLatestCliVersion).mockResolvedValue('2.0.0');
+      vi.mocked(compareVersions).mockReturnValue(1);
+      setRuntimeContext(buildRuntimeContext({ json: true, yes: true }));
+      vi.mocked(execa)
+        .mockResolvedValueOnce(execaResult({})) // ls pnpm-lock.yaml succeeds
+        .mockRejectedValueOnce(new Error('Network timeout'));
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+      try {
+        const { createUpdateCommand } = await import('../../src/commands/update/index.js');
+        const command = createUpdateCommand();
+
+        await command.parseAsync([], { from: 'user' });
+
+        expect(exitMock).toHaveBeenCalledWith(1);
+        expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toEqual({
+          error: {
+            code: 'UPDATE_INSTALL_FAILED',
+            message: 'Update failed: Network timeout',
+            category: 'COMMAND',
+            severity: 'medium',
+            suggestions: ['Try updating manually: pnpm add -g @radkode/neo@latest'],
+            context: { packageManager: 'pnpm' },
+          },
+        });
+      } finally {
+        stdoutWriteSpy.mockRestore();
+      }
     });
   });
 });

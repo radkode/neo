@@ -27,7 +27,7 @@ const ALIASES: AliasDefinition = Object.freeze({
  * @param aliases - The alias definitions to check for conflicts
  * @returns Array of conflicting aliases with their current values
  */
-function findConflictingAliases(
+export function findConflictingAliases(
   content: string,
   aliases: AliasDefinition
 ): { alias: string; current: string }[] {
