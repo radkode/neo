@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.10.1
+
+### Patch Changes
+
+- [#89](https://github.com/radkode/neo/pull/89) [`4b9bca2`](https://github.com/radkode/neo/commit/4b9bca2117373e6319137cddf560e380b8e47a8b) Thanks [@jacekradko](https://github.com/jacekradko)! - Give failure paths real error codes, categories and suggestions under --json
+
 ## 1.10.0
 
 ### Minor Changes
