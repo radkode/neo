@@ -185,6 +185,7 @@ export const aliasSetupOptionsSchema = baseOptionsSchema.extend({
   force: z.boolean().optional(),
   enable: z.boolean().optional(),
   disable: z.boolean().optional(),
+  pnpm: z.boolean().optional(),
 });
 
 /**

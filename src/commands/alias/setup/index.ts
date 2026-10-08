@@ -57,6 +57,7 @@ export function createSetupCommand(): Command {
   command
     .description('Setup ZSH aliases for Neo CLI. Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
+    .option('--pnpm', 'also alias pnpm to load repository-local .env.pnpm.local files')
     .action(
       runAction(async (options: unknown): Promise<void> => {
         const validatedOptions: AliasSetupOptions = validate(
@@ -64,6 +65,9 @@ export function createSetupCommand(): Command {
           options,
           'alias setup options'
         );
+        const aliases: AliasDefinition = validatedOptions.pnpm
+          ? { ...ALIASES, pnpm: 'neo --quiet pnpm --' }
+          : ALIASES;
         const shell = new ZshIntegration();
 
         // Read current rc content and detect conflicts
@@ -78,14 +82,12 @@ export function createSetupCommand(): Command {
           }
         })();
 
-        const conflicts = findConflictingAliases(rcContent, ALIASES);
+        const conflicts = findConflictingAliases(rcContent, aliases);
 
         if (conflicts.length > 0 && !validatedOptions.force) {
           ui.warn('The following aliases already exist and will be overwritten:');
           for (const c of conflicts) {
-            ui.plain(
-              `  ${c.alias}: currently ${c.current} -> new ${ALIASES[c.alias as keyof AliasDefinition]}`
-            );
+            ui.plain(`  ${c.alias}: currently ${c.current} -> new ${aliases[c.alias]}`);
           }
 
           const rtCtx = getRuntimeContext();
@@ -119,20 +121,20 @@ export function createSetupCommand(): Command {
         }
 
         // Apply aliases using ZshIntegration (this uses markers and updates cleanly)
-        for (const [alias, value] of Object.entries(ALIASES)) {
+        for (const [alias, value] of Object.entries(aliases)) {
           await shell.addAlias(alias, value);
         }
 
         ui.success('Aliases configured successfully');
         ui.info('Added/updated aliases:');
-        ui.list(Object.entries(ALIASES).map(([alias, value]) => `${alias}="${value}"`));
+        ui.list(Object.entries(aliases).map(([alias, value]) => `${alias}="${value}"`));
 
         ui.info('Restart your shell or run: source ~/.zshrc');
 
         emitJson({
           ok: true,
           command: 'alias.setup',
-          aliases: ALIASES,
+          aliases,
           rcFile,
         });
       })

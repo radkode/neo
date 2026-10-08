@@ -103,6 +103,31 @@ Runs the `build`, `test`, `lint`, and `typecheck` package scripts that the repos
 
 Neo invokes the configured value as a package script. Use an umbrella script when verification needs multiple commands or environment-specific options. `neo verify --only build,test` overrides the repository setting for one run, and `--skip` filters the selected scripts.
 
+### `neo pnpm`
+
+Runs pnpm with the nearest `.env.pnpm.local` loaded only into pnpm and its subprocesses. Discovery walks upward from the current directory but stops at the nearest Git repository or worktree root. Outside a Git repository, only the current directory is checked. No file means normal pnpm execution; `.env.local` is not loaded.
+
+Keep `.env.pnpm.local` untracked: add it to the repository's ignore rules or your local Git exclude file, and restrict its permissions with `chmod 600 .env.pnpm.local`. For example, its contents can be:
+
+```dotenv
+GITHUB_TOKEN=your-package-access-token
+HARNESS_TOKEN=your-harness-token
+```
+
+```bash
+neo pnpm -- install --frozen-lockfile
+neo pnpm -- run dev
+neo pnpm --env-file /path/to/private.env -- install  # Explicit override
+
+neo alias setup --pnpm  # Opt in once; backs up ~/.zshrc and checks conflicts
+source ~/.zshrc
+pnpm install           # Automatically loads this repository's .env.pnpm.local
+pnpm run dev
+command pnpm install   # Bypass the alias and environment loading
+```
+
+The alias is `pnpm="neo --quiet pnpm --"`, so pnpm flags are forwarded unchanged and repositories without a convention file keep working normally. The wrapper invokes the pnpm executable directly, without shell alias recursion. File values override inherited variables for the child only, with no variable interpolation. It does not export tokens to your shell or affect separate `gh` commands. Remove any previous global token exports yourself; the wrapper cannot remove them from its parent shell.
+
 ### `neo config`
 
 Key-value configuration with secure secrets storage and profiles.
