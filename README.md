@@ -235,6 +235,10 @@ pnpm run unlink-local
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 
+## Releases
+
+Changesets opens a version-bump PR. After it merges, the release workflow publishes to npm using trusted publishing, then creates a `v<version>` tag and GitHub Release at the publishing commit with generated release notes. Rerun the failed workflow on that same commit if GitHub release creation fails after npm publication; the package will not be published again. Existing historical versions are not backfilled.
+
 ## License
 
 [MIT](LICENSE) © Jacek Radko
