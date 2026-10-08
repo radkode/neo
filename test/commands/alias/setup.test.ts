@@ -124,11 +124,26 @@ describe('createSetupCommand', () => {
     setRuntimeContext(buildRuntimeContext());
   });
 
-  it('exposes only the --force option', () => {
+  it('exposes force and opt-in pnpm alias options', () => {
     const command = createSetupCommand();
 
     expect(command.name()).toBe('setup');
-    expect(command.options.map(({ flags }) => flags)).toEqual(['-f, --force']);
+    expect(command.options.map(({ flags }) => flags)).toEqual(['-f, --force', '--pnpm']);
+  });
+
+  it('adds the convention-based pnpm alias only when requested', async () => {
+    await createSetupCommand().parseAsync(['--pnpm'], { from: 'user' });
+    expect(shellMock.addAlias).toHaveBeenCalledWith('pnpm', 'neo --quiet pnpm --');
+    expect(shellMock.addAlias).toHaveBeenCalledTimes(4);
+  });
+
+  it('checks conflicts before replacing an existing pnpm alias', async () => {
+    readFileMock.mockResolvedValue('alias pnpm="custom-pnpm"\n');
+    vi.mocked(confirm).mockResolvedValue(false);
+    await createSetupCommand().parseAsync(['--pnpm'], { from: 'user' });
+    expect(confirm).toHaveBeenCalled();
+    expect(shellMock.addAlias).not.toHaveBeenCalled();
+    expect(shellMock.backup).not.toHaveBeenCalled();
   });
 
   it('backs up the rc file and writes every alias when there is no conflict', async () => {
