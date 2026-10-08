@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.11.0
+
+### Minor Changes
+
+- [#92](https://github.com/radkode/neo/pull/92) [`a842c5b`](https://github.com/radkode/neo/commit/a842c5bb59cb1d7be1c4abcf8cf44749d474902b) Thanks [@jacekradko](https://github.com/jacekradko)! - Add `neo pnpm` with repository-local `.env.pnpm.local` discovery and an opt-in pnpm shell alias, keeping package-manager tokens out of the parent shell environment.
+
 ## 1.10.1
 
 ### Patch Changes
