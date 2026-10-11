@@ -44,6 +44,7 @@ vi.mock('@/utils/agent.js', () => ({
 }));
 
 import { executeWorkStart } from '@/commands/work/start/index.js';
+import { ContextDB } from '@/storage/db.js';
 import { isAgentInitialized, getAgentDbPath } from '@/utils/agent.js';
 
 const execaMock = vi.mocked(execa);
@@ -240,5 +241,16 @@ describe('executeWorkStart', () => {
 
     expect(result.contextRecorded).toBe(false);
     expect(dbClose).toHaveBeenCalled();
+  });
+
+  it('does not fail branch creation when the agent path is unsafe', async () => {
+    mockHappyPath({ previousBranch: 'main' });
+    isAgentInitializedMock.mockResolvedValue(true);
+    getAgentDbPathMock.mockRejectedValue(new Error('Unsafe context file'));
+
+    const result = await executeWorkStart('fix-foo', {});
+
+    expect(result.contextRecorded).toBe(false);
+    expect(ContextDB.create).not.toHaveBeenCalled();
   });
 });

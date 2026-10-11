@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContextDB } from '../../src/storage/db.js';
-import { rm, mkdtemp } from 'fs/promises';
+import { rm, mkdtemp, mkdir, lstat, readFile, readdir, symlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -40,6 +40,101 @@ describe('ContextDB', () => {
     it('should initialize with empty contexts table', () => {
       const contexts = db.listContexts();
       expect(contexts).toEqual([]);
+    });
+
+    it('rejects a symlinked context file before reading it', async () => {
+      const sentinel = join(tempDir, 'outside.json');
+      const dbPath = join(tempDir, 'linked.json');
+      await writeFile(sentinel, '{"version":1,"contexts":[]}');
+      await symlink(sentinel, dbPath);
+
+      await expect(ContextDB.create(dbPath)).rejects.toThrow();
+      expect(await readFile(sentinel, 'utf-8')).toBe('{"version":1,"contexts":[]}');
+    });
+
+    it('rejects a symlinked parent directory', async () => {
+      const outsideDir = join(tempDir, 'outside');
+      const linkedDir = join(tempDir, 'linked');
+      await mkdir(outsideDir);
+      await symlink(outsideDir, linkedDir, 'dir');
+
+      await expect(ContextDB.create(join(linkedDir, 'contexts.json'))).rejects.toThrow();
+      await expect(lstat(join(outsideDir, 'contexts.json'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+
+    it('rejects a symlinked grandparent directory', async () => {
+      const outsideDir = join(tempDir, 'outside');
+      const neoDir = join(tempDir, '.neo');
+      await mkdir(join(outsideDir, 'agent'), { recursive: true });
+      await symlink(outsideDir, neoDir, 'dir');
+
+      await expect(ContextDB.create(join(neoDir, 'agent', 'contexts.json'))).rejects.toThrow();
+      expect(await readdir(join(outsideDir, 'agent'))).toEqual([]);
+    });
+  });
+
+  describe('persistence safety', () => {
+    it('does not follow a preplanted predictable temporary-file symlink', async () => {
+      const sentinel = join(tempDir, 'outside.txt');
+      const dbPath = join(tempDir, 'contexts.json');
+      await writeFile(sentinel, 'untouched');
+      await symlink(sentinel, `${dbPath}.tmp`);
+
+      const safeDb = await ContextDB.create(dbPath);
+      safeDb.addContext({ content: 'saved' });
+
+      expect(await readFile(sentinel, 'utf-8')).toBe('untouched');
+      expect((await lstat(`${dbPath}.tmp`)).isSymbolicLink()).toBe(true);
+      expect((await ContextDB.create(dbPath)).listContexts()[0]?.content).toBe('saved');
+    });
+
+    it('rejects a context-file symlink added after creation', async () => {
+      const sentinel = join(tempDir, 'outside.json');
+      const dbPath = join(tempDir, 'contexts.json');
+      const safeDb = await ContextDB.create(dbPath);
+      await writeFile(sentinel, '{"version":1,"contexts":[]}');
+      await symlink(sentinel, dbPath);
+
+      expect(() => safeDb.addContext({ content: 'not saved' })).toThrow();
+      expect(await readFile(sentinel, 'utf-8')).toBe('{"version":1,"contexts":[]}');
+      expect((await lstat(dbPath)).isSymbolicLink()).toBe(true);
+      expect((await readdir(tempDir)).filter((name) => name.startsWith('contexts.json.'))).toEqual(
+        []
+      );
+    });
+
+    it('rejects a parent directory replaced by a symlink before persistence', async () => {
+      const agentDir = join(tempDir, 'agent');
+      const outsideDir = join(tempDir, 'outside');
+      await mkdir(agentDir);
+      await mkdir(outsideDir);
+      const safeDb = await ContextDB.create(join(agentDir, 'contexts.json'));
+      const sentinel = join(outsideDir, 'sentinel');
+      await writeFile(sentinel, 'untouched');
+      await rm(agentDir, { recursive: true });
+      await symlink(outsideDir, agentDir, 'dir');
+
+      expect(() => safeDb.addContext({ content: 'not saved' })).toThrow();
+      expect(await readFile(sentinel, 'utf-8')).toBe('untouched');
+      expect(await readdir(outsideDir)).toEqual(['sentinel']);
+    });
+
+    it('rejects a grandparent directory replaced by a symlink before persistence', async () => {
+      const neoDir = join(tempDir, '.neo');
+      const outsideDir = join(tempDir, 'outside');
+      await mkdir(join(neoDir, 'agent'), { recursive: true });
+      await mkdir(join(outsideDir, 'agent'), { recursive: true });
+      const safeDb = await ContextDB.create(join(neoDir, 'agent', 'contexts.json'));
+      const sentinel = join(outsideDir, 'agent', 'sentinel');
+      await writeFile(sentinel, 'untouched');
+      await rm(neoDir, { recursive: true });
+      await symlink(outsideDir, neoDir, 'dir');
+
+      expect(() => safeDb.addContext({ content: 'not saved' })).toThrow();
+      expect(await readFile(sentinel, 'utf-8')).toBe('untouched');
+      expect(await readdir(join(outsideDir, 'agent'))).toEqual(['sentinel']);
     });
   });
 

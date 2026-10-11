@@ -1,7 +1,7 @@
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { access, lstat, mkdir, readFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join, dirname, basename } from 'path';
-import { findUp } from 'find-up';
+import { execa } from 'execa';
 import type { AgentConfig, RawAgentConfig } from '@/types/agent.js';
 import { ui } from '@/utils/ui.js';
 
@@ -21,11 +21,37 @@ const CONFIG_FILE = 'config.json';
 const DB_FILE = 'contexts.json';
 
 /**
- * Find the project root by looking for .neo directory
+ * Find the Git root containing the project's .neo directory
  */
 export async function getProjectRoot(): Promise<string | null> {
-  const neoDir = await findUp('.neo', { type: 'directory' });
-  return neoDir ? dirname(neoDir) : null;
+  let root: string;
+  try {
+    const result = await execa('git', [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+      '--show-toplevel',
+    ]);
+    const [commonDir, currentRoot] = result.stdout.trim().split(/\r?\n/);
+    if (!commonDir || !currentRoot) return null;
+    root = basename(commonDir) === '.git' ? dirname(commonDir) : currentRoot;
+  } catch {
+    return null;
+  }
+  if (!root || !(await safeDirectoryExists(join(root, '.neo')))) return null;
+  return root;
+}
+
+async function safeDirectoryExists(path: string): Promise<boolean> {
+  try {
+    if (!(await lstat(path)).isDirectory()) {
+      throw new Error(`Unsafe agent directory: ${path}`);
+    }
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
 }
 
 /**
@@ -36,7 +62,9 @@ export async function getAgentDir(): Promise<string | null> {
   if (!projectRoot) {
     return null;
   }
-  return join(projectRoot, '.neo', AGENT_DIR);
+  const agentDir = join(projectRoot, '.neo', AGENT_DIR);
+  await safeDirectoryExists(agentDir);
+  return agentDir;
 }
 
 /**
@@ -47,7 +75,15 @@ export async function getAgentDbPath(): Promise<string | null> {
   if (!agentDir) {
     return null;
   }
-  return join(agentDir, DB_FILE);
+  const dbPath = join(agentDir, DB_FILE);
+  try {
+    if (!(await lstat(dbPath)).isFile()) {
+      throw new Error(`Unsafe context file: ${dbPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  return dbPath;
 }
 
 /**
@@ -105,9 +141,17 @@ export async function createAgentDir(): Promise<string> {
   const neoDir = join(projectRoot, '.neo');
   const agentDir = join(neoDir, AGENT_DIR);
 
-  // Create directories recursively (idempotent)
-  await mkdir(neoDir, { recursive: true });
-  await mkdir(agentDir, { recursive: true });
+  if (!(await safeDirectoryExists(neoDir))) {
+    throw new Error(`Unsafe agent directory: ${neoDir}`);
+  }
+  try {
+    await mkdir(agentDir, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  if (!(await safeDirectoryExists(agentDir))) {
+    throw new Error(`Unsafe agent directory: ${agentDir}`);
+  }
 
   return agentDir;
 }

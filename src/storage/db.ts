@@ -1,7 +1,16 @@
 import { nanoid } from 'nanoid';
 import { dirname } from 'path';
-import { mkdir, readFile } from 'fs/promises';
-import { writeFileSync, renameSync } from 'fs';
+import { mkdir, lstat, open } from 'fs/promises';
+import {
+  constants,
+  closeSync,
+  fsyncSync,
+  lstatSync,
+  openSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import type {
   ContextItem,
   ContextFilters,
@@ -41,6 +50,20 @@ const PRIORITY_RANK: Record<ContextPriority, number> = {
   low: 1,
 };
 
+function assertSafeContextDirectories(path: string, allowMissing = false): void {
+  const directory = dirname(path);
+  for (const candidate of [dirname(directory), directory]) {
+    try {
+      if (!lstatSync(candidate).isDirectory()) {
+        throw new Error(`Unsafe context directory: ${candidate}`);
+      }
+    } catch (error) {
+      if (allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+  }
+}
+
 export class ContextDB {
   private constructor(
     private readonly path: string,
@@ -48,17 +71,31 @@ export class ContextDB {
   ) {}
 
   static async create(path: string): Promise<ContextDB> {
-    await mkdir(dirname(path), { recursive: true });
+    const directory = dirname(path);
+    assertSafeContextDirectories(path, true);
+    await mkdir(directory, { recursive: true });
+    assertSafeContextDirectories(path);
 
     let contexts: PersistedContext[] = [];
-    try {
-      const raw = await readFile(path, 'utf-8');
+    const entry = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (entry) {
+      if (!entry.isFile()) throw new Error(`Unsafe context file: ${path}`);
+      const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      let raw: string;
+      try {
+        const opened = await file.stat();
+        if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino) {
+          throw new Error(`Unsafe context file: ${path}`);
+        }
+        raw = await file.readFile('utf-8');
+      } finally {
+        await file.close();
+      }
       const parsed = JSON.parse(raw) as PersistedShape | PersistedContext[];
       contexts = Array.isArray(parsed) ? parsed : (parsed.contexts ?? []);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw err;
-      }
     }
 
     return new ContextDB(path, contexts);
@@ -173,8 +210,42 @@ export class ContextDB {
 
   private persist(): void {
     const payload: PersistedShape = { version: 1, contexts: this.contexts };
-    const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf-8');
-    renameSync(tmp, this.path);
+    assertSafeContextDirectories(this.path);
+
+    const tmp = `${this.path}.${nanoid()}.tmp`;
+    const fd = openSync(
+      tmp,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+      0o600
+    );
+    try {
+      try {
+        writeFileSync(fd, JSON.stringify(payload, null, 2), 'utf-8');
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+
+      assertSafeContextDirectories(this.path);
+      try {
+        if (!lstatSync(this.path).isFile()) {
+          throw new Error(`Unsafe context file: ${this.path}`);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      renameSync(tmp, this.path);
+    } catch (error) {
+      try {
+        unlinkSync(tmp);
+      } catch (cleanupError) {
+        if ((cleanupError as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw new AggregateError([error, cleanupError], 'Failed to clean up context write', {
+            cause: cleanupError,
+          });
+        }
+      }
+      throw error;
+    }
   }
 }
