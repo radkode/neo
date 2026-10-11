@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockProcessExit } from './test-helpers.js';
+import { dirname } from 'path';
 
 // Mock dependencies before importing
-vi.mock('find-up', () => ({
-  findUp: vi.fn(),
+vi.mock('execa', () => ({
+  execa: vi.fn(),
 }));
 
 vi.mock('fs/promises', () => ({
   access: vi.fn(),
+  lstat: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
   writeFile: vi.fn(),
@@ -23,8 +25,8 @@ vi.mock('@/utils/ui.js', () => ({
   },
 }));
 
-import { findUp } from 'find-up';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { execa } from 'execa';
+import { access, lstat, mkdir, readFile, writeFile } from 'fs/promises';
 import { ui } from '@/utils/ui.js';
 import {
   getProjectRoot,
@@ -40,11 +42,29 @@ import {
   getDefaultProjectName,
 } from '../../src/utils/agent.js';
 
+function mockNeoDir(path?: string): void {
+  if (path) {
+    const root = dirname(path);
+    vi.mocked(execa).mockResolvedValue({ stdout: `${root}/.git\n${root}` } as never);
+  } else {
+    vi.mocked(lstat).mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+  }
+}
+
 describe('Agent utilities', () => {
   let exitMock: ReturnType<typeof mockProcessExit>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(execa).mockResolvedValue({
+      stdout: '/path/to/project/.git\n/path/to/project',
+    } as never);
+    vi.mocked(lstat).mockImplementation(async (path) => {
+      if (String(path).endsWith('contexts.json')) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      }
+      return { isDirectory: () => true } as never;
+    });
     exitMock = mockProcessExit();
   });
 
@@ -54,16 +74,21 @@ describe('Agent utilities', () => {
 
   describe('getProjectRoot', () => {
     it('should return project root when .neo directory exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
 
       const result = await getProjectRoot();
 
       expect(result).toBe('/path/to/project');
-      expect(findUp).toHaveBeenCalledWith('.neo', { type: 'directory' });
+      expect(execa).toHaveBeenCalledWith('git', [
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-common-dir',
+        '--show-toplevel',
+      ]);
     });
 
     it('should return null when .neo directory not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await getProjectRoot();
 
@@ -73,7 +98,7 @@ describe('Agent utilities', () => {
 
   describe('getAgentDir', () => {
     it('should return agent directory path when project root exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
 
       const result = await getAgentDir();
 
@@ -81,7 +106,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null when project root not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await getAgentDir();
 
@@ -91,7 +116,7 @@ describe('Agent utilities', () => {
 
   describe('getAgentDbPath', () => {
     it('should return database path when agent dir exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
 
       const result = await getAgentDbPath();
 
@@ -99,7 +124,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null when agent dir not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await getAgentDbPath();
 
@@ -109,7 +134,7 @@ describe('Agent utilities', () => {
 
   describe('getAgentConfigPath', () => {
     it('should return config path when agent dir exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
 
       const result = await getAgentConfigPath();
 
@@ -117,7 +142,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null when agent dir not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await getAgentConfigPath();
 
@@ -127,7 +152,7 @@ describe('Agent utilities', () => {
 
   describe('isAgentInitialized', () => {
     it('should return true when all required files exist', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
 
       const result = await isAgentInitialized();
@@ -136,7 +161,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return false when agent dir not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await isAgentInitialized();
 
@@ -144,7 +169,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return false when any file is missing', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockRejectedValueOnce(new Error('ENOENT'));
 
       const result = await isAgentInitialized();
@@ -155,7 +180,7 @@ describe('Agent utilities', () => {
 
   describe('ensureAgentInitialized', () => {
     it('should not exit when agent is initialized', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
 
       await ensureAgentInitialized();
@@ -164,7 +189,7 @@ describe('Agent utilities', () => {
     });
 
     it('should throw when agent is not initialized', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       await expect(ensureAgentInitialized()).rejects.toThrow(
         'Agent not initialized in this project'
@@ -174,18 +199,17 @@ describe('Agent utilities', () => {
 
   describe('createAgentDir', () => {
     it('should create agent directory when project root exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(mkdir).mockResolvedValue(undefined);
 
       const result = await createAgentDir();
 
       expect(result).toBe('/path/to/project/.neo/agent');
-      expect(mkdir).toHaveBeenCalledWith('/path/to/project/.neo', { recursive: true });
-      expect(mkdir).toHaveBeenCalledWith('/path/to/project/.neo/agent', { recursive: true });
+      expect(mkdir).toHaveBeenCalledWith('/path/to/project/.neo/agent', { mode: 0o700 });
     });
 
     it('should throw when project root not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       await expect(createAgentDir()).rejects.toThrow('Not in a Neo project');
     });
@@ -198,7 +222,7 @@ describe('Agent utilities', () => {
     };
 
     it('should load and parse config successfully', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue(JSON.stringify(validConfig));
 
@@ -210,7 +234,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null when agent dir not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await loadAgentConfig();
 
@@ -218,7 +242,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null when config file not found', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockRejectedValue(new Error('ENOENT'));
 
       const result = await loadAgentConfig();
@@ -227,7 +251,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return null and log error on parse failure', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue('invalid json');
 
@@ -245,7 +269,7 @@ describe('Agent utilities', () => {
     };
 
     it('should save config successfully', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(writeFile).mockResolvedValue(undefined);
 
       await saveAgentConfig(config);
@@ -254,13 +278,13 @@ describe('Agent utilities', () => {
     });
 
     it('should throw when agent dir not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       await expect(saveAgentConfig(config)).rejects.toThrow('Agent directory not found');
     });
 
     it('should throw on write failure', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(writeFile).mockRejectedValue(new Error('Write failed'));
 
       await expect(saveAgentConfig(config)).rejects.toThrow('Failed to save agent configuration');
@@ -269,7 +293,7 @@ describe('Agent utilities', () => {
 
   describe('updateGitignore', () => {
     it('should do nothing when project root not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       await updateGitignore();
 
@@ -277,7 +301,7 @@ describe('Agent utilities', () => {
     });
 
     it('should do nothing when .gitignore does not exist', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockRejectedValue(new Error('ENOENT'));
 
       await updateGitignore();
@@ -286,7 +310,7 @@ describe('Agent utilities', () => {
     });
 
     it('should not update when already in .gitignore', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue('node_modules/\n.neo/agent/\n');
 
@@ -296,7 +320,7 @@ describe('Agent utilities', () => {
     });
 
     it('should add entry to .gitignore', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue('node_modules/\n');
       vi.mocked(writeFile).mockResolvedValue(undefined);
@@ -308,7 +332,7 @@ describe('Agent utilities', () => {
     });
 
     it('should handle .gitignore without trailing newline', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue('node_modules/');
       vi.mocked(writeFile).mockResolvedValue(undefined);
@@ -323,7 +347,7 @@ describe('Agent utilities', () => {
     });
 
     it('should handle write error silently', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/project/.neo');
+      mockNeoDir('/path/to/project/.neo');
       vi.mocked(access).mockResolvedValue(undefined);
       vi.mocked(readFile).mockResolvedValue('node_modules/\n');
       vi.mocked(writeFile).mockRejectedValue(new Error('Write failed'));
@@ -336,7 +360,7 @@ describe('Agent utilities', () => {
 
   describe('getDefaultProjectName', () => {
     it('should return directory name when project root exists', async () => {
-      vi.mocked(findUp).mockResolvedValue('/path/to/my-project/.neo');
+      mockNeoDir('/path/to/my-project/.neo');
 
       const result = await getDefaultProjectName();
 
@@ -344,7 +368,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return "unknown-project" when project root not found', async () => {
-      vi.mocked(findUp).mockResolvedValue(undefined);
+      mockNeoDir(undefined);
 
       const result = await getDefaultProjectName();
 
@@ -352,7 +376,7 @@ describe('Agent utilities', () => {
     });
 
     it('should return "unknown-project" when directory name is empty', async () => {
-      vi.mocked(findUp).mockResolvedValue('/.neo');
+      mockNeoDir('/.neo');
 
       const result = await getDefaultProjectName();
 

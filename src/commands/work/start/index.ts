@@ -156,12 +156,12 @@ async function recordWorkItemInAgentDb(payload: {
   base: string;
   worktreePath?: string;
 }): Promise<boolean> {
-  if (!(await isAgentInitialized())) return false;
-  const dbPath = await getAgentDbPath();
-  if (!dbPath) return false;
-
   let db: ContextDB | null = null;
   try {
+    if (!(await isAgentInitialized())) return false;
+    const dbPath = await getAgentDbPath();
+    if (!dbPath) return false;
+
     db = await ContextDB.create(dbPath);
     db.addContext({
       content: JSON.stringify({
