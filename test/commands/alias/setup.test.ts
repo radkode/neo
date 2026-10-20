@@ -120,6 +120,12 @@ describe('findConflictingAliases', () => {
     expect(findConflictingAliases('alias\n  gp=git-pull-wrapper\n', ALIASES)).toEqual([]);
   });
 
+  it('ignores unquoted values containing quote characters, with or without a comment', () => {
+    const content = [`alias gp=git"pull'`, `alias gst=git"stash' # note`].join('\n');
+
+    expect(findConflictingAliases(content, ALIASES)).toEqual([]);
+  });
+
   it('returns no conflicts for content with no alias lines', () => {
     expect(findConflictingAliases('', ALIASES)).toEqual([]);
   });

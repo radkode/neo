@@ -36,7 +36,7 @@ export function findConflictingAliases(
   // alias name="value", alias name='value', or an unquoted alias name=value,
   // optionally followed by a shell comment
   const aliasRegex =
-    /^alias[ \t]+([A-Za-z0-9_-]+)=(?:(["'])(.*?)\2|([^\s"'#]\S*))(?:[ \t]+#.*)?[ \t]*$/gm;
+    /^alias[ \t]+([A-Za-z0-9_-]+)=(?:(["'])(.*?)\2|([^\s"'#][^\s"']*))(?:[ \t]+#.*)?[ \t]*$/gm;
   let match: RegExpExecArray | null;
 
   while ((match = aliasRegex.exec(content)) !== null) {
