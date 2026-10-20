@@ -274,4 +274,35 @@ describe('executeWorkFinish', () => {
     expect(updateCall.tags).not.toContain('active');
     expect(dbClose).toHaveBeenCalled();
   });
+
+  it('finishes the branch when the agent context path is unsafe', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse
+    execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+    execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // show-ref
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+    execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
+    execaMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([{ state: 'MERGED', url: 'https://github.com/x/y/pull/1' }]),
+    } as never); // gh pr list
+    execaMock.mockResolvedValueOnce({ stdout: mainAndFeatureWorktrees } as never); // worktree list
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // pull
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // worktree remove
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // branch -D
+
+    isAgentInitializedMock.mockResolvedValue(true);
+    getAgentDbPathMock.mockRejectedValue(new Error('Unsafe context file'));
+
+    const result = await executeWorkFinish(undefined, {});
+
+    expect(result).toMatchObject({
+      branchDeleted: true,
+      worktreeRemoved: true,
+      contextUpdated: false,
+    });
+    expect(execaMock).toHaveBeenCalledWith('git', ['branch', '-D', 'jacek/fix-foo'], {
+      cwd: '/repo',
+    });
+    expect(dbListContexts).not.toHaveBeenCalled();
+  });
 });

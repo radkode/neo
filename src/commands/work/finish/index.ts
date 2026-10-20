@@ -124,9 +124,12 @@ async function getWorktrees(): Promise<WorktreeInfo[]> {
 }
 
 async function resolveAgentDbPath(): Promise<string | null> {
-  if (!(await isAgentInitialized())) return null;
-  const dbPath = await getAgentDbPath();
-  return dbPath;
+  try {
+    if (!(await isAgentInitialized())) return null;
+    return await getAgentDbPath();
+  } catch {
+    return null;
+  }
 }
 
 async function markWorkItemDone(branch: string, dbPath: string | null): Promise<boolean> {

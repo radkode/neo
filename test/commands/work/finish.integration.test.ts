@@ -3,6 +3,7 @@ import { access, chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/pro
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
+import { ContextDB } from '../../../src/storage/db.js';
 import { createTempDir, type TempDir } from '../../utils/test-helpers.js';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -82,6 +83,7 @@ async function runFinish(cwd: string, args: string[], env: NodeJS.ProcessEnv) {
   );
   return JSON.parse(stdout) as {
     branchDeleted: boolean;
+    contextUpdated: boolean;
     pulled: boolean;
     worktreeRemoved: boolean;
     worktreePath?: string;
@@ -93,6 +95,25 @@ afterEach(async () => {
 });
 
 describe.skipIf(process.platform === 'win32')('work finish worktree integration', () => {
+  it('marks the primary checkout context done when called from a linked worktree', async () => {
+    const fixture = await createFixture();
+    const dbPath = join(fixture.repoPath, '.neo', 'agent', 'contexts.json');
+    await writeFile(join(fixture.repoPath, '.git', 'info', 'exclude'), '.neo/agent/\n');
+    const db = await ContextDB.create(dbPath);
+    await writeFile(join(fixture.repoPath, '.neo', 'agent', 'config.json'), '{}');
+    const workItem = db.addContext({
+      content: 'work item',
+      tags: ['work-item', 'active', 'branch:jacek/finished'],
+    });
+
+    const result = await runFinish(fixture.featurePath, ['--base', 'main'], fixture.env);
+
+    expect(result.contextUpdated).toBe(true);
+    const updated = (await ContextDB.create(dbPath)).getContext(workItem.id);
+    expect(updated?.tags).toContain('done');
+    expect(updated?.tags).not.toContain('active');
+  }, 30_000);
+
   it('updates the base in its primary worktree before removing the caller worktree', async () => {
     const fixture = await createFixture();
 

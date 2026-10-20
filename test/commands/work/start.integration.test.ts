@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { access, mkdir, realpath, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { createTempDir, type TempDir } from '../../utils/test-helpers.js';
@@ -77,7 +77,7 @@ async function runStart(cwd: string, env: NodeJS.ProcessEnv) {
     ],
     { cwd, env }
   );
-  return JSON.parse(stdout) as { branch: string; worktreePath: string };
+  return JSON.parse(stdout) as { branch: string; worktreePath: string; contextRecorded: boolean };
 }
 
 afterEach(async () => {
@@ -138,5 +138,38 @@ describe.skipIf(process.platform === 'win32')('work start worktree integration',
     expect(await git(fixture.repoPath, ['worktree', 'list', '--porcelain'], fixture.env)).toContain(
       `worktree ${expectedPath}`
     );
+  }, 30_000);
+
+  it('records context only at the primary checkout without following temporary-file symlinks', async () => {
+    const fixture = await createFixture();
+    const nestedPath = join(fixture.callerPath, 'nested');
+    const rootDb = join(fixture.repoPath, '.neo', 'agent', 'contexts.json');
+    const callerDb = join(fixture.callerPath, '.neo', 'agent', 'contexts.json');
+    const nestedDb = join(nestedPath, '.neo', 'agent', 'contexts.json');
+    const emptyStore = '{"version":1,"contexts":[]}';
+    for (const dbPath of [rootDb, callerDb, nestedDb]) {
+      await mkdir(dirname(dbPath), { recursive: true });
+      await writeFile(join(dirname(dbPath), 'config.json'), '{}');
+      await writeFile(dbPath, emptyStore);
+    }
+    const rootSentinel = join(dirname(fixture.repoPath), 'root-sentinel');
+    const callerSentinel = join(dirname(fixture.repoPath), 'caller-sentinel');
+    const nestedSentinel = join(dirname(fixture.repoPath), 'nested-sentinel');
+    await writeFile(rootSentinel, 'untouched');
+    await writeFile(callerSentinel, 'untouched');
+    await writeFile(nestedSentinel, 'untouched');
+    await symlink(rootSentinel, `${rootDb}.tmp`);
+    await symlink(callerSentinel, `${callerDb}.tmp`);
+    await symlink(nestedSentinel, `${nestedDb}.tmp`);
+
+    const result = await runStart(nestedPath, fixture.env);
+
+    expect(result.contextRecorded).toBe(true);
+    expect(JSON.parse(await readFile(rootDb, 'utf-8')).contexts).toHaveLength(1);
+    expect(JSON.parse(await readFile(callerDb, 'utf-8')).contexts).toHaveLength(0);
+    expect(JSON.parse(await readFile(nestedDb, 'utf-8')).contexts).toHaveLength(0);
+    expect(await readFile(rootSentinel, 'utf-8')).toBe('untouched');
+    expect(await readFile(callerSentinel, 'utf-8')).toBe('untouched');
+    expect(await readFile(nestedSentinel, 'utf-8')).toBe('untouched');
   }, 30_000);
 });
