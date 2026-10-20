@@ -98,6 +98,34 @@ describe('findConflictingAliases', () => {
     expect(findConflictingAliases('alias gp=""\n', ALIASES)).toEqual([]);
   });
 
+  it('reports an unquoted alias value that differs from the target', () => {
+    const content = ['alias gp=git-pull-wrapper', 'alias gst=neo'].join('\n');
+
+    expect(findConflictingAliases(content, ALIASES)).toEqual([
+      { alias: 'gp', current: 'git-pull-wrapper' },
+      { alias: 'gst', current: 'neo' },
+    ]);
+  });
+
+  it('reports quoted and unquoted aliases followed by a shell comment', () => {
+    const content = ['alias gp="git pull" # pull', 'alias gst=git-stash  # stash'].join('\n');
+
+    expect(findConflictingAliases(content, ALIASES)).toEqual([
+      { alias: 'gp', current: 'git pull' },
+      { alias: 'gst', current: 'git-stash' },
+    ]);
+  });
+
+  it('does not treat an assignment on the line after a bare alias keyword as an alias', () => {
+    expect(findConflictingAliases('alias\n  gp=git-pull-wrapper\n', ALIASES)).toEqual([]);
+  });
+
+  it('ignores unquoted values containing quote characters, with or without a comment', () => {
+    const content = [`alias gp=git"pull'`, `alias gst=git"stash' # note`].join('\n');
+
+    expect(findConflictingAliases(content, ALIASES)).toEqual([]);
+  });
+
   it('returns no conflicts for content with no alias lines', () => {
     expect(findConflictingAliases('', ALIASES)).toEqual([]);
   });
@@ -124,23 +152,62 @@ describe('createSetupCommand', () => {
     setRuntimeContext(buildRuntimeContext());
   });
 
-  it('exposes force and opt-in pnpm alias options', () => {
+  it('exposes force and opt-in package manager alias options', () => {
     const command = createSetupCommand();
 
     expect(command.name()).toBe('setup');
-    expect(command.options.map(({ flags }) => flags)).toEqual(['-f, --force', '--pnpm']);
+    expect(command.options.map(({ flags }) => flags)).toEqual(['-f, --force', '--pnpm', '--yarn']);
   });
 
   it('adds the convention-based pnpm alias only when requested', async () => {
     await createSetupCommand().parseAsync(['--pnpm'], { from: 'user' });
     expect(shellMock.addAlias).toHaveBeenCalledWith('pnpm', 'neo --quiet pnpm --');
+    expect(shellMock.addAlias).not.toHaveBeenCalledWith('yarn', expect.any(String));
     expect(shellMock.addAlias).toHaveBeenCalledTimes(4);
+  });
+
+  it('adds the convention-based yarn alias only when requested', async () => {
+    await createSetupCommand().parseAsync(['--yarn'], { from: 'user' });
+    expect(shellMock.addAlias).toHaveBeenCalledWith('yarn', 'neo --quiet yarn --');
+    expect(shellMock.addAlias).not.toHaveBeenCalledWith('pnpm', expect.any(String));
+    expect(shellMock.addAlias).toHaveBeenCalledTimes(4);
+  });
+
+  it('adds both package manager aliases when both are requested', async () => {
+    await createSetupCommand().parseAsync(['--pnpm', '--yarn'], { from: 'user' });
+    expect(shellMock.addAlias.mock.calls).toEqual([
+      ['gp', 'neo git pull'],
+      ['gpu', 'neo git push'],
+      ['gst', 'neo git stash'],
+      ['pnpm', 'neo --quiet pnpm --'],
+      ['yarn', 'neo --quiet yarn --'],
+    ]);
   });
 
   it('checks conflicts before replacing an existing pnpm alias', async () => {
     readFileMock.mockResolvedValue('alias pnpm="custom-pnpm"\n');
     vi.mocked(confirm).mockResolvedValue(false);
     await createSetupCommand().parseAsync(['--pnpm'], { from: 'user' });
+    expect(confirm).toHaveBeenCalled();
+    expect(shellMock.addAlias).not.toHaveBeenCalled();
+    expect(shellMock.backup).not.toHaveBeenCalled();
+  });
+
+  it('checks conflicts before replacing an existing yarn alias', async () => {
+    readFileMock.mockResolvedValue('alias yarn="custom-yarn"\n');
+    vi.mocked(confirm).mockResolvedValue(false);
+    await createSetupCommand().parseAsync(['--yarn'], { from: 'user' });
+    expect(ui.plain).toHaveBeenCalledWith(
+      '  yarn: currently custom-yarn -> new neo --quiet yarn --'
+    );
+    expect(shellMock.addAlias).not.toHaveBeenCalled();
+    expect(shellMock.backup).not.toHaveBeenCalled();
+  });
+
+  it('checks conflicts before replacing an unquoted yarn alias', async () => {
+    readFileMock.mockResolvedValue('alias yarn=custom-yarn\n');
+    vi.mocked(confirm).mockResolvedValue(false);
+    await createSetupCommand().parseAsync(['--yarn'], { from: 'user' });
     expect(confirm).toHaveBeenCalled();
     expect(shellMock.addAlias).not.toHaveBeenCalled();
     expect(shellMock.backup).not.toHaveBeenCalled();
