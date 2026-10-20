@@ -128,6 +128,22 @@ command pnpm install   # Bypass the alias and environment loading
 
 The alias is `pnpm="neo --quiet pnpm --"`, so pnpm flags are forwarded unchanged and repositories without a convention file keep working normally. The wrapper invokes the pnpm executable directly, without shell alias recursion. File values override inherited variables for the child only, with no variable interpolation. It does not export tokens to your shell or affect separate `gh` commands. Remove any previous global token exports yourself; the wrapper cannot remove them from its parent shell.
 
+### `neo yarn`
+
+Works like `neo pnpm`, for Yarn: runs Yarn with the nearest `.env.yarn.local` loaded only into Yarn and its subprocesses. Discovery, the `--env-file` override, and the file rules are the same as for `neo pnpm`. It does not read `.env.pnpm.local`; to reuse a file from another repository, pass it with `--env-file`. Keep `.env.yarn.local` untracked and restrict its permissions with `chmod 600 .env.yarn.local`.
+
+```bash
+neo yarn -- install --immutable
+neo yarn --env-file /path/to/private.env -- install  # Explicit override
+
+neo alias setup --yarn  # Opt in once; combine with --pnpm to alias both
+source ~/.zshrc
+yarn install           # Automatically loads this repository's .env.yarn.local
+command yarn install   # Bypass the alias and environment loading
+```
+
+The alias is `yarn="neo --quiet yarn --"`. Yarn reads the variables the same way it reads exported ones, so a `.yarnrc.yml` entry such as `npmAuthToken: "${GITHUB_TOKEN}"` works unchanged.
+
 ### `neo config`
 
 Key-value configuration with secure secrets storage and profiles.

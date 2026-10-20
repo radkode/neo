@@ -16,6 +16,7 @@ import { createDoctorCommand } from '@/commands/doctor/index.js';
 import { createAiCommand } from '@/commands/ai/index.js';
 import { createWorkCommand } from '@/commands/work/index.js';
 import { createPnpmCommand } from '@/commands/pnpm/index.js';
+import { createYarnCommand } from '@/commands/yarn/index.js';
 
 export function registerCommands(program: Command): void {
   program.addCommand(createInitCommand());
@@ -35,6 +36,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(createAiCommand());
   program.addCommand(createWorkCommand());
   program.addCommand(createPnpmCommand());
+  program.addCommand(createYarnCommand());
 }
 
 export { createInitCommand } from '@/commands/init/index.js';
@@ -54,3 +56,4 @@ export { createDoctorCommand } from '@/commands/doctor/index.js';
 export { createAiCommand } from '@/commands/ai/index.js';
 export { createWorkCommand } from '@/commands/work/index.js';
 export { createPnpmCommand } from '@/commands/pnpm/index.js';
+export { createYarnCommand } from '@/commands/yarn/index.js';
