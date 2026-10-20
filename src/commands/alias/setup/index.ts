@@ -33,12 +33,15 @@ export function findConflictingAliases(
 ): { alias: string; current: string }[] {
   const conflicts: { alias: string; current: string }[] = [];
 
-  // Simple pattern: alias name="value" or alias name='value'
-  const aliasRegex = /^alias\s+([A-Za-z0-9_-]+)=(["'])(.*?)\2\s*$/gm;
+  // alias name="value", alias name='value', or an unquoted alias name=value,
+  // optionally followed by a shell comment
+  const aliasRegex =
+    /^alias[ \t]+([A-Za-z0-9_-]+)=(?:(["'])(.*?)\2|([^\s"'#][^\s"']*))(?:[ \t]+#.*)?[ \t]*$/gm;
   let match: RegExpExecArray | null;
 
   while ((match = aliasRegex.exec(content)) !== null) {
-    const [, name, , value] = match;
+    const [, name, , quotedValue, bareValue] = match;
+    const value = quotedValue ?? bareValue;
     // Type guard: ensure name and value are defined
     if (name && value && aliases[name as keyof AliasDefinition] && value.trim() !== aliases[name]) {
       conflicts.push({ alias: name, current: value.trim() });
@@ -58,6 +61,7 @@ export function createSetupCommand(): Command {
     .description('Setup ZSH aliases for Neo CLI. Backs up ~/.zshrc before modifying.')
     .option('-f, --force', 'skip confirmation and overwrite conflicting aliases')
     .option('--pnpm', 'also alias pnpm to load repository-local .env.pnpm.local files')
+    .option('--yarn', 'also alias yarn to load repository-local .env.yarn.local files')
     .action(
       runAction(async (options: unknown): Promise<void> => {
         const validatedOptions: AliasSetupOptions = validate(
@@ -65,9 +69,11 @@ export function createSetupCommand(): Command {
           options,
           'alias setup options'
         );
-        const aliases: AliasDefinition = validatedOptions.pnpm
-          ? { ...ALIASES, pnpm: 'neo --quiet pnpm --' }
-          : ALIASES;
+        const aliases: AliasDefinition = {
+          ...ALIASES,
+          ...(validatedOptions.pnpm ? { pnpm: 'neo --quiet pnpm --' } : {}),
+          ...(validatedOptions.yarn ? { yarn: 'neo --quiet yarn --' } : {}),
+        };
         const shell = new ZshIntegration();
 
         // Read current rc content and detect conflicts
