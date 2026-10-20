@@ -1,5 +1,11 @@
 # @radkode/neo
 
+## 1.12.0
+
+### Minor Changes
+
+- [#98](https://github.com/radkode/neo/pull/98) [`cc673f7`](https://github.com/radkode/neo/commit/cc673f74f806f308c634f1129079b04ef4fe9e8d) Thanks [@jacekradko](https://github.com/jacekradko)! - Add `neo yarn` with repository-local `.env.yarn.local` discovery and an opt-in yarn shell alias (`neo alias setup --yarn`), matching `neo pnpm` so Yarn package tokens stay out of the parent shell environment. `neo pnpm` and `neo yarn` now report when the package manager cannot be started instead of exiting silently, and `neo alias setup` detects conflicting aliases written without quotes.
+
 ## 1.11.0
 
 ### Minor Changes
