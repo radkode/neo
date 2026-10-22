@@ -109,9 +109,15 @@ describe('executeWorkStart', () => {
     expect(result.contextRecorded).toBe(false);
 
     const checkoutCall = execaMock.mock.calls.find(
-      ([_cmd, args]) => Array.isArray(args) && args[0] === 'checkout' && args[1] === '-b'
+      ([_cmd, args]) => Array.isArray(args) && args[0] === 'checkout' && args.includes('-b')
     );
-    expect(checkoutCall?.[1]).toEqual(['checkout', '-b', 'jacek/fix-foo', 'origin/main']);
+    expect(checkoutCall?.[1]).toEqual([
+      'checkout',
+      '--no-track',
+      '-b',
+      'jacek/fix-foo',
+      'origin/main',
+    ]);
   });
 
   it('respects --no-prefix (encoded as prefix: false)', async () => {
@@ -198,6 +204,7 @@ describe('executeWorkStart', () => {
     expect(worktreeAddCall?.[1]).toEqual([
       'worktree',
       'add',
+      '--no-track',
       '-b',
       'jacek/fix-foo',
       '/repo/.worktrees/fix-foo',

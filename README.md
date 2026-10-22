@@ -47,7 +47,7 @@ neo config list     # View your configuration
 
 ### `neo git push`
 
-Pulls before pushing. Prompts for confirmation on `main`.
+Pulls before pushing. Prompts for confirmation on `main`. The first push of a branch with no upstream sets one to the same-named remote branch, as `git push -u` would.
 
 ```bash
 neo git push              # Safe push (confirms on main)
@@ -102,6 +102,25 @@ Runs the `build`, `test`, `lint`, and `typecheck` package scripts that the repos
 ```
 
 Neo invokes the configured value as a package script. Use an umbrella script when verification needs multiple commands or environment-specific options. `neo verify --only build,test` overrides the repository setting for one run, and `--skip` filters the selected scripts.
+
+### `neo gh pr status`
+
+Shows whether a pull request can merge: its checks, review decision, unresolved review threads, and mergeability, reduced to one verdict (`ready`, `pending`, `failing`, `conflicting`, `blocked`, `merged`, or `closed`) with the reasons behind it. When branch protection requires checks, only those decide the verdict; otherwise every check does.
+
+```bash
+neo gh pr status                  # The current branch's PR
+neo gh pr status 88 --json        # Full report, including headRefOid
+neo gh pr status 88 --wait        # Poll until checks settle (every 15s, up to 30 min)
+```
+
+Without `--wait` the command exits `0` whenever it can read the PR. With `--wait` it exits `0` only when the PR is `ready` or `merged`, so it chains into a merge. Pass the inspected head to `neo gh pr merge --head`, and the merge is refused if anyone pushes after you looked:
+
+```bash
+head=$(neo gh pr status 88 --wait --json | jq -r .headRefOid) &&
+  neo gh pr merge 88 --strategy squash --head "$head"
+```
+
+Right after a push, GitHub can take a moment to register checks, so `--wait` treats a PR with no checks as pending for its first minute.
 
 ### `neo pnpm`
 
@@ -219,6 +238,13 @@ The schema follows an OpenCLI-lite shape: every command, option, argument, and g
 neo git push --yes --json \
   && neo gh pr create --title "Add X" --body "…" --yes --json \
   | jq -r '.url'
+```
+
+### Example: merge once CI is green
+
+```bash
+head=$(neo gh pr status 88 --wait --json | jq -r .headRefOid) &&
+  neo gh pr merge 88 --strategy squash --head "$head" --yes --json
 ```
 
 If a required prompt can't be answered non-interactively you'll get exit code `2` and a structured error telling you which flag was missing.

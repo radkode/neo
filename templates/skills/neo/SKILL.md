@@ -15,12 +15,14 @@ Neo is an opinionated CLI that wraps common git/GitHub workflows with guardrails
 
 ## The work lifecycle
 
-The canonical flow is `start → ship → finish`. Use it for any non-trivial change.
+The canonical flow is `start → ship → status → merge → finish`. Use it for any non-trivial change.
 
 ```bash
 neo work start <name>           # creates a prefixed branch (add --worktree for an isolated worktree)
 # ... edit, commit ...
 neo work ship                   # verify + ensure changeset + push + open PR
+neo gh pr status --wait --json  # wait for CI; verdict, checks, reviews, unresolved threads
+neo gh pr merge --strategy squash --head <headRefOid>   # merge exactly what you inspected
 # ... after merge ...
 neo work finish                 # checkout base, pull, delete local branch + worktree
 ```
@@ -35,6 +37,7 @@ For one-off commits outside this flow, use `neo git commit` (interactive convent
 | Pull without losing WIP         | `neo git pull`                            | `git stash && git pull && git stash pop`         |
 | Commit with conventional format | `neo git commit` (or `--ai`)              | `git commit -m`                                  |
 | Open a PR                       | `neo gh pr create --title ... --body ...` | `gh pr create`                                   |
+| Check CI, reviews, mergeability | `neo gh pr status` (`--wait` to block)    | `gh pr checks` / `gh pr view` / polling          |
 | Merge a PR safely               | `neo gh pr merge --strategy squash`       | `gh pr merge`                                    |
 | Generate a PR description       | `neo ai pr --json --no-create`            | hand-writing one                                 |
 | Start a new branch              | `neo work start <name>`                   | `git checkout -b`                                |
@@ -53,6 +56,10 @@ neo work ship --json | jq -r '.pr.url'
 # Draft a PR body without opening
 neo ai pr --json --no-create | jq -r '.body'
 
+# Wait for CI, then merge only the commit that was inspected
+head=$(neo gh pr status 42 --wait --json | jq -r '.headRefOid') \
+  && neo gh pr merge 42 --strategy squash --head "$head" --yes --json
+
 # Arm guarded auto-merge
 neo gh pr merge 42 --strategy squash --auto --yes --json | jq -r '.action'
 
@@ -66,6 +73,7 @@ Exit codes: `0` success, `1` failure, `2` non-interactive prompt required (the J
 
 - Don't `git push` to bypass neo's main-branch confirmation. If you need to push to main, use `neo git push --force-main`. Not `--force`: that is not a neo flag, so it passes straight through to git as a real force-push.
 - Don't open PRs with `gh pr create` when `neo work ship` is the right call. Ship handles verify + changeset + push + PR in one step.
+- Don't poll `gh pr checks` or `gh pr view` to see whether a PR is green. `neo gh pr status --wait` blocks until checks settle and exits `0` only when the PR is ready or merged.
 - Don't merge PRs with raw `gh pr merge`. Neo checks readiness, pins the inspected head commit, and preserves local cleanup for `neo work finish`.
 - Don't skip changesets. `neo work ship` enforces them; if a change doesn't affect a published package, create an empty changeset (`---\n---`).
 - Don't re-derive the command tree from memory. `neo schema --json` is authoritative and version-correct.

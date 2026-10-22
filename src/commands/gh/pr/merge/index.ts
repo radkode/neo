@@ -11,28 +11,21 @@ import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { runAction } from '@/utils/run-action.js';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
+import {
+  errorText,
+  inspectChecks,
+  inspectPr,
+  isGhAuthError,
+  isGhInstalled,
+  readinessIssues,
+  repositoryFromPrUrl,
+  summarizeChecks,
+  type PrInfo,
+  type RepositoryTarget,
+  type RequiredChecksSummary,
+} from '@/commands/gh/pr/inspection.js';
 
-const prInfoSchema = z.object({
-  autoMergeRequest: z.object({ mergeMethod: z.string() }).nullable(),
-  baseRefName: z.string(),
-  headRefName: z.string(),
-  headRefOid: z.string(),
-  id: z.string(),
-  isCrossRepository: z.boolean(),
-  isDraft: z.boolean(),
-  mergeCommit: z.object({ oid: z.string() }).nullable(),
-  mergeStateStatus: z.string(),
-  mergeable: z.string(),
-  mergedAt: z.string().nullable(),
-  number: z.number(),
-  reviewDecision: z.string().nullable(),
-  state: z.string(),
-  url: z.string().url(),
-});
-
-const requiredChecksSchema = z.array(
-  z.object({ bucket: z.string(), link: z.string(), name: z.string(), state: z.string() })
-);
+export type { RequiredChecksSummary } from '@/commands/gh/pr/inspection.js';
 
 const relatedPrsSchema = z.array(
   z.object({
@@ -54,15 +47,7 @@ const repositorySettingsSchema = z.object({
   sshUrl: z.string(),
 });
 
-type PrInfo = z.infer<typeof prInfoSchema>;
-type RequiredCheck = z.infer<typeof requiredChecksSchema>[number];
 type MergeStrategy = NonNullable<GhPrMergeOptions['strategy']>;
-
-export interface RequiredChecksSummary {
-  failed: string[];
-  passed: string[];
-  pending: string[];
-}
 
 export interface BranchCleanupResult {
   reason?: string;
@@ -97,60 +82,6 @@ export interface GhPrMergeResult {
   url: string;
 }
 
-async function isGhInstalled(): Promise<boolean> {
-  try {
-    await execa('gh', ['--version']);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function errorText(error: unknown): string {
-  if (error && typeof error === 'object') {
-    const stderr = Reflect.get(error, 'stderr');
-    if (typeof stderr === 'string' && stderr.trim()) return stderr.trim();
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-
-async function inspectPr(target?: string, repository?: string): Promise<PrInfo> {
-  let last: PrInfo | undefined;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const args = ['pr', 'view'];
-    if (target) args.push(target);
-    if (repository) args.push('--repo', repository);
-    args.push(
-      '--json',
-      [
-        'autoMergeRequest',
-        'baseRefName',
-        'headRefName',
-        'headRefOid',
-        'id',
-        'isCrossRepository',
-        'isDraft',
-        'mergeCommit',
-        'mergeStateStatus',
-        'mergeable',
-        'mergedAt',
-        'number',
-        'reviewDecision',
-        'state',
-        'url',
-      ].join(',')
-    );
-    const { stdout } = await execa('gh', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    last = prInfoSchema.parse(JSON.parse(stdout));
-    const unknown = last.mergeable === 'UNKNOWN' || last.mergeStateStatus === 'UNKNOWN';
-    if (last.state !== 'OPEN' || !unknown) return last;
-    if (attempt < 2) await delay(100);
-  }
-
-  return last as PrInfo;
-}
-
 async function inspectPostflight(number: number, repository: string): Promise<PrInfo> {
   let last: PrInfo | undefined;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -159,26 +90,6 @@ async function inspectPostflight(number: number, repository: string): Promise<Pr
     if (attempt < 2) await delay(100);
   }
   return last as PrInfo;
-}
-
-interface RepositoryTarget {
-  apiHost: string;
-  nameWithOwner: string;
-  selector: string;
-}
-
-function repositoryFromPrUrl(url: string): RepositoryTarget {
-  const parsed = new URL(url);
-  const parts = parsed.pathname.split('/').filter(Boolean);
-  if (parts.length < 4 || parts[2] !== 'pull') {
-    throw new Error(`Could not determine the repository from ${url}`);
-  }
-  const nameWithOwner = `${parts[0]}/${parts[1]}`;
-  return {
-    apiHost: parsed.host.toLowerCase(),
-    nameWithOwner,
-    selector: `${parsed.host}/${nameWithOwner}`,
-  };
 }
 
 interface MergeQueueState {
@@ -224,34 +135,6 @@ async function inspectMergeQueue(
   }
 }
 
-async function inspectRequiredChecks(number: number, repository: string): Promise<RequiredCheck[]> {
-  const result = await execa(
-    'gh',
-    [
-      'pr',
-      'checks',
-      String(number),
-      '--repo',
-      repository,
-      '--required',
-      '--json',
-      'name,state,bucket,link',
-    ],
-    { reject: false, stdio: ['ignore', 'pipe', 'pipe'] }
-  );
-
-  if (result.stdout.trim()) return requiredChecksSchema.parse(JSON.parse(result.stdout));
-  const stderr = result.stderr.toLowerCase();
-  if (
-    result.exitCode === 0 ||
-    stderr.includes('no checks reported on') ||
-    stderr.includes('no required checks reported')
-  ) {
-    return [];
-  }
-  throw new Error(`Could not inspect required checks: ${result.stderr.trim()}`);
-}
-
 type RepositorySettings = z.infer<typeof repositorySettingsSchema>;
 
 async function inspectRepositorySettings(repository: string): Promise<RepositorySettings> {
@@ -266,55 +149,6 @@ async function inspectRepositorySettings(repository: string): Promise<Repository
     );
   }
   return repositorySettingsSchema.parse(JSON.parse(result.stdout));
-}
-
-function summarizeChecks(checks: RequiredCheck[]): RequiredChecksSummary {
-  const summary: RequiredChecksSummary = { failed: [], passed: [], pending: [] };
-  for (const check of checks) {
-    switch (check.bucket.toLowerCase()) {
-      case 'pass':
-      case 'skipping':
-        summary.passed.push(check.name);
-        break;
-      case 'fail':
-      case 'cancel':
-        summary.failed.push(check.name);
-        break;
-      default:
-        summary.pending.push(check.name);
-    }
-  }
-  return summary;
-}
-
-function readinessIssues(
-  pr: PrInfo,
-  checks: RequiredChecksSummary
-): { hard: string[]; requirements: string[] } {
-  const hard = new Set<string>();
-  const requirements = new Set<string>();
-
-  if (pr.state !== 'OPEN') hard.add(`pull request state is ${pr.state.toLowerCase()}`);
-  if (pr.isDraft || pr.mergeStateStatus === 'DRAFT') hard.add('pull request is a draft');
-  if (pr.mergeable === 'CONFLICTING' || pr.mergeStateStatus === 'DIRTY') {
-    hard.add('head branch conflicts with the base branch');
-  }
-  if (pr.mergeable === 'UNKNOWN' || pr.mergeStateStatus === 'UNKNOWN') {
-    hard.add('GitHub could not determine mergeability');
-  }
-
-  if (pr.reviewDecision === 'REVIEW_REQUIRED') requirements.add('required review is missing');
-  if (pr.reviewDecision === 'CHANGES_REQUESTED') requirements.add('changes were requested');
-  if (checks.pending.length > 0) {
-    requirements.add(`required checks are pending: ${checks.pending.join(', ')}`);
-  }
-  if (checks.failed.length > 0) {
-    requirements.add(`required checks failed: ${checks.failed.join(', ')}`);
-  }
-  if (pr.mergeStateStatus === 'BEHIND') requirements.add('head branch is behind the base branch');
-  if (pr.mergeStateStatus === 'BLOCKED') requirements.add('base branch policy blocks the merge');
-
-  return { hard: [...hard], requirements: [...requirements] };
 }
 
 async function resolveStrategy(options: GhPrMergeOptions): Promise<MergeStrategy> {
@@ -691,11 +525,23 @@ export async function executeGhPrMerge(
     }
 
     const before = await inspectPr(target);
+    if (options.head && !before.headRefOid.toLowerCase().startsWith(options.head.toLowerCase())) {
+      return failure(
+        new CommandError(
+          `PR #${before.number} head is ${before.headRefOid}, not the expected ${options.head}; Neo will not merge a commit you did not inspect`,
+          'gh-pr-merge',
+          {
+            code: 'PR_HEAD_MISMATCH',
+            suggestions: [`Re-inspect the PR: neo gh pr status ${before.number}`],
+          }
+        )
+      );
+    }
     const repository = repositoryFromPrUrl(before.url);
     if (before.state === 'MERGED') return cleanAlreadyMergedPr(before, repository, options);
 
     const [requiredChecks, queueBefore] = await Promise.all([
-      inspectRequiredChecks(before.number, repository.selector),
+      inspectChecks(before.number, repository.selector, { required: true }),
       inspectMergeQueue(before, repository),
     ]);
     const checks = summarizeChecks(requiredChecks);
@@ -891,7 +737,7 @@ export async function executeGhPrMerge(
     if (error instanceof NonInteractiveError) throw error;
     if (error instanceof CommandError) return failure(error);
     const detail = errorText(error);
-    if (/authentication|not logged|auth login|http 401/i.test(detail)) {
+    if (isGhAuthError(detail)) {
       return failure(
         new CommandError('Not authenticated with GitHub CLI for the target host', 'gh-pr-merge', {
           suggestions: ['Run: gh auth login'],
@@ -910,6 +756,7 @@ export function createPrMergeCommand(): Command {
     .argument('[pull-request]', 'pull request number, URL, or branch (default: current branch)')
     .option('--strategy <method>', 'merge method: merge, squash, or rebase')
     .option('--auto', 'merge after GitHub requirements pass')
+    .option('--head <sha>', 'merge only if the PR head is still this commit (full or 7+ char SHA)')
     .option(
       '-d, --delete-remote-branch',
       'delete the remote head branch after merge (local cleanup stays with neo work finish)'
@@ -923,6 +770,9 @@ Examples:
 
   Arm auto-merge and emit JSON:
     $ neo gh pr merge 88 --strategy squash --auto --yes --json
+
+  Merge only the commit you inspected:
+    $ neo gh pr merge 88 --strategy squash --head "$(neo gh pr status 88 --json | jq -r .headRefOid)"
 
   Request remote branch cleanup after a confirmed merge:
     $ neo gh pr merge 88 --strategy squash --delete-remote-branch

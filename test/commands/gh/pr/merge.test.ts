@@ -248,14 +248,48 @@ describe('gh pr merge command', () => {
     expect(command.options.map(({ flags }) => flags)).toEqual([
       '--strategy <method>',
       '--auto',
+      '--head <sha>',
       '-d, --delete-remote-branch',
     ]);
-    expect(prCommand.commands.map((child) => child.name())).toEqual(['create', 'merge']);
+    expect(prCommand.commands.map((child) => child.name())).toEqual(['create', 'merge', 'status']);
   });
 
   it('validates the merge strategy', () => {
     expect(ghPrMergeOptionsSchema.parse({ strategy: 'squash' }).strategy).toBe('squash');
     expect(ghPrMergeOptionsSchema.safeParse({ strategy: 'octopus' }).success).toBe(false);
+  });
+
+  it('accepts only 7 to 40 hex characters as the expected head', () => {
+    expect(ghPrMergeOptionsSchema.safeParse({ head: headSha }).success).toBe(true);
+    expect(ghPrMergeOptionsSchema.safeParse({ head: headSha.slice(0, 7) }).success).toBe(true);
+    expect(ghPrMergeOptionsSchema.safeParse({ head: headSha.slice(0, 6) }).success).toBe(false);
+    expect(ghPrMergeOptionsSchema.safeParse({ head: 'main' }).success).toBe(false);
+  });
+
+  it('merges when the expected head matches, by full or abbreviated SHA', async () => {
+    useScenario();
+
+    const result = await executeGhPrMerge('88', {
+      strategy: 'squash',
+      head: headSha.slice(0, 12).toUpperCase(),
+    });
+
+    expect(result.success).toBe(true);
+    expect(mergeCall()?.[1]).toContain(headSha);
+  });
+
+  it('refuses to merge when the PR head is not the expected commit', async () => {
+    useScenario();
+
+    const result = await executeGhPrMerge('88', { strategy: 'squash', head: mergeSha });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('Expected a head mismatch');
+    expect(result.error.code).toBe('PR_HEAD_MISMATCH');
+    expect(result.error.message).toBe(
+      `PR #88 head is ${headSha}, not the expected ${mergeSha}; Neo will not merge a commit you did not inspect`
+    );
+    expect(mergeCall()).toBeUndefined();
   });
 
   it('merges a ready PR with the inspected head SHA pinned', async () => {

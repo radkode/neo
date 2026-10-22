@@ -93,7 +93,7 @@ const aiAvailableMock = vi.mocked(isAICommitAvailable);
  *                                           (hasPendingChangeset, only when
  *                                            changesets are enabled)
  *   — changeset creation (mocked / disabled) —
- *   9. rev-parse --abbrev-ref @{upstream}   (hasUpstream)
+ *   9. rev-parse --abbrev-ref @{upstream}   (upstreamOf)
  *  10. push ... origin <branch>
  *  11. gh --version                          (ghInstalled)
  *  12. gh pr view --json url                  (existingPrUrl)
@@ -101,6 +101,12 @@ const aiAvailableMock = vi.mocked(isAICommitAvailable);
  *  13. log origin/<base>..HEAD --pretty=...  (getCommitSubjects)
  *  14. gh pr create ...                      (creates PR)
  */
+
+function shipPushArgs(): readonly string[] | undefined {
+  return execaMock.mock.calls.find(
+    ([command, args]) => command === 'git' && Array.isArray(args) && args[0] === 'push'
+  )?.[1] as readonly string[] | undefined;
+}
 
 describe('executeWorkShip', () => {
   beforeEach(() => {
@@ -247,7 +253,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '3' } as never); // rev-list --count
-    execaMock.mockRejectedValueOnce(new Error('no upstream')); // hasUpstream
+    execaMock.mockRejectedValueOnce(new Error('no upstream')); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push -u
     execaMock.mockRejectedValueOnce(new Error('no gh')); // gh --version → not installed
 
@@ -262,6 +268,25 @@ describe('executeWorkShip', () => {
     expect(result.verified).toBe(false);
     expect(result.pushed).toBe(true);
     expect(result.commits).toBe(3);
+    expect(shipPushArgs()).toEqual(['push', '-u', 'origin', 'jacek/fix-foo']);
+  });
+
+  it('retargets a branch that still tracks the base to its own remote branch', async () => {
+    execaMock.mockResolvedValueOnce({ stdout: 'true' } as never); // rev-parse --is-inside-work-tree
+    execaMock.mockResolvedValueOnce({ stdout: '/repo' } as never); // rev-parse --show-toplevel
+    execaMock.mockResolvedValueOnce({ stdout: 'jacek/fix-foo' } as never); // current branch
+    execaMock.mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main' } as never); // symbolic-ref
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
+    execaMock.mockResolvedValueOnce({ stdout: '3' } as never); // rev-list --count
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/main' } as never); // upstreamOf
+    execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push --force-with-lease -u
+    execaMock.mockRejectedValueOnce(new Error('no gh')); // gh --version → not installed
+
+    const result = await executeWorkShip({ verify: false, changeset: false });
+
+    expect(result.pushed).toBe(true);
+    expect(shipPushArgs()).toEqual(['push', '--force-with-lease', '-u', 'origin', 'jacek/fix-foo']);
   });
 
   it('returns the existing PR url instead of creating a new one', async () => {
@@ -272,7 +297,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '3' } as never); // rev-list --count
-    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // hasUpstream
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push --force-with-lease
     execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
     execaMock.mockResolvedValueOnce({
@@ -283,6 +308,7 @@ describe('executeWorkShip', () => {
 
     expect(result.prUrl).toBe('https://github.com/x/y/pull/42');
     expect(result.prCreated).toBe(false);
+    expect(shipPushArgs()).toEqual(['push', '--force-with-lease', 'origin', 'jacek/fix-foo']);
   });
 
   it('creates a PR with inferred title/body when AI is unavailable', async () => {
@@ -293,7 +319,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '2' } as never); // rev-list --count
-    execaMock.mockRejectedValueOnce(new Error('no upstream')); // hasUpstream
+    execaMock.mockRejectedValueOnce(new Error('no upstream')); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push -u
     execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
     execaMock.mockRejectedValueOnce(new Error('no PR yet')); // gh pr view → none
@@ -326,7 +352,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
-    execaMock.mockRejectedValueOnce(new Error('no upstream')); // hasUpstream
+    execaMock.mockRejectedValueOnce(new Error('no upstream')); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push -u
     execaMock.mockRejectedValueOnce(new Error('not installed')); // gh --version
 
@@ -352,7 +378,7 @@ describe('executeWorkShip', () => {
     }
 
     function mockPushAndExistingPr(): void {
-      execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // hasUpstream
+      execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // upstreamOf
       execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
       execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
       execaMock.mockResolvedValueOnce({
@@ -425,7 +451,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
-    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/child' } as never); // hasUpstream
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/child' } as never); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
     execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
     execaMock.mockResolvedValueOnce({
@@ -447,7 +473,7 @@ describe('executeWorkShip', () => {
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
     execaMock.mockResolvedValueOnce({ stdout: '1' } as never); // rev-list --count
-    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // hasUpstream
+    execaMock.mockResolvedValueOnce({ stdout: 'origin/jacek/fix-foo' } as never); // upstreamOf
     execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push
     execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
     execaMock.mockResolvedValueOnce({
@@ -470,7 +496,7 @@ describe('executeWorkShip', () => {
       execaMock.mockResolvedValueOnce({ stdout: '' } as never); // status
       execaMock.mockResolvedValueOnce({ stdout: '' } as never); // fetch
       execaMock.mockResolvedValueOnce({ stdout: '2' } as never); // rev-list --count
-      execaMock.mockRejectedValueOnce(new Error('no upstream')); // hasUpstream
+      execaMock.mockRejectedValueOnce(new Error('no upstream')); // upstreamOf
       execaMock.mockResolvedValueOnce({ stdout: '' } as never); // push -u
       execaMock.mockResolvedValueOnce({ stdout: 'gh 2.42.0' } as never); // gh --version
       execaMock.mockRejectedValueOnce(new Error('no PR yet')); // gh pr view → none

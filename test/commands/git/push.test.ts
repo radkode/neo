@@ -80,6 +80,20 @@ describe('git push command', () => {
   const pushCalls = () =>
     execaMock.mock.calls.filter(([_cmd, args]) => Array.isArray(args) && args[0] === 'push');
 
+  /** The branch already tracks a remote branch, so neo leaves the push args alone. */
+  const hasUpstream = () =>
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/tracked' })); // rev-parse @{upstream}
+  /** The branch has no upstream yet, so neo adds --set-upstream. */
+  const noUpstream = () =>
+    execaMock.mockResolvedValueOnce(
+      execaResult({ exitCode: 128, stderr: 'fatal: no upstream configured for branch' })
+    ); // rev-parse @{upstream}
+  const upstreamChecks = () =>
+    execaMock.mock.calls.filter(
+      ([_cmd, args]) =>
+        Array.isArray(args) && args[0] === 'rev-parse' && args.includes('@{upstream}')
+    );
+
   const jsonWrite = (index = 0): unknown =>
     JSON.parse(String(stdoutWriteSpy.mock.calls[index]?.[0]));
 
@@ -105,6 +119,7 @@ describe('git push command', () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
     execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
+    hasUpstream();
     const rejectionError = new Error('non-fast-forward');
     (rejectionError as { shortMessage?: string }).shortMessage = 'fetch first';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
@@ -144,6 +159,7 @@ describe('git push command', () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
     execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
+    hasUpstream();
     const rejectionError = new Error('rejected');
     (rejectionError as { shortMessage?: string }).shortMessage = 'non-fast-forward';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
@@ -218,6 +234,7 @@ describe('git push command', () => {
 
     it('pushes to main without prompting when --force-main is passed', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' }));
+      hasUpstream();
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'Everything up-to-date' }));
       setRuntimeContext(buildRuntimeContext({ json: true }));
 
@@ -236,6 +253,7 @@ describe('git push command', () => {
         command: 'git.push',
         remote: 'origin',
         branch: 'main',
+        upstream: null,
       });
       expect(exitMock).not.toHaveBeenCalled();
     });
@@ -265,6 +283,7 @@ describe('git push command', () => {
 
     it('pushes to main once the confirmation is accepted', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' }));
+      hasUpstream();
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'pushed' }));
       confirmMock.mockResolvedValueOnce(true);
 
@@ -310,6 +329,7 @@ describe('git push command', () => {
 
     it('maps a missing upstream to GIT_NO_UPSTREAM naming the current branch', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/x' }));
+      hasUpstream();
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 128: git push origin feature/x',
@@ -335,6 +355,7 @@ describe('git push command', () => {
 
     it('maps a rejected credential to GIT_AUTHENTICATION_FAILED', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/x' }));
+      hasUpstream();
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 128: git push origin feature/x',
@@ -356,10 +377,110 @@ describe('git push command', () => {
     });
   });
 
+  describe('upstream tracking', () => {
+    beforeEach(() => {
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+    });
+
+    it('sets the upstream when the current branch has none yet', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      noUpstream();
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([
+        ['push', '--set-upstream', 'origin', 'feature/new'],
+      ]);
+      expect(jsonWrite()).toEqual({
+        ok: true,
+        command: 'git.push',
+        remote: 'origin',
+        branch: 'feature/new',
+        upstream: 'origin/feature/new',
+      });
+      expect(exitMock).not.toHaveBeenCalled();
+    });
+
+    it('leaves an existing upstream alone', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/old' })); // branch
+      hasUpstream();
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([['push', 'origin', 'feature/old']]);
+      expect(jsonWrite()).toMatchObject({ upstream: null });
+    });
+
+    it('does not check for an upstream when -u is already passed', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync(['-u'], { from: 'user' });
+
+      expect(upstreamChecks()).toHaveLength(0);
+      expect(pushCalls().map(([, args]) => args)).toEqual([
+        ['push', '-u', 'origin', 'feature/new'],
+      ]);
+      expect(jsonWrite()).toMatchObject({ upstream: 'origin/feature/new' });
+    });
+
+    it('does not track a differently named remote branch', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync(['origin', 'release'], { from: 'user' });
+
+      expect(upstreamChecks()).toHaveLength(0);
+      expect(pushCalls().map(([, args]) => args)).toEqual([['push', 'origin', 'release']]);
+    });
+
+    it('does not set an upstream for a deletion', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync(['--delete'], { from: 'user' });
+
+      expect(upstreamChecks()).toHaveLength(0);
+      expect(pushCalls().map(([, args]) => args)).toEqual([
+        ['push', '--delete', 'origin', 'feature/new'],
+      ]);
+    });
+
+    it('keeps --set-upstream on the retry after a pull-rebase', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      noUpstream();
+      execaMock.mockRejectedValueOnce(
+        execaFailure(
+          'Command failed with exit code 1: git push --set-upstream origin feature/new',
+          'hint: Updates were rejected because the tip of your current branch is behind'
+        )
+      );
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'rebased' })); // pull --rebase
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push retry
+
+      const command = await pushCommand();
+      await command.parseAsync(['--on-reject', 'pull-rebase'], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([
+        ['push', '--set-upstream', 'origin', 'feature/new'],
+        ['push', '--set-upstream', 'origin', 'feature/new'],
+      ]);
+      expect(ui.info).toHaveBeenCalledWith('Set upstream branch: origin/feature/new');
+    });
+  });
+
   describe('--on-reject', () => {
     it('cancels without prompting when --on-reject cancel is passed', async () => {
       setRuntimeContext(buildRuntimeContext({ json: true }));
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' }));
+      hasUpstream();
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 1: git push origin feature/diverge',

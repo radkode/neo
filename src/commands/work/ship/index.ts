@@ -90,14 +90,15 @@ async function countCommitsAhead(base: string): Promise<number> {
   }
 }
 
-async function hasUpstream(branch: string): Promise<boolean> {
+/** The branch's configured upstream (e.g. `origin/main`), or null when it has none. */
+async function upstreamOf(branch: string): Promise<string | null> {
   try {
-    await execa('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+    const { stdout } = await execa('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return true;
+    return stdout.trim() || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -309,9 +310,13 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
   const pushSpinner = ui.spinner(`Pushing ${branch} to origin`);
   pushSpinner.start();
   try {
-    const pushArgs = (await hasUpstream(branch))
-      ? ['push', '--force-with-lease', 'origin', branch]
-      : ['push', '-u', 'origin', branch];
+    // A branch cut from origin/<base> can still track the base. Retarget it to its own
+    // remote branch, so status, pull, and later pushes compare against what was shipped.
+    const upstream = await upstreamOf(branch);
+    const pushArgs = ['push'];
+    if (upstream) pushArgs.push('--force-with-lease');
+    if (upstream !== `origin/${branch}`) pushArgs.push('-u');
+    pushArgs.push('origin', branch);
     await execa('git', pushArgs);
     pushSpinner.succeed(`Pushed ${branch}`);
     pushed = true;
@@ -451,6 +456,7 @@ Examples:
                     ? `Shipped ${result.branch} → PR opened: ${result.prUrl}`
                     : `Shipped ${result.branch} → existing PR: ${result.prUrl}`
                 );
+                ui.muted(`Next: neo gh pr status ${result.prUrl} --wait`);
               } else {
                 ui.success(`Shipped ${result.branch} (no PR created — gh unavailable)`);
               }

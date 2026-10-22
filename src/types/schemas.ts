@@ -291,9 +291,24 @@ export const ghPrMergeOptionsSchema = baseOptionsSchema.extend({
   strategy: z.enum(['merge', 'squash', 'rebase']).optional(),
   auto: z.boolean().optional(),
   deleteRemoteBranch: z.boolean().optional(),
+  head: z
+    .string()
+    .regex(/^[0-9a-f]{7,40}$/i, 'Head must be a commit SHA of 7 to 40 hex characters')
+    .optional(),
 });
 
 export type GhPrMergeOptions = z.infer<typeof ghPrMergeOptionsSchema>;
+
+/**
+ * gh pr status command options schema
+ */
+export const ghPrStatusOptionsSchema = baseOptionsSchema.extend({
+  wait: z.boolean().optional(),
+  interval: z.coerce.number().int().min(1, 'Interval must be at least 1 second').default(15),
+  timeout: z.coerce.number().int().min(1, 'Timeout must be at least 1 minute').default(30),
+});
+
+export type GhPrStatusOptions = z.infer<typeof ghPrStatusOptionsSchema>;
 
 /**
  * Profile name schema
