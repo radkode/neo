@@ -245,7 +245,7 @@ export async function executeWorkStart(
     const wtSpinner = ui.spinner(`Creating worktree at .worktrees/${lastSegment}`);
     wtSpinner.start();
     try {
-      await execa('git', ['worktree', 'add', '-b', branch, wtAbs, base]);
+      await execa('git', ['worktree', 'add', '--no-track', '-b', branch, wtAbs, base]);
       wtSpinner.succeed(`Created worktree at .worktrees/${lastSegment}`);
       worktreePath = wtAbs;
     } catch (error) {
@@ -256,7 +256,7 @@ export async function executeWorkStart(
     const coSpinner = ui.spinner(`Creating branch ${branch} from ${base}`);
     coSpinner.start();
     try {
-      await execa('git', ['checkout', '-b', branch, base]);
+      await execa('git', ['checkout', '--no-track', '-b', branch, base]);
       coSpinner.succeed(`Created branch ${branch} from ${base}`);
     } catch (error) {
       coSpinner.fail('Branch creation failed');

@@ -15,7 +15,7 @@ describe('createGhCommand', () => {
     const pr = createGhCommand().commands.find((child) => child.name() === 'pr');
 
     expect(pr?.description()).toBe('Pull request operations');
-    expect(pr?.commands.map((child) => child.name())).toEqual(['create', 'merge']);
+    expect(pr?.commands.map((child) => child.name())).toEqual(['create', 'merge', 'status']);
   });
 
   it('lists pr in the gh help output', () => {

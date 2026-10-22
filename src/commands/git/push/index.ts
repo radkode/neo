@@ -19,6 +19,43 @@ import {
   isConflictError,
 } from '@/utils/git-errors.js';
 
+/** Push options that make `--set-upstream` redundant or meaningless. */
+const NO_AUTO_UPSTREAM = new Set([
+  '-u',
+  '--set-upstream',
+  '-d',
+  '--delete',
+  '--mirror',
+  '--all',
+  '--branches',
+  '--prune',
+  '-n',
+  '--dry-run',
+]);
+
+/**
+ * True when pushing the current branch to its same-named remote branch and the branch has
+ * no upstream yet, so neo should add `--set-upstream` as `git push -u` would.
+ */
+async function needsUpstream(
+  branchName: string,
+  targetBranch: string,
+  passthrough: string[]
+): Promise<boolean> {
+  if (!branchName || targetBranch !== branchName) return false;
+  if (passthrough.some((arg) => NO_AUTO_UPSTREAM.has(arg))) return false;
+  const result = await execa(
+    'git',
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+    { reject: false, stdio: 'pipe' }
+  );
+  return result.exitCode !== 0;
+}
+
+function setsUpstream(passthrough: string[]): boolean {
+  return passthrough.includes('-u') || passthrough.includes('--set-upstream');
+}
+
 interface PushOptions {
   dryRun?: boolean | undefined;
   passthrough: string[];
@@ -113,6 +150,10 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       return success(undefined);
     }
 
+    if (await needsUpstream(branchName, targetBranch, options.passthrough)) {
+      options = { ...options, passthrough: ['--set-upstream', ...options.passthrough] };
+    }
+
     spinner.start();
 
     // Build push args: git push [passthrough options] remote branch
@@ -131,7 +172,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ui.muted(pushResult.stdout);
     }
 
-    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
+    if (setsUpstream(options.passthrough)) {
       ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
     }
 
@@ -140,6 +181,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       command: 'git.push',
       remote: remoteName,
       branch: targetBranch,
+      upstream: setsUpstream(options.passthrough) ? `${remoteName}/${targetBranch}` : null,
     });
 
     return success(undefined);
@@ -224,7 +266,7 @@ async function handlePullRebase(
       ui.muted(retryResult.stdout);
     }
 
-    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
+    if (setsUpstream(options.passthrough)) {
       // Extract remote and branch from pushArgs (last two elements)
       const remoteName = pushArgs[pushArgs.length - 2];
       const targetBranch = pushArgs[pushArgs.length - 1];
@@ -263,7 +305,7 @@ async function handleForcePush(pushArgs: string[], options: PushOptions): Promis
       ui.muted(forceResult.stdout);
     }
 
-    if (options.passthrough.includes('-u') || options.passthrough.includes('--set-upstream')) {
+    if (setsUpstream(options.passthrough)) {
       // Extract remote and branch from pushArgs (last two elements)
       const remoteName = pushArgs[pushArgs.length - 2];
       const targetBranch = pushArgs[pushArgs.length - 1];
