@@ -120,6 +120,7 @@ neo pnpm -- run dev
 neo pnpm --env-file /path/to/private.env -- install  # Explicit override
 
 neo alias setup --pnpm  # Opt in once; backs up ~/.zshrc and checks conflicts
+                        # (or opt in while installing: neo init --pnpm)
 source ~/.zshrc
 pnpm install           # Automatically loads this repository's .env.pnpm.local
 pnpm run dev
@@ -127,6 +128,8 @@ command pnpm install   # Bypass the alias and environment loading
 ```
 
 The alias is `pnpm="neo --quiet pnpm --"`, so pnpm flags are forwarded unchanged and repositories without a convention file keep working normally. The wrapper invokes the pnpm executable directly, without shell alias recursion. File values override inherited variables for the child only, with no variable interpolation. It does not export tokens to your shell or affect separate `gh` commands. Remove any previous global token exports yourself; the wrapper cannot remove them from its parent shell.
+
+`neo init` also offers the pnpm and yarn aliases, preselecting whichever ones `~/.zshrc` already has. Pass `--pnpm`/`--yarn` to add them or `--no-pnpm`/`--no-yarn` to remove them without the prompt; with `--yes` or `--non-interactive`, init keeps the current aliases.
 
 ### `neo yarn`
 
@@ -137,6 +140,7 @@ neo yarn -- install --immutable
 neo yarn --env-file /path/to/private.env -- install  # Explicit override
 
 neo alias setup --yarn  # Opt in once; combine with --pnpm to alias both
+                        # (or opt in while installing: neo init --yarn)
 source ~/.zshrc
 yarn install           # Automatically loads this repository's .env.yarn.local
 command yarn install   # Bypass the alias and environment loading

@@ -17,9 +17,11 @@ const mockVerifyGlobalCommand = vi.fn();
 const mockShellGetRcFile = vi.fn();
 const mockShellBackup = vi.fn();
 const mockShellApplyConfig = vi.fn();
+const mockShellHasAlias = vi.fn<(alias: string) => Promise<boolean>>();
 
 // Mock all dependencies
 vi.mock('@inquirer/prompts', () => ({
+  checkbox: vi.fn(),
   select: vi.fn(),
 }));
 
@@ -81,6 +83,7 @@ vi.mock('@/utils/shell.js', () => ({
       getRcFile: mockShellGetRcFile,
       backup: mockShellBackup,
       applyConfig: mockShellApplyConfig,
+      hasAlias: mockShellHasAlias,
     };
   }),
 }));
@@ -95,7 +98,8 @@ vi.mock('@/utils/skill-installer.js', () => ({
   installClaudeSkill: vi.fn().mockResolvedValue(null),
 }));
 
-import { select } from '@inquirer/prompts';
+import { Command } from '@commander-js/extra-typings';
+import { checkbox, select } from '@inquirer/prompts';
 import { configManager } from '@/utils/config.js';
 import { CompletionGenerator } from '@/utils/completions.js';
 import { installClaudeSkill } from '@/utils/skill-installer.js';
@@ -141,6 +145,8 @@ describe('createInitCommand', () => {
     mockShellGetRcFile.mockReturnValue('/home/user/.zshrc');
     mockShellBackup.mockResolvedValue('/home/user/.zshrc.backup');
     mockShellApplyConfig.mockResolvedValue(undefined);
+    mockShellHasAlias.mockResolvedValue(false);
+    vi.mocked(checkbox).mockResolvedValue([]);
 
     vi.mocked(configManager.isInitialized).mockResolvedValue(false);
     vi.mocked(configManager.write).mockResolvedValue(undefined);
@@ -422,13 +428,17 @@ describe('createInitCommand', () => {
       });
     });
 
-    it('should create completion files', async () => {
+    it('should create completion files from the full command tree', async () => {
       const { createInitCommand } = await import('../../src/commands/init/index.js');
-      const command = createInitCommand();
+      const program = new Command('neo');
+      program.addCommand(createInitCommand());
 
-      await command.parseAsync([], { from: 'user' });
+      await program.parseAsync(['init'], { from: 'user' });
 
-      expect(CompletionGenerator.createCompletionFiles).toHaveBeenCalled();
+      expect(CompletionGenerator.createCompletionFiles).toHaveBeenCalledWith(
+        '/home/user/.config/neo/completions',
+        program
+      );
     });
 
     it('should apply shell configuration', async () => {
@@ -438,6 +448,92 @@ describe('createInitCommand', () => {
       await command.parseAsync([], { from: 'user' });
 
       expect(mockShellApplyConfig).toHaveBeenCalled();
+    });
+  });
+
+  describe('package manager aliases', () => {
+    const writtenAliases = () =>
+      vi.mocked(configManager.write).mock.calls[0][0].preferences.aliases;
+
+    it('should enable the requested aliases without prompting', async () => {
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync(['--pnpm', '--yarn'], { from: 'user' });
+
+      expect(checkbox).not.toHaveBeenCalled();
+      expect(writtenAliases()).toEqual({ n: true, pnpm: true, yarn: true });
+      expect(mockShellApplyConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preferences: expect.objectContaining({ aliases: { n: true, pnpm: true, yarn: true } }),
+        })
+      );
+      expect(ui.list).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          'Shell alias: pnpm → neo pnpm (loads .env.pnpm.local)',
+          'Shell alias: yarn → neo yarn (loads .env.yarn.local)',
+        ])
+      );
+    });
+
+    it('should disable an alias with --no-<tool> even when it is configured', async () => {
+      mockShellHasAlias.mockResolvedValue(true);
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync(['--no-yarn', '--pnpm'], { from: 'user' });
+
+      expect(checkbox).not.toHaveBeenCalled();
+      expect(writtenAliases()).toEqual({ n: true, pnpm: true, yarn: false });
+    });
+
+    it('should prompt only for undecided tools, defaulting to the current rc state', async () => {
+      mockShellHasAlias.mockImplementation(async (alias) => alias === 'yarn');
+      vi.mocked(checkbox).mockResolvedValueOnce(['yarn']);
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync([], { from: 'user' });
+
+      expect(checkbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          choices: [
+            { name: 'pnpm', value: 'pnpm', checked: false },
+            { name: 'yarn', value: 'yarn', checked: true },
+          ],
+        })
+      );
+      expect(writtenAliases()).toEqual({ n: true, pnpm: false, yarn: true });
+    });
+
+    it('should not prompt for a tool decided by a flag', async () => {
+      vi.mocked(checkbox).mockResolvedValueOnce(['pnpm']);
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync(['--yarn'], { from: 'user' });
+
+      expect(checkbox).toHaveBeenCalledWith(
+        expect.objectContaining({ choices: [{ name: 'pnpm', value: 'pnpm', checked: false }] })
+      );
+      expect(writtenAliases()).toEqual({ n: true, pnpm: true, yarn: true });
+    });
+
+    it('should keep the current rc state without prompting in non-interactive mode', async () => {
+      setRuntimeContext(buildRuntimeContext({ nonInteractive: true }));
+      mockShellHasAlias.mockImplementation(async (alias) => alias === 'yarn');
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync([], { from: 'user' });
+
+      expect(checkbox).not.toHaveBeenCalled();
+      expect(writtenAliases()).toEqual({ n: true, pnpm: false, yarn: true });
+    });
+
+    it('should keep the current rc state without prompting when --yes is active', async () => {
+      setRuntimeContext(buildRuntimeContext({ yes: true }));
+      const { createInitCommand } = await import('../../src/commands/init/index.js');
+
+      await createInitCommand().parseAsync([], { from: 'user' });
+
+      expect(checkbox).not.toHaveBeenCalled();
+      expect(writtenAliases()).toEqual({ n: true, pnpm: false, yarn: false });
     });
   });
 

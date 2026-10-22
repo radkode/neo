@@ -33,6 +33,10 @@ export interface NeoConfig {
   preferences: {
     aliases: {
       n: boolean;
+      /** Route pnpm through `neo pnpm`; unset leaves whatever ~/.zshrc already has. */
+      pnpm?: boolean;
+      /** Route yarn through `neo yarn`; unset leaves whatever ~/.zshrc already has. */
+      yarn?: boolean;
     };
     /**
      * Banner display mode

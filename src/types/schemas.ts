@@ -17,6 +17,8 @@ export const initOptionsSchema = baseOptionsSchema.extend({
   force: z.boolean().optional(),
   skipInstall: z.boolean().optional(),
   skill: z.boolean().optional(),
+  pnpm: z.boolean().optional(),
+  yarn: z.boolean().optional(),
 });
 
 /**

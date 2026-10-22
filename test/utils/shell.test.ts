@@ -453,6 +453,68 @@ ${NEO_MARKER_END}
       expect(content).toContain('alias n="neo"');
       expect(content).toContain('fpath=(/path/to/completions $fpath)');
     });
+
+    it('should add enabled package manager aliases', async () => {
+      const config = {
+        preferences: {
+          aliases: { n: true, pnpm: true, yarn: true },
+        },
+        installation: {},
+      } as NeoConfig;
+
+      await shell.applyConfig(config);
+
+      const content = await readFile(rcFile, 'utf-8');
+      expect(content).toContain('alias pnpm="neo --quiet pnpm --"');
+      expect(content).toContain('alias yarn="neo --quiet yarn --"');
+    });
+
+    it('should remove a package manager alias that is explicitly disabled', async () => {
+      await writeFile(
+        rcFile,
+        `${NEO_MARKER_START}
+alias pnpm="neo --quiet pnpm --"
+alias yarn="neo --quiet yarn --"
+${NEO_MARKER_END}
+`
+      );
+
+      const config = {
+        preferences: {
+          aliases: { n: true, pnpm: true, yarn: false },
+        },
+        installation: {},
+      } as NeoConfig;
+
+      await shell.applyConfig(config);
+
+      const content = await readFile(rcFile, 'utf-8');
+      expect(content).toContain('alias pnpm="neo --quiet pnpm --"');
+      expect(content).not.toContain('alias yarn=');
+    });
+
+    it('should leave package manager aliases alone when the config does not set them', async () => {
+      await writeFile(
+        rcFile,
+        `${NEO_MARKER_START}
+alias yarn="neo --quiet yarn --"
+${NEO_MARKER_END}
+`
+      );
+
+      const config = {
+        preferences: {
+          aliases: { n: true },
+        },
+        installation: {},
+      } as NeoConfig;
+
+      await shell.applyConfig(config);
+
+      const content = await readFile(rcFile, 'utf-8');
+      expect(content).toContain('alias yarn="neo --quiet yarn --"');
+      expect(content).not.toContain('alias pnpm=');
+    });
   });
 
   describe('cleanup', () => {

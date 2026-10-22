@@ -1,5 +1,5 @@
 import { Command } from '@commander-js/extra-typings';
-import { select } from '@inquirer/prompts';
+import { checkbox, select } from '@inquirer/prompts';
 import { logger } from '@/utils/logger.js';
 import { ui } from '@/utils/ui.js';
 import { validate } from '@/utils/validation.js';
@@ -9,6 +9,11 @@ import { configManager, type NeoConfig } from '@/utils/config.js';
 import { GlobalInstaller } from '@/utils/installer.js';
 import { ZshIntegration } from '@/utils/shell.js';
 import { CompletionGenerator } from '@/utils/completions.js';
+import { getRootProgram } from '@/utils/root-program.js';
+import {
+  PACKAGE_MANAGER_ALIAS_NAMES,
+  type PackageManagerAlias,
+} from '@/utils/package-manager-aliases.js';
 import { installClaudeSkill } from '@/utils/skill-installer.js';
 import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
@@ -16,6 +21,42 @@ import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
 import { CommandError, ErrorCategory } from '@/core/errors/index.js';
 import { join } from 'path';
+
+/**
+ * Decides which package-manager aliases init leaves in ~/.zshrc. An explicit flag wins;
+ * otherwise the current state is kept, and an interactive run may change it.
+ */
+async function resolvePackageManagerAliases(
+  shell: ZshIntegration,
+  options: InitOptions
+): Promise<Record<PackageManagerAlias, boolean>> {
+  const resolved = {} as Record<PackageManagerAlias, boolean>;
+  const undecided: PackageManagerAlias[] = [];
+  for (const tool of PACKAGE_MANAGER_ALIAS_NAMES) {
+    const flag = options[tool];
+    if (flag === undefined) {
+      resolved[tool] = await shell.hasAlias(tool);
+      undecided.push(tool);
+    } else {
+      resolved[tool] = flag;
+    }
+  }
+
+  const rtCtx = getRuntimeContext();
+  if (undecided.length === 0 || rtCtx.yes || rtCtx.nonInteractive) {
+    return resolved;
+  }
+
+  const selected = await checkbox({
+    message:
+      'Alias package managers to load repository-local .env.<tool>.local files? (replaces an existing alias of the same name)',
+    choices: undecided.map((tool) => ({ name: tool, value: tool, checked: resolved[tool] })),
+  });
+  for (const tool of undecided) {
+    resolved[tool] = selected.includes(tool);
+  }
+  return resolved;
+}
 
 export function createInitCommand(): Command {
   const command = new Command('init');
@@ -25,6 +66,10 @@ export function createInitCommand(): Command {
     .option('--force', 'force reconfiguration if already initialized')
     .option('--skip-install', 'skip global installation (configuration only)')
     .option('--no-skill', 'skip installing the bundled Claude Code skill')
+    .option('--pnpm', 'alias pnpm to load repository-local .env.pnpm.local files')
+    .option('--no-pnpm', 'remove the pnpm alias added by neo')
+    .option('--yarn', 'alias yarn to load repository-local .env.yarn.local files')
+    .option('--no-yarn', 'remove the yarn alias added by neo')
     .action(
       runAction(async (options: unknown) => {
         const validatedOptions: InitOptions = validate(initOptionsSchema, options, 'init options');
@@ -83,6 +128,8 @@ export function createInitCommand(): Command {
               }
             }
           }
+
+          const packageManagerAliases = await resolvePackageManagerAliases(shell, validatedOptions);
 
           if (!validatedOptions.skipInstall) {
             const installSpinner = ui.spinner('Installing Neo CLI globally');
@@ -159,6 +206,7 @@ export function createInitCommand(): Command {
             preferences: {
               aliases: {
                 n: true,
+                ...packageManagerAliases,
               },
               banner: 'full',
               theme: 'auto',
@@ -180,7 +228,10 @@ export function createInitCommand(): Command {
           const completionSpinner = ui.spinner('Creating completion files');
           completionSpinner.start();
 
-          await CompletionGenerator.createCompletionFiles(newConfig.installation.completionsPath!);
+          await CompletionGenerator.createCompletionFiles(
+            newConfig.installation.completionsPath!,
+            getRootProgram(command)
+          );
 
           completionSpinner.succeed('Completion files created');
 
@@ -225,6 +276,9 @@ export function createInitCommand(): Command {
             'Global installation: neo command available',
             `Configuration: ${configManager.getConfigFile()}`,
             'Shell alias: n → neo',
+            ...PACKAGE_MANAGER_ALIAS_NAMES.filter((tool) => packageManagerAliases[tool]).map(
+              (tool) => `Shell alias: ${tool} → neo ${tool} (loads .env.${tool}.local)`
+            ),
             'Shell completions: enabled',
           ]);
 
@@ -240,6 +294,7 @@ export function createInitCommand(): Command {
             command: 'init',
             version: installStatus.packageVersion ?? null,
             configFile: configManager.getConfigFile(),
+            aliases: newConfig.preferences.aliases,
           });
         } catch (error: unknown) {
           // A NonInteractiveError is a contract signal, not a failure — let it
@@ -265,6 +320,9 @@ Examples:
 
   Configuration only (no global install):
     $ neo init --skip-install
+
+  Also alias pnpm and yarn to load repository-local .env.<tool>.local files:
+    $ neo init --pnpm --yarn
 `
   );
 
