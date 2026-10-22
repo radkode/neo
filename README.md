@@ -47,7 +47,7 @@ neo config list     # View your configuration
 
 ### `neo git push`
 
-Pulls before pushing. Prompts for confirmation on `main`. The first push of a branch with no upstream sets one to the same-named remote branch, as `git push -u` would.
+Pulls before pushing. Prompts for confirmation on `main`. The first push of a branch with no upstream sets one to the same-named remote branch, as `git push -u` would. A branch that still tracks the remote's default branch (as `git checkout -b x origin/main` leaves it) is retargeted the same way; tracking a different remote (a fork workflow) or another feature branch (a stack) is left alone.
 
 ```bash
 neo git push              # Safe push (confirms on main)
