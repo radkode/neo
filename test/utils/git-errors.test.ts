@@ -78,6 +78,18 @@ describe('detectGitError', () => {
     });
   });
 
+  describe('PERMISSION_DENIED', () => {
+    it.each([
+      'ERROR: Permission to o/r.git denied to someone.\nfatal: Could not read from remote repository.',
+      "remote: Permission to o/r.git denied to someone.\nfatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 403",
+      'remote: You are not allowed to push code to this project.',
+    ])('detects an accepted login without write access: %s', (stderr) => {
+      const error = Object.assign(new Error('Command failed'), { stderr });
+
+      expect(detectGitError(error, context).gitErrorCode).toBe(GitErrorCode.PERMISSION_DENIED);
+    });
+  });
+
   describe('AUTHENTICATION_FAILED', () => {
     it('should detect authentication errors', () => {
       const error = new Error('Authentication failed for repo');

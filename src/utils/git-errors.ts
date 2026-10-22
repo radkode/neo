@@ -19,6 +19,7 @@ export enum GitErrorCode {
   NOT_A_REPOSITORY = 'GIT_NOT_A_REPOSITORY',
   NO_UPSTREAM = 'GIT_NO_UPSTREAM',
   AUTHENTICATION_FAILED = 'GIT_AUTHENTICATION_FAILED',
+  PERMISSION_DENIED = 'GIT_PERMISSION_DENIED',
   NETWORK_ERROR = 'GIT_NETWORK_ERROR',
   MERGE_CONFLICT = 'GIT_MERGE_CONFLICT',
   REBASE_CONFLICT = 'GIT_REBASE_CONFLICT',
@@ -99,6 +100,22 @@ const GIT_ERROR_PATTERNS: GitErrorPattern[] = [
     patterns: ['not a git repository', 'fatal: not a git repository'],
     message: 'Not a git repository!',
     getSuggestions: () => ['Make sure you are in a git repository directory'],
+  },
+  {
+    // Before AUTHENTICATION_FAILED: GitHub follows "Permission to o/r.git denied to user"
+    // with "Could not read from remote repository", but the credentials were accepted.
+    code: GitErrorCode.PERMISSION_DENIED,
+    patterns: [
+      'denied to ',
+      'the requested url returned error: 403',
+      'you are not allowed to push',
+      'write access to repository not granted',
+    ],
+    message: 'Authenticated, but not allowed to push to this repository.',
+    getSuggestions: () => [
+      'Check that your account has write access to the repository',
+      'For a fork workflow, push to your fork remote instead',
+    ],
   },
   {
     code: GitErrorCode.AUTHENTICATION_FAILED,
@@ -454,6 +471,13 @@ export function isAuthenticationError(error: unknown): boolean {
 }
 
 /**
+ * Check if error is an accepted login without write access
+ */
+export function isPermissionDeniedError(error: unknown): boolean {
+  return isGitError(error, GitErrorCode.PERMISSION_DENIED);
+}
+
+/**
  * Check if error is upstream error
  */
 export function isNoUpstreamError(error: unknown): boolean {
@@ -534,13 +558,34 @@ export const GitErrors = {
     );
   },
 
-  noUpstream(commandName: string, branchName?: string): GitError {
-    return new GitError('No upstream branch configured!', GitErrorCode.NO_UPSTREAM, commandName, {
-      suggestions: [
-        `Set an upstream branch: git branch --set-upstream-to=origin/${branchName || 'your-branch'} ${branchName || 'your-branch'}`,
-        `Or push with upstream: git push -u origin ${branchName || 'your-branch'}`,
-      ],
-    });
+  noUpstream(commandName: string, branchName?: string, error?: unknown): GitError {
+    return new GitError(
+      'No upstream branch configured!',
+      GitErrorCode.NO_UPSTREAM,
+      commandName,
+      gitErrorOptions(
+        [
+          `Set an upstream branch: git branch --set-upstream-to=origin/${branchName || 'your-branch'} ${branchName || 'your-branch'}`,
+          `Or push with upstream: git push -u origin ${branchName || 'your-branch'}`,
+        ],
+        error
+      )
+    );
+  },
+
+  permissionDenied(commandName: string, error?: unknown): GitError {
+    return new GitError(
+      'Authenticated, but not allowed to push to this repository.',
+      GitErrorCode.PERMISSION_DENIED,
+      commandName,
+      gitErrorOptions(
+        [
+          'Check that your account has write access to the repository',
+          'For a fork workflow, push to your fork remote instead',
+        ],
+        error
+      )
+    );
   },
 
   networkError(commandName: string, error?: unknown): GitError {
@@ -597,17 +642,18 @@ export const GitErrors = {
     );
   },
 
-  nonFastForward(commandName: string): GitError {
+  nonFastForward(commandName: string, error?: unknown): GitError {
     return new GitError(
       'Push was rejected because the remote has new commits.',
       GitErrorCode.NON_FAST_FORWARD,
       commandName,
-      {
-        suggestions: [
+      gitErrorOptions(
+        [
           'Pull the latest changes: git pull --rebase',
           'Or force push if intentional: git push --force',
         ],
-      }
+        error
+      )
     );
   },
 

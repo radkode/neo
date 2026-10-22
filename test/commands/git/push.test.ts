@@ -297,6 +297,7 @@ describe('git push command', () => {
         destinations: [
           { action: 'update', branch: 'main', force: false, protected: true, source: 'main' },
         ],
+        recovery: null,
         upstream: null,
         replacedUpstream: null,
       });
@@ -696,6 +697,7 @@ describe('git push command', () => {
             source: 'feature/new',
           },
         ],
+        recovery: null,
         upstream: 'origin/feature/new',
         replacedUpstream: null,
       });
@@ -808,6 +810,137 @@ describe('git push command', () => {
     });
   });
 
+  describe('recovery outcome', () => {
+    beforeEach(() => {
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+    });
+
+    it('emits one success envelope after a pull-rebase recovery', async () => {
+      useGit({ branch: 'feature/diverge', pushes: [behind(), 'ok'] });
+
+      await run(['--yes', '--on-reject', 'pull-rebase']);
+
+      expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
+      expect(jsonWrite()).toMatchObject({
+        ok: true,
+        command: 'git.push',
+        branch: 'feature/diverge',
+        recovery: 'pull-rebase',
+      });
+      expect(exitMock).not.toHaveBeenCalled();
+    });
+
+    it('emits one success envelope after a force recovery', async () => {
+      useGit({ branch: 'feature/diverge', pushes: [behind(), 'ok'] });
+
+      await run(['--on-reject', 'force']);
+
+      expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
+      expect(jsonWrite()).toMatchObject({ ok: true, recovery: 'force' });
+    });
+
+    it('reports the rejection as a warning, not an error, when it goes on to recover', async () => {
+      setRuntimeContext(buildRuntimeContext());
+      useGit({ branch: 'feature/diverge', pushes: [behind(), 'ok'] });
+
+      await run(['--on-reject', 'force']);
+
+      expect(ui.error).not.toHaveBeenCalled();
+      expect(ui.warn).toHaveBeenCalledWith('Push was rejected because the remote has new commits.');
+    });
+
+    it('rebases onto the remote and branch the push targets', async () => {
+      useGit({ branch: 'feature/x', pushes: [behind(), 'ok'] });
+
+      await run(['--on-reject', 'pull-rebase', 'fork', 'HEAD:review/x']);
+
+      expect(
+        execaMock.mock.calls
+          .map(([, args]) => (Array.isArray(args) ? args.join(' ') : ''))
+          .filter((line) => line.startsWith('pull'))
+      ).toEqual(['pull --rebase fork review/x']);
+    });
+
+    it('reports a retry that is rejected again with git output', async () => {
+      useGit({ branch: 'feature/diverge', pushes: [behind(), behind()] });
+
+      await run(['--on-reject', 'pull-rebase']);
+
+      expect(exitMock).toHaveBeenCalledWith(1);
+      expect(stdoutWriteSpy).toHaveBeenCalledTimes(1);
+      expect(jsonWrite()).toMatchObject({
+        error: { code: 'GIT_NON_FAST_FORWARD', context: { stderr: expect.any(String) } },
+      });
+    });
+
+    it('keeps a scoped lease instead of replacing it with --force', async () => {
+      useGit({ branch: 'feature/diverge', pushes: [behind(), 'ok'] });
+
+      await run(['--force-with-lease=other:abc1234', '--on-reject', 'force']);
+
+      expect(pushCalls()).toEqual([
+        ['push', '--force-with-lease=other:abc1234', 'origin', 'feature/diverge'],
+        [
+          'push',
+          '--force-with-lease',
+          '--force-with-lease=other:abc1234',
+          'origin',
+          'feature/diverge',
+        ],
+      ]);
+      expect(pushCalls().flat()).not.toContain('--force');
+    });
+  });
+
+  describe('failure diagnostics', () => {
+    beforeEach(() => {
+      setRuntimeContext(buildRuntimeContext({ json: true }));
+    });
+
+    it('reports an accepted login without write access as GIT_PERMISSION_DENIED', async () => {
+      useGit({
+        pushes: [
+          execaFailure(
+            'Command failed with exit code 128: git push origin feature/x',
+            'ERROR: Permission to radkode/neo.git denied to jacek-bot.\nfatal: Could not read from remote repository.'
+          ),
+        ],
+      });
+
+      await run();
+
+      expect(exitMock).toHaveBeenCalledWith(1);
+      expect(jsonWrite()).toMatchObject({
+        error: {
+          code: 'GIT_PERMISSION_DENIED',
+          message: 'Authenticated, but not allowed to push to this repository.',
+          context: { stderr: expect.stringContaining('denied to jacek-bot') },
+        },
+      });
+    });
+
+    it('keeps git output on an authentication failure, with credentials redacted', async () => {
+      const failure = Object.assign(
+        execaFailure(
+          'Command failed with exit code 128: git push https://jacek:ghp_SECRET@github.com/o/r.git feature/x',
+          "fatal: Authentication failed for 'https://jacek:ghp_SECRET@github.com/o/r.git/'"
+        ),
+        { exitCode: 128 }
+      );
+      useGit({ pushes: [failure] });
+
+      await run();
+
+      const payload = jsonWrite() as { error: { code: string; context: Record<string, unknown> } };
+      expect(payload.error.code).toBe('GIT_AUTHENTICATION_FAILED');
+      expect(payload.error.context).toMatchObject({
+        exitCode: 128,
+        stderr: expect.stringContaining('Authentication failed'),
+      });
+      expect(JSON.stringify(payload)).not.toContain('ghp_SECRET');
+    });
+  });
+
   describe('--on-reject', () => {
     it('cancels without prompting when --on-reject cancel is passed', async () => {
       setRuntimeContext(buildRuntimeContext({ json: true }));
@@ -819,7 +952,12 @@ describe('git push command', () => {
       expect(ui.info).toHaveBeenCalledWith('Push cancelled. No changes were pushed.');
       expect(pushCalls()).toHaveLength(1);
       expect(exitMock).toHaveBeenCalledWith(1);
-      expect(jsonWrite()).toMatchObject({ error: { code: 'GIT_UNKNOWN_ERROR' } });
+      expect(jsonWrite()).toMatchObject({
+        error: {
+          code: 'GIT_NON_FAST_FORWARD',
+          context: { stderr: expect.stringContaining('tip of your current branch is behind') },
+        },
+      });
     });
 
     it('rejects an unrecognized strategy at parse time', async () => {

@@ -12,6 +12,7 @@ import {
   GitErrors,
   isNotGitRepository,
   isAuthenticationError,
+  isPermissionDeniedError,
   isNetworkError,
 } from '@/utils/git-errors.js';
 import { executeVerify } from '@/commands/verify/index.js';
@@ -322,8 +323,9 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
     pushed = true;
   } catch (error) {
     pushSpinner.fail('Push failed');
-    if (isAuthenticationError(error)) throw GitErrors.authenticationFailed('work ship');
-    if (isNetworkError(error)) throw GitErrors.networkError('work ship');
+    if (isPermissionDeniedError(error)) throw GitErrors.permissionDenied('work ship', error);
+    if (isAuthenticationError(error)) throw GitErrors.authenticationFailed('work ship', error);
+    if (isNetworkError(error)) throw GitErrors.networkError('work ship', error);
     throw GitErrors.unknown('work ship', error);
   }
 
