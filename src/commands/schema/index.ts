@@ -10,6 +10,7 @@ import { Command, Option } from '@commander-js/extra-typings';
 import packageJson from '../../../package.json' with { type: 'json' };
 import { emitJson } from '@/utils/output.js';
 import { ui } from '@/utils/ui.js';
+import { getRootProgram } from '@/utils/root-program.js';
 
 interface SchemaOption {
   flags: string;
@@ -142,14 +143,6 @@ export async function buildFullSchema(root: Command): Promise<SchemaRoot> {
       },
     },
   };
-}
-
-function getRootProgram(cmd: Command): Command {
-  let current: Command = cmd;
-  while (current.parent) {
-    current = current.parent as Command;
-  }
-  return current;
 }
 
 function renderOptionMarkdown(opt: SchemaOption): string {

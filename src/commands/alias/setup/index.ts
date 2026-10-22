@@ -9,6 +9,7 @@ import { getRuntimeContext } from '@/utils/runtime-context.js';
 import { NonInteractiveError } from '@/utils/prompt.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { PACKAGE_MANAGER_ALIASES } from '@/utils/package-manager-aliases.js';
 
 interface AliasDefinition {
   readonly [alias: string]: string;
@@ -71,8 +72,8 @@ export function createSetupCommand(): Command {
         );
         const aliases: AliasDefinition = {
           ...ALIASES,
-          ...(validatedOptions.pnpm ? { pnpm: 'neo --quiet pnpm --' } : {}),
-          ...(validatedOptions.yarn ? { yarn: 'neo --quiet yarn --' } : {}),
+          ...(validatedOptions.pnpm ? { pnpm: PACKAGE_MANAGER_ALIASES.pnpm } : {}),
+          ...(validatedOptions.yarn ? { yarn: PACKAGE_MANAGER_ALIASES.yarn } : {}),
         };
         const shell = new ZshIntegration();
 

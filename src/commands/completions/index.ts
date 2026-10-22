@@ -6,6 +6,7 @@ import { configManager } from '@/utils/config.js';
 import { ZshIntegration, BashIntegration, FishIntegration } from '@/utils/shell.js';
 import { emitJson } from '@/utils/output.js';
 import { runAction } from '@/utils/run-action.js';
+import { getRootProgram } from '@/utils/root-program.js';
 import { join } from 'path';
 
 const SUPPORTED_SHELLS = ['zsh', 'bash', 'fish'] as const;
@@ -16,14 +17,6 @@ function detectShell(): ShellType {
   if (shell.includes('fish')) return 'fish';
   if (shell.includes('bash')) return 'bash';
   return 'zsh'; // default
-}
-
-function getRootProgram(command: Command): Command {
-  let current: Command = command;
-  while (current.parent) {
-    current = current.parent as Command;
-  }
-  return current;
 }
 
 export function createCompletionsCommand(): Command {

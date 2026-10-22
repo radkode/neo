@@ -4,6 +4,10 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { logger } from '@/utils/logger.js';
 import type { NeoConfig } from '@/utils/config.js';
+import {
+  PACKAGE_MANAGER_ALIASES,
+  PACKAGE_MANAGER_ALIAS_NAMES,
+} from '@/utils/package-manager-aliases.js';
 
 export interface ShellIntegration {
   hasAlias(alias: string): Promise<boolean>;
@@ -301,6 +305,15 @@ compinit`;
       await this.addAlias('n', 'neo');
     } else {
       await this.removeAlias('n');
+    }
+
+    for (const tool of PACKAGE_MANAGER_ALIAS_NAMES) {
+      const enabled = config.preferences.aliases[tool];
+      if (enabled === true) {
+        await this.addAlias(tool, PACKAGE_MANAGER_ALIASES[tool]);
+      } else if (enabled === false) {
+        await this.removeAlias(tool);
+      }
     }
 
     // Add completions if path is configured
