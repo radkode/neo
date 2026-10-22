@@ -57,7 +57,7 @@ function useExeca(overrides: Record<string, ExecaResponse | Error> = {}): void {
   );
 }
 
-type ExecaCall = [string, string[]];
+type ExecaCall = [string, string[], { input?: string }?];
 
 function callsTo(command: string): ExecaCall[] {
   return (execaMock.mock.calls as unknown as ExecaCall[]).filter(
@@ -280,9 +280,10 @@ describe('executeAiPr', () => {
       'main',
       '--title',
       TITLE,
-      '--body',
-      BODY,
+      '--body-file',
+      '-',
     ]);
+    expect(ghCreateCall()?.[2]).toEqual({ input: BODY });
     expect(result).toMatchObject({ created: true, prUrl: PR_URL });
     expect(confirmMock).not.toHaveBeenCalled();
     expect(uiMock._spinner.succeed).toHaveBeenCalledWith(`Created PR: ${PR_URL}`);

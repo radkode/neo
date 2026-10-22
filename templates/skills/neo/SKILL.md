@@ -31,19 +31,19 @@ For one-off commits outside this flow, use `neo git commit` (interactive convent
 
 ## Command map
 
-| Want to...                      | Use                                       | Instead of                                       |
-| ------------------------------- | ----------------------------------------- | ------------------------------------------------ |
-| Push safely                     | `neo git push`                            | `git push`                                       |
-| Pull without losing WIP         | `neo git pull`                            | `git stash && git pull && git stash pop`         |
-| Commit with conventional format | `neo git commit` (or `--ai`)              | `git commit -m`                                  |
-| Open a PR                       | `neo gh pr create --title ... --body ...` | `gh pr create`                                   |
-| Check CI, reviews, mergeability | `neo gh pr status` (`--wait` to block)    | `gh pr checks` / `gh pr view` / polling          |
-| Merge a PR safely               | `neo gh pr merge --strategy squash`       | `gh pr merge`                                    |
-| Generate a PR description       | `neo ai pr --json --no-create`            | hand-writing one                                 |
-| Start a new branch              | `neo work start <name>`                   | `git checkout -b`                                |
-| Ship a finished branch          | `neo work ship`                           | push + `gh pr create` manually                   |
-| Clean up after merge            | `neo work finish`                         | `git checkout main && git pull && git branch -D` |
-| Verify the repo is healthy      | `neo verify` / `neo doctor`               | ad-hoc checks                                    |
+| Want to...                      | Use                                              | Instead of                                       |
+| ------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| Push safely                     | `neo git push`                                   | `git push`                                       |
+| Pull without losing WIP         | `neo git pull`                                   | `git stash && git pull && git stash pop`         |
+| Commit with conventional format | `neo git commit` (or `--ai`)                     | `git commit -m`                                  |
+| Open a PR                       | `neo gh pr create --title ... --body-file pr.md` | `gh pr create`                                   |
+| Check CI, reviews, mergeability | `neo gh pr status` (`--wait` to block)           | `gh pr checks` / `gh pr view` / polling          |
+| Merge a PR safely               | `neo gh pr merge --strategy squash`              | `gh pr merge`                                    |
+| Generate a PR description       | `neo ai pr --json --no-create`                   | hand-writing one                                 |
+| Start a new branch              | `neo work start <name>`                          | `git checkout -b`                                |
+| Ship a finished branch          | `neo work ship`                                  | push + `gh pr create` manually                   |
+| Clean up after merge            | `neo work finish`                                | `git checkout main && git pull && git branch -D` |
+| Verify the repo is healthy      | `neo verify` / `neo doctor`                      | ad-hoc checks                                    |
 
 ## Agent patterns
 
@@ -73,6 +73,7 @@ Exit codes: `0` success, `1` failure, `2` non-interactive prompt required (the J
 
 - Don't `git push` to bypass neo's protected-branch confirmation. If you need to push to main, use `neo git push --allow-main`, or `git config neo.allowMainPush true` in a repo whose working branch is main. Not `--force`: that is not a neo flag, so it passes straight through to git as a real force-push. The guard follows the destination, so `HEAD:main` from a feature branch needs `--allow-main` too.
 - Don't open PRs with `gh pr create` when `neo work ship` is the right call. Ship handles verify + changeset + push + PR in one step.
+- Don't squeeze a multi-paragraph PR body into `--body "..."`. Write it to a file and pass `--body-file pr.md` (or `--body-file -` on stdin); neo hands it to gh on stdin, so it stays out of argv and logs. `--head <branch>` opens a PR for a branch that isn't checked out.
 - Don't poll `gh pr checks` or `gh pr view` to see whether a PR is green. `neo gh pr status --wait` blocks until checks settle and exits `0` only when the PR is ready or merged.
 - Don't merge PRs with raw `gh pr merge`. Neo checks readiness, pins the inspected head commit, and preserves local cleanup for `neo work finish`.
 - Don't skip changesets. `neo work ship` enforces them; if a change doesn't affect a published package, create an empty changeset (`---\n---`).

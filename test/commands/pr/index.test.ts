@@ -59,7 +59,9 @@ describe('createPrAliasCommand', () => {
       expect(flags).toEqual([
         '-t, --title <title>',
         '-b, --body <body>',
+        '-F, --body-file <path>',
         '-B, --base <branch>',
+        '-H, --head <branch>',
         '-d, --draft',
         '-r, --reviewer <reviewers...>',
         '-l, --label <labels...>',
@@ -86,6 +88,8 @@ describe('createPrAliasCommand', () => {
           'Add X',
           '--body',
           'Why X',
+          '--head',
+          'feature/x',
           '--base',
           'main',
           '--draft',
@@ -102,6 +106,7 @@ describe('createPrAliasCommand', () => {
       expect(executeGhPrCreate).toHaveBeenCalledWith({
         title: 'Add X',
         body: 'Why X',
+        head: 'feature/x',
         base: 'main',
         draft: true,
         reviewer: ['alice', 'bob'],

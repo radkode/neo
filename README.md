@@ -245,7 +245,7 @@ The schema follows an OpenCLI-lite shape: every command, option, argument, and g
 
 ```bash
 neo git push --yes --json \
-  && neo gh pr create --title "Add X" --body "…" --yes --json \
+  && neo gh pr create --title "Add X" --body-file pr.md --yes --json \
   | jq -r '.url'
 ```
 

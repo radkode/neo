@@ -273,6 +273,12 @@ export type AiModel = z.infer<typeof aiModelSchema>;
 export const ghPrCreateOptionsSchema = baseOptionsSchema.extend({
   title: z.string().min(1, 'PR title cannot be empty').optional(),
   body: z.string().optional(),
+  bodyFile: z.string().min(1, 'Body file path cannot be empty').optional(),
+  head: z
+    .string()
+    .min(1, 'Head branch cannot be empty')
+    .regex(/^[a-zA-Z0-9/._:-]+$/, 'Invalid head branch format')
+    .optional(),
   base: z
     .string()
     .min(1, 'Base branch cannot be empty')

@@ -335,13 +335,19 @@ describe('executeWorkShip', () => {
     expect(result.prCreated).toBe(true);
     expect(result.prUrl).toBe('https://github.com/x/y/pull/7');
 
-    const createCall = execaMock.mock.calls.find(
+    const createCall = (
+      execaMock.mock.calls as unknown as Array<[string, string[], { input?: string }?]>
+    ).find(
       ([cmd, args]) =>
         cmd === 'gh' && Array.isArray(args) && args[0] === 'pr' && args[1] === 'create'
     );
     expect(createCall).toBeTruthy();
     expect(createCall?.[1]).toContain('--title');
     expect(createCall?.[1]).toContain('feat: add foo');
+    // The body reaches gh on stdin, never as an argument.
+    expect(createCall?.[1]).toContain('--body-file');
+    expect(createCall?.[1]).not.toContain('--body');
+    expect(createCall?.[2]?.input).toContain('- feat: add foo');
   });
 
   it('warns and skips PR creation when gh is unavailable', async () => {
