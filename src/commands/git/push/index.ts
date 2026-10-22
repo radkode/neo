@@ -33,23 +33,59 @@ const NO_AUTO_UPSTREAM = new Set([
   '--dry-run',
 ]);
 
+/** Whether `branch` is the default branch of `remote`, per `<remote>/HEAD` or, unset, main/master. */
+async function isDefaultBranch(remote: string, branch: string): Promise<boolean> {
+  const head = await execa(
+    'git',
+    ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`],
+    {
+      reject: false,
+      stdio: 'pipe',
+    }
+  );
+  const prefix = `${remote}/`;
+  const resolved = head.exitCode === 0 ? head.stdout.trim() : '';
+  if (resolved.startsWith(prefix)) return resolved.slice(prefix.length) === branch;
+  return branch === 'main' || branch === 'master';
+}
+
+interface UpstreamChange {
+  /** The upstream being replaced, e.g. `origin/main`, or null when the branch had none. */
+  replaces: string | null;
+}
+
 /**
- * True when pushing the current branch to its same-named remote branch and the branch has
- * no upstream yet, so neo should add `--set-upstream` as `git push -u` would.
+ * Decides whether neo should add `--set-upstream` when pushing the current branch to its
+ * same-named remote branch: when the branch has no upstream yet, as `git push -u` would, or
+ * when it still tracks the remote's default branch (inherited from `git checkout -b x
+ * origin/main`). Any other upstream is left alone: a different remote is a fork workflow,
+ * and another feature branch is a stack.
  */
-async function needsUpstream(
+async function upstreamChange(
   branchName: string,
+  remoteName: string,
   targetBranch: string,
   passthrough: string[]
-): Promise<boolean> {
-  if (!branchName || targetBranch !== branchName) return false;
-  if (passthrough.some((arg) => NO_AUTO_UPSTREAM.has(arg))) return false;
-  const result = await execa(
+): Promise<UpstreamChange | null> {
+  if (!branchName || targetBranch !== branchName) return null;
+  if (passthrough.some((arg) => NO_AUTO_UPSTREAM.has(arg))) return null;
+
+  const tracking = await execa(
     'git',
-    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+    [
+      'for-each-ref',
+      '--format=%(upstream:remotename)%00%(upstream:remoteref)',
+      `refs/heads/${branchName}`,
+    ],
     { reject: false, stdio: 'pipe' }
   );
-  return result.exitCode !== 0;
+  const [upstreamRemote = '', upstreamRef = ''] = tracking.stdout.trim().split('\0');
+  if (!upstreamRef) return { replaces: null };
+
+  const upstreamBranch = upstreamRef.replace(/^refs\/heads\//, '');
+  if (upstreamBranch === targetBranch || upstreamRemote !== remoteName) return null;
+  if (!(await isDefaultBranch(remoteName, upstreamBranch))) return null;
+  return { replaces: `${upstreamRemote}/${upstreamBranch}` };
 }
 
 function setsUpstream(passthrough: string[]): boolean {
@@ -150,7 +186,8 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       return success(undefined);
     }
 
-    if (await needsUpstream(branchName, targetBranch, options.passthrough)) {
+    const change = await upstreamChange(branchName, remoteName, targetBranch, options.passthrough);
+    if (change) {
       options = { ...options, passthrough: ['--set-upstream', ...options.passthrough] };
     }
 
@@ -173,7 +210,9 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
     }
 
     if (setsUpstream(options.passthrough)) {
-      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
+      ui.info(
+        `Set upstream branch: ${remoteName}/${targetBranch}${change?.replaces ? ` (was ${change.replaces})` : ''}`
+      );
     }
 
     emitJson({
@@ -182,6 +221,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       remote: remoteName,
       branch: targetBranch,
       upstream: setsUpstream(options.passthrough) ? `${remoteName}/${targetBranch}` : null,
+      replacedUpstream: change?.replaces ?? null,
     });
 
     return success(undefined);

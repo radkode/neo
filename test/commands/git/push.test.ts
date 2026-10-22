@@ -80,18 +80,16 @@ describe('git push command', () => {
   const pushCalls = () =>
     execaMock.mock.calls.filter(([_cmd, args]) => Array.isArray(args) && args[0] === 'push');
 
-  /** The branch already tracks a remote branch, so neo leaves the push args alone. */
-  const hasUpstream = () =>
-    execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/tracked' })); // rev-parse @{upstream}
+  /** The branch's upstream as `git for-each-ref` reports it: remote, NUL, then the remote ref. */
+  const tracks = (remote: string, branch: string) =>
+    execaMock.mockResolvedValueOnce(execaResult({ stdout: `${remote}\0refs/heads/${branch}` })); // for-each-ref
+  /** The branch already tracks its same-named remote branch, so neo leaves the push args alone. */
+  const hasUpstream = (branch: string) => tracks('origin', branch);
   /** The branch has no upstream yet, so neo adds --set-upstream. */
-  const noUpstream = () =>
-    execaMock.mockResolvedValueOnce(
-      execaResult({ exitCode: 128, stderr: 'fatal: no upstream configured for branch' })
-    ); // rev-parse @{upstream}
+  const noUpstream = () => execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // for-each-ref
   const upstreamChecks = () =>
     execaMock.mock.calls.filter(
-      ([_cmd, args]) =>
-        Array.isArray(args) && args[0] === 'rev-parse' && args.includes('@{upstream}')
+      ([_cmd, args]) => Array.isArray(args) && args[0] === 'for-each-ref'
     );
 
   const jsonWrite = (index = 0): unknown =>
@@ -119,7 +117,7 @@ describe('git push command', () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
     execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
-    hasUpstream();
+    hasUpstream('feature/diverge');
     const rejectionError = new Error('non-fast-forward');
     (rejectionError as { shortMessage?: string }).shortMessage = 'fetch first';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
@@ -159,7 +157,7 @@ describe('git push command', () => {
     const { createPushCommand } = await import('../../../src/commands/git/push/index.js');
 
     execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' })); // branch
-    hasUpstream();
+    hasUpstream('feature/diverge');
     const rejectionError = new Error('rejected');
     (rejectionError as { shortMessage?: string }).shortMessage = 'non-fast-forward';
     execaMock.mockRejectedValueOnce(rejectionError); // push rejected
@@ -234,7 +232,7 @@ describe('git push command', () => {
 
     it('pushes to main without prompting when --force-main is passed', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' }));
-      hasUpstream();
+      hasUpstream('main');
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'Everything up-to-date' }));
       setRuntimeContext(buildRuntimeContext({ json: true }));
 
@@ -254,6 +252,7 @@ describe('git push command', () => {
         remote: 'origin',
         branch: 'main',
         upstream: null,
+        replacedUpstream: null,
       });
       expect(exitMock).not.toHaveBeenCalled();
     });
@@ -283,7 +282,7 @@ describe('git push command', () => {
 
     it('pushes to main once the confirmation is accepted', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'main' }));
-      hasUpstream();
+      hasUpstream('main');
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'pushed' }));
       confirmMock.mockResolvedValueOnce(true);
 
@@ -329,7 +328,7 @@ describe('git push command', () => {
 
     it('maps a missing upstream to GIT_NO_UPSTREAM naming the current branch', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/x' }));
-      hasUpstream();
+      hasUpstream('feature/x');
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 128: git push origin feature/x',
@@ -355,7 +354,7 @@ describe('git push command', () => {
 
     it('maps a rejected credential to GIT_AUTHENTICATION_FAILED', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/x' }));
-      hasUpstream();
+      hasUpstream('feature/x');
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 128: git push origin feature/x',
@@ -399,13 +398,89 @@ describe('git push command', () => {
         remote: 'origin',
         branch: 'feature/new',
         upstream: 'origin/feature/new',
+        replacedUpstream: null,
       });
       expect(exitMock).not.toHaveBeenCalled();
     });
 
+    it('retargets a branch that still tracks the default branch', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      tracks('origin', 'main');
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/main' })); // symbolic-ref origin/HEAD
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([
+        ['push', '--set-upstream', 'origin', 'feature/new'],
+      ]);
+      expect(jsonWrite()).toMatchObject({
+        upstream: 'origin/feature/new',
+        replacedUpstream: 'origin/main',
+      });
+    });
+
+    it('falls back to main and master when the remote HEAD is unknown', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      tracks('origin', 'master');
+      execaMock.mockResolvedValueOnce(
+        execaResult({
+          exitCode: 1,
+          stderr: 'fatal: ref refs/remotes/origin/HEAD is not a symbolic ref',
+        })
+      ); // symbolic-ref origin/HEAD
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(jsonWrite()).toMatchObject({ replacedUpstream: 'origin/master' });
+    });
+
+    it('reports the replaced upstream in text mode', async () => {
+      setRuntimeContext(buildRuntimeContext());
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      tracks('origin', 'main');
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/main' })); // symbolic-ref origin/HEAD
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(ui.info).toHaveBeenCalledWith(
+        'Set upstream branch: origin/feature/new (was origin/main)'
+      );
+    });
+
+    it('leaves a stacked branch tracking another feature branch alone', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/child' })); // branch
+      tracks('origin', 'feature/parent');
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'origin/main' })); // symbolic-ref origin/HEAD
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync([], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([['push', 'origin', 'feature/child']]);
+      expect(jsonWrite()).toMatchObject({ upstream: null, replacedUpstream: null });
+    });
+
+    it('leaves a fork workflow alone: tracking origin/main while pushing to another remote', async () => {
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/new' })); // branch
+      tracks('origin', 'main');
+      execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
+
+      const command = await pushCommand();
+      await command.parseAsync(['fork'], { from: 'user' });
+
+      expect(pushCalls().map(([, args]) => args)).toEqual([['push', 'fork', 'feature/new']]);
+      expect(jsonWrite()).toMatchObject({ upstream: null, replacedUpstream: null });
+    });
+
     it('leaves an existing upstream alone', async () => {
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/old' })); // branch
-      hasUpstream();
+      hasUpstream('feature/old');
       execaMock.mockResolvedValueOnce(execaResult({ stdout: '' })); // push
 
       const command = await pushCommand();
@@ -480,7 +555,7 @@ describe('git push command', () => {
     it('cancels without prompting when --on-reject cancel is passed', async () => {
       setRuntimeContext(buildRuntimeContext({ json: true }));
       execaMock.mockResolvedValueOnce(execaResult({ stdout: 'feature/diverge' }));
-      hasUpstream();
+      hasUpstream('feature/diverge');
       execaMock.mockRejectedValueOnce(
         execaFailure(
           'Command failed with exit code 1: git push origin feature/diverge',
