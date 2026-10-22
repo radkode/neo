@@ -52,7 +52,7 @@ export const PUSH_FLAGS_WITH_VALUE = new Set([
   '--repo',
 ]);
 
-function isForceFlag(arg: string): boolean {
+export function isForceFlag(arg: string): boolean {
   if (/^--force(-with-lease(=.*)?|-if-includes)?$/.test(arg)) return true;
   // Bundled short flags such as -fu.
   return /^-[A-Za-z]+$/.test(arg) && arg.slice(1).includes('f');

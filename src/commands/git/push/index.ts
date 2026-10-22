@@ -17,10 +17,12 @@ import {
   isNonFastForwardError,
   isAuthenticationError,
   isConflictError,
+  isPermissionDeniedError,
 } from '@/utils/git-errors.js';
 import {
   allowsMainPush,
   guardFor,
+  isForceFlag,
   planPush,
   PUSH_FLAGS_WITH_VALUE,
   type GuardDecision,
@@ -230,6 +232,43 @@ async function reportDryRun(
   return success(undefined);
 }
 
+type Recovery = 'pull-rebase' | 'force';
+
+/** What a successful push needs to report, whichever attempt succeeded. */
+interface PushReport {
+  change: UpstreamChange | null;
+  plan: PushPlan;
+  remote: string;
+  soleRefspec: string;
+}
+
+/** Reports a push that went through. Every success path ends here, so --json always gets one envelope. */
+function reportPushed(
+  report: PushReport,
+  options: PushOptions,
+  recovery: Recovery | null
+): Result<void> {
+  const upstream = setsUpstream(options.passthrough)
+    ? `${report.remote}/${report.soleRefspec}`
+    : null;
+  if (upstream) {
+    ui.info(
+      `Set upstream branch: ${upstream}${report.change?.replaces ? ` (was ${report.change.replaces})` : ''}`
+    );
+  }
+  emitJson({
+    ok: true,
+    command: 'git.push',
+    remote: report.remote,
+    branch: report.soleRefspec || null,
+    destinations: report.plan.destinations,
+    recovery,
+    upstream,
+    replacedUpstream: report.change?.replaces ?? null,
+  });
+  return success(undefined);
+}
+
 /**
  * Execute the push command logic
  * Returns a Result indicating success or failure
@@ -241,6 +280,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
   let guard: GuardDecision = { actions: [], level: 'none' };
   /** Whether --allow-main or a confirmation, not just neo.allowMainPush, authorized the push. */
   let explicitlyAuthorized = false;
+  let report: PushReport | undefined;
 
   try {
     const { stdout: currentBranch } = await execa('git', ['branch', '--show-current']);
@@ -286,6 +326,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
     if (change) {
       options = { ...options, passthrough: ['--set-upstream', ...options.passthrough] };
     }
+    report = { change, plan, remote: remoteName, soleRefspec };
 
     spinner.start();
 
@@ -305,23 +346,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ui.muted(pushResult.stdout);
     }
 
-    if (setsUpstream(options.passthrough)) {
-      ui.info(
-        `Set upstream branch: ${remoteName}/${soleRefspec}${change?.replaces ? ` (was ${change.replaces})` : ''}`
-      );
-    }
-
-    emitJson({
-      ok: true,
-      command: 'git.push',
-      remote: remoteName,
-      branch: soleRefspec || null,
-      destinations: plan.destinations,
-      upstream: setsUpstream(options.passthrough) ? `${remoteName}/${soleRefspec}` : null,
-      replacedUpstream: change?.replaces ?? null,
-    });
-
-    return success(undefined);
+    return reportPushed(report, options, null);
   } catch (error: unknown) {
     spinner.stop();
 
@@ -333,16 +358,17 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
 
     // Use shared git error detection
     if (isNotGitRepository(error)) {
-      return failure(GitErrors.notARepository('push'));
+      return failure(GitErrors.notARepository('push', error));
     }
 
     if (isNoUpstreamError(error)) {
-      return failure(GitErrors.noUpstream('push', branchName));
+      return failure(GitErrors.noUpstream('push', branchName, error));
     }
 
-    if (isNonFastForwardError(error)) {
-      ui.error('Push was rejected because the remote has new commits.');
-      ui.warn('Choose how to resolve the divergence:');
+    if (isNonFastForwardError(error) && report) {
+      // Not the outcome yet: neo is about to resolve it, and reports the result once.
+      ui.warn('Push was rejected because the remote has new commits.');
+      if (!options.onReject) ui.warn('Choose how to resolve the divergence:');
 
       const resolution: 'pull-rebase' | 'force' | 'cancel' = options.onReject
         ? options.onReject
@@ -358,7 +384,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
           });
 
       if (resolution === 'pull-rebase') {
-        return handlePullRebase(branchName, pushArgs, options);
+        return handlePullRebase(branchName, pushArgs, options, report);
       }
 
       if (resolution === 'force') {
@@ -373,18 +399,22 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
           };
           if ((await authorizeProtectedPush(forceGuard, options)) === 'cancelled') {
             ui.info('Push cancelled. No changes were pushed.');
-            return failure(GitErrors.unknown('push'));
+            return failure(GitErrors.nonFastForward('push', error));
           }
         }
-        return handleForcePush(pushArgs, options);
+        return handleForcePush(pushArgs, options, report);
       }
 
       ui.info('Push cancelled. No changes were pushed.');
-      return failure(GitErrors.unknown('push'));
+      return failure(GitErrors.nonFastForward('push', error));
+    }
+
+    if (isPermissionDeniedError(error)) {
+      return failure(GitErrors.permissionDenied('push', error));
     }
 
     if (isAuthenticationError(error)) {
-      return failure(GitErrors.authenticationFailed('push'));
+      return failure(GitErrors.authenticationFailed('push', error));
     }
 
     return failure(GitErrors.unknown('push', error));
@@ -397,77 +427,100 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
 async function handlePullRebase(
   branchName: string,
   pushArgs: string[],
-  options: PushOptions
+  options: PushOptions,
+  report: PushReport
 ): Promise<Result<void>> {
-  const rebaseSpinner = ui.spinner('Pulling latest changes with rebase');
+  // Rebase onto the branch the push targets, on the remote it targets.
+  const updates = report.plan.destinations.filter(({ action }) => action === 'update');
+  const target = updates.length === 1 ? (updates[0]?.branch ?? branchName) : branchName;
+  const rebaseSpinner = ui.spinner(`Rebasing onto ${report.remote}/${target || 'HEAD'}`);
   try {
     rebaseSpinner.start();
-    await execa('git', ['pull', '--rebase', 'origin', branchName || 'HEAD']);
-    rebaseSpinner.succeed('Rebased onto remote changes');
+    await execa('git', ['pull', '--rebase', report.remote, target || 'HEAD']);
+    rebaseSpinner.succeed(`Rebased onto ${report.remote}/${target || 'HEAD'}`);
+  } catch (rebaseError) {
+    rebaseSpinner.stop();
+    if (isConflictError(rebaseError)) {
+      return failure(GitErrors.rebaseConflict('push', rebaseError));
+    }
+    return failure(GitErrors.unknown('push', rebaseError));
+  }
 
-    const retrySpinner = ui.spinner('Retrying push after rebase');
+  const retrySpinner = ui.spinner('Retrying push after rebase');
+  try {
     retrySpinner.start();
     const retryResult = await execa('git', pushArgs, {
       encoding: 'utf8',
       stdio: 'pipe',
     });
-    retrySpinner.succeed('Successfully pushed after rebase');
-
+    retrySpinner.succeed("Pushed after rebasing onto the remote's new commits");
     if (retryResult.stdout) {
       ui.muted(retryResult.stdout);
     }
-
-    if (setsUpstream(options.passthrough)) {
-      // Extract remote and branch from pushArgs (last two elements)
-      const remoteName = pushArgs[pushArgs.length - 2];
-      const targetBranch = pushArgs[pushArgs.length - 1];
-      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
-    }
-
-    return success(undefined);
-  } catch (rebaseError) {
-    rebaseSpinner.stop();
-    if (isConflictError(rebaseError)) {
-      return failure(GitErrors.rebaseConflict('push'));
-    }
-    return failure(GitErrors.unknown('push', rebaseError));
+  } catch (retryError) {
+    retrySpinner.stop();
+    return failure(
+      isNonFastForwardError(retryError)
+        ? GitErrors.nonFastForward('push', retryError)
+        : GitErrors.unknown('push', retryError)
+    );
   }
+
+  return reportPushed(report, options, 'pull-rebase');
+}
+
+/**
+ * The arguments for the force fallback. A lease the caller passed is kept and never
+ * replaced by --force, which would discard its expected-value check: a scoped lease keeps
+ * its value, and bare --force-with-lease covers the other refs.
+ */
+export function forcePushArgs(pushArgs: string[]): string[] {
+  const options = pushArgs.slice(1);
+  if (
+    options.some((arg) => arg === '--force-with-lease' || arg.startsWith('--force-with-lease='))
+  ) {
+    return options.includes('--force-with-lease')
+      ? pushArgs
+      : ['push', '--force-with-lease', ...options];
+  }
+  if (options.some(isForceFlag)) return pushArgs;
+  return ['push', '--force', ...options];
 }
 
 /**
  * Handle force push
  */
-async function handleForcePush(pushArgs: string[], options: PushOptions): Promise<Result<void>> {
-  const forceSpinner = ui.spinner('Force pushing (overwriting remote)');
-  const hasForce =
-    pushArgs.includes('--force') ||
-    pushArgs.includes('-f') ||
-    pushArgs.includes('--force-with-lease');
-  const forceArgs = hasForce ? pushArgs : ['push', '--force', ...pushArgs.slice(1)];
+async function handleForcePush(
+  pushArgs: string[],
+  options: PushOptions,
+  report: PushReport
+): Promise<Result<void>> {
+  const forceArgs = forcePushArgs(pushArgs);
+  const withLease = forceArgs.some((arg) => arg.startsWith('--force-with-lease'));
+  const forceSpinner = ui.spinner(
+    withLease ? 'Force pushing with lease' : 'Force pushing (overwriting remote)'
+  );
   try {
     forceSpinner.start();
     const forceResult = await execa('git', forceArgs, {
       encoding: 'utf8',
       stdio: 'pipe',
     });
-    forceSpinner.succeed('Force push completed');
+    forceSpinner.succeed(
+      withLease
+        ? 'Force-pushed with lease over the rejected update'
+        : "Force-pushed over the remote's new commits"
+    );
 
     if (forceResult.stdout) {
       ui.muted(forceResult.stdout);
     }
-
-    if (setsUpstream(options.passthrough)) {
-      // Extract remote and branch from pushArgs (last two elements)
-      const remoteName = pushArgs[pushArgs.length - 2];
-      const targetBranch = pushArgs[pushArgs.length - 1];
-      ui.info(`Set upstream branch: ${remoteName}/${targetBranch}`);
-    }
-
-    return success(undefined);
   } catch (forceError) {
     forceSpinner.stop();
     return failure(GitErrors.unknown('push', forceError));
   }
+
+  return reportPushed(report, options, 'force');
 }
 
 export function createPushCommand(): Command {
