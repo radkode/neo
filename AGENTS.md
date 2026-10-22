@@ -2,7 +2,7 @@
 
 ## Use neo, not raw git
 
-This repo ships `neo`, so it is the last place that should reach past it. `neo git pull` and `neo git push` carry the guardrails (auto-rebase on divergence, the main-branch safety prompt, non-fast-forward resolution) that raw `git pull` and `git push` do not, and the skill neo distributes lists raw git as an anti-pattern. Use `neo git pull --rebase`, `neo git push`, and `neo git push --force-main` when a main-branch push is genuinely intended. `git status` and other read-only commands are fine as-is.
+This repo ships `neo`, so it is the last place that should reach past it. `neo git pull` and `neo git push` carry the guardrails (auto-rebase on divergence, the main-branch safety prompt, non-fast-forward resolution) that raw `git pull` and `git push` do not, and the skill neo distributes lists raw git as an anti-pattern. Use `neo git pull --rebase`, `neo git push`, and `neo git push --allow-main` when a main-branch push is genuinely intended (or `git config neo.allowMainPush true` in a checkout whose working branch is main). `git status` and other read-only commands are fine as-is.
 
 When testing a change to the CLI itself, run the locally linked build (`pnpm run link-local`) so you are exercising your edit rather than the published version.
 
