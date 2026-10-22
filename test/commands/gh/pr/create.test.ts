@@ -387,6 +387,8 @@ describe('gh pr create command', () => {
     const options = command.options.map((o) => o.flags);
     expect(options).toContain('-t, --title <title>');
     expect(options).toContain('-b, --body <body>');
+    expect(options).toContain('-F, --body-file <path>');
+    expect(options).toContain('-H, --head <branch>');
     expect(options).toContain('-B, --base <branch>');
     expect(options).toContain('-d, --draft');
     expect(options).toContain('-r, --reviewer <reviewers...>');
@@ -429,8 +431,8 @@ describe('gh pr create command', () => {
         'feat: add the widget',
         '--base',
         'main',
-        '--body',
-        '',
+        '--body-file',
+        '-',
       ]);
     });
 
@@ -452,8 +454,8 @@ describe('gh pr create command', () => {
         'Add nav bar',
         '--base',
         'main',
-        '--body',
-        '',
+        '--body-file',
+        '-',
       ]);
     });
 
@@ -495,8 +497,8 @@ describe('gh pr create command', () => {
         'chore: tidy up',
         '--base',
         'main',
-        '--body',
-        '',
+        '--body-file',
+        '-',
       ]);
     });
 
@@ -522,9 +524,10 @@ describe('gh pr create command', () => {
         'feat: templated',
         '--base',
         'main',
-        '--body',
-        template,
+        '--body-file',
+        '-',
       ]);
+      expect(prCreateCall()?.[2]).toEqual({ input: template });
     });
 
     it('emits the JSON envelope under --json --yes', async () => {
@@ -548,6 +551,7 @@ describe('gh pr create command', () => {
         url: 'https://github.com/owner/repo/pull/321',
         title: 'feat: json envelope',
         base: 'main',
+        head: 'jacek/json',
         draft: false,
         reviewers: ['octocat'],
         labels: ['bug'],
@@ -559,13 +563,195 @@ describe('gh pr create command', () => {
         'feat: json envelope',
         '--base',
         'main',
-        '--body',
-        '',
+        '--body-file',
+        '-',
         '--reviewer',
         'octocat',
         '--label',
         'bug',
       ]);
+    });
+  });
+
+  describe('PR body and head branch', () => {
+    let tempDir: TempDir;
+    let cwdSpy: ReturnType<typeof vi.spyOn>;
+    let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      tempDir = await createTempDir('neo-pr-body-');
+      cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tempDir.path);
+      stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      setRuntimeContext(buildRuntimeContext({ yes: true }));
+      promptSelectMock.mockResolvedValue('ready');
+    });
+
+    afterEach(async () => {
+      cwdSpy.mockRestore();
+      stdoutWriteSpy.mockRestore();
+      await tempDir.cleanup();
+    });
+
+    /** Every argument neo passed to any command, for asserting a body never leaked into argv. */
+    const allArgs = () =>
+      execaMock.mock.calls.flatMap(([, args]) => (Array.isArray(args) ? args.map(String) : []));
+
+    const BODY = [
+      '## Summary',
+      '',
+      'Uses `--body-file`, "quotes", $(echo not-run) and a trailing newline.',
+      '',
+    ].join('\n');
+
+    it('reads --body-file exactly as written and hands it to gh on stdin', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      const bodyPath = path.join(tempDir.path, 'pr.md');
+      await fs.writeFile(bodyPath, BODY, 'utf8');
+      mockPrScenario({ branch: 'jacek/body-file' });
+
+      const result = await executeGhPrCreate({ title: 'Add X', bodyFile: bodyPath });
+
+      expect(result.success).toBe(true);
+      expect(editorMock).not.toHaveBeenCalled();
+      expect(prCreateCall()?.[1]).toEqual([
+        'pr',
+        'create',
+        '--title',
+        'Add X',
+        '--base',
+        'main',
+        '--body-file',
+        '-',
+      ]);
+      expect(prCreateCall()?.[2]).toEqual({ input: BODY });
+      expect(allArgs().some((arg) => arg.includes('not-run'))).toBe(false);
+    });
+
+    it('reads the body from stdin for --body-file -', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      const { Readable } = await import('node:stream');
+      const stdin = Object.getOwnPropertyDescriptor(process, 'stdin');
+      Object.defineProperty(process, 'stdin', {
+        configurable: true,
+        value: Readable.from([Buffer.from(BODY, 'utf8')]),
+      });
+      mockPrScenario({ branch: 'jacek/stdin' });
+
+      try {
+        const result = await executeGhPrCreate({ title: 'Add X', bodyFile: '-' });
+
+        expect(result.success).toBe(true);
+        expect(prCreateCall()?.[2]).toEqual({ input: BODY });
+      } finally {
+        if (stdin) Object.defineProperty(process, 'stdin', stdin);
+      }
+    });
+
+    it('keeps an empty body file empty instead of falling back to the template', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      await fs.mkdir(path.join(tempDir.path, '.github'), { recursive: true });
+      await fs.writeFile(path.join(tempDir.path, '.github', 'PULL_REQUEST_TEMPLATE.md'), '## T');
+      const bodyPath = path.join(tempDir.path, 'empty.md');
+      await fs.writeFile(bodyPath, '', 'utf8');
+      mockPrScenario({ branch: 'jacek/empty' });
+
+      const result = await executeGhPrCreate({ title: 'Add X', bodyFile: bodyPath });
+
+      expect(result.success).toBe(true);
+      expect(prCreateCall()?.[2]).toEqual({ input: '' });
+    });
+
+    it('passes --body on stdin too, and keeps it out of argv and the debug log', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      const { logger } = await import('@/utils/logger.js');
+      mockPrScenario({ branch: 'jacek/inline' });
+
+      const result = await executeGhPrCreate({ title: 'Add X', body: 'secret-ish detail' });
+
+      expect(result.success).toBe(true);
+      expect(prCreateCall()?.[2]).toEqual({ input: 'secret-ish detail' });
+      expect(allArgs().some((arg) => arg.includes('secret-ish'))).toBe(false);
+      const logged = vi.mocked(logger.debug).mock.calls.map(([line]) => String(line));
+      expect(logged.some((line) => line.includes('secret-ish'))).toBe(false);
+    });
+
+    it('refuses --body together with --body-file before touching git or gh', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      mockPrScenario();
+
+      const result = await executeGhPrCreate({ body: 'a', bodyFile: 'b.md' });
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('Expected failure');
+      expect(result.error.code).toBe('PR_BODY_CONFLICT');
+      expect(execaMock).not.toHaveBeenCalled();
+    });
+
+    it('reports an unreadable body file before pushing anything', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      mockPrScenario({ unpushed: true });
+
+      const result = await executeGhPrCreate({ bodyFile: path.join(tempDir.path, 'missing.md') });
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('Expected failure');
+      expect(result.error.code).toBe('PR_BODY_FILE_UNREADABLE');
+      expect(result.error.message).toContain('missing.md');
+      expect(pushCall()).toBeUndefined();
+      expect(prCreateCall()).toBeUndefined();
+    });
+
+    it('opens a PR for --head from the default branch without pushing it', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      setRuntimeContext(buildRuntimeContext({ json: true, yes: true }));
+      mockPrScenario({ branch: 'main', unpushed: true, lastCommit: 'feat: on feature' });
+
+      const result = await executeGhPrCreate({ head: 'feature/x', body: 'why' });
+
+      expect(result.success).toBe(true);
+      expect(pushCall()).toBeUndefined();
+      expect(prCreateCall()?.[1]).toEqual([
+        'pr',
+        'create',
+        '--title',
+        'feat: on feature',
+        '--base',
+        'main',
+        '--head',
+        'feature/x',
+        '--body-file',
+        '-',
+      ]);
+      const lastCommitCall = execaMock.mock.calls.find(
+        ([cmd, args]) => cmd === 'git' && Array.isArray(args) && args[1] === '-1'
+      );
+      expect(lastCommitCall?.[1]).toEqual(['log', '-1', '--format=%s', 'feature/x', '--']);
+      expect(JSON.parse(String(stdoutWriteSpy.mock.calls[0]?.[0]))).toMatchObject({
+        head: 'feature/x',
+        base: 'main',
+      });
+    });
+
+    it('titles a --head PR from its branch name when the branch is not local', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      mockPrScenario({ branch: 'main', lastCommit: new Error('unknown revision') });
+
+      await executeGhPrCreate({ head: 'octocat:feature/add-nav', body: 'why' });
+
+      expect(prCreateCall()?.[1]).toContain('Add nav');
+      expect(prCreateCall()?.[1]).toContain('octocat:feature/add-nav');
+    });
+
+    it('refuses a --head that is the base branch', async () => {
+      const { executeGhPrCreate } = await import('@/commands/gh/pr/create/index.js');
+      mockPrScenario({ branch: 'feature/x' });
+
+      const result = await executeGhPrCreate({ head: 'main' });
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('Expected failure');
+      expect(result.error.message).toBe('Cannot create a PR from main into itself');
+      expect(prCreateCall()).toBeUndefined();
     });
   });
 

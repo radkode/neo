@@ -364,9 +364,10 @@ export async function executeWorkShip(options: WorkShipOptions): Promise<WorkShi
         const createSpinner = ui.spinner('Creating PR (inferred title + body)');
         createSpinner.start();
         try {
-          const args = ['pr', 'create', '--base', base, '--title', title, '--body', body];
+          const args = ['pr', 'create', '--base', base, '--title', title, '--body-file', '-'];
           if (options.draft) args.push('--draft');
-          const { stdout } = await execa('gh', args);
+          // The body goes on stdin so it stays out of argv and error messages.
+          const { stdout } = await execa('gh', args, { input: body });
           const url = stdout.trim().split('\n').pop() ?? '';
           createSpinner.succeed(`Created PR: ${url}`);
           prUrl = url;

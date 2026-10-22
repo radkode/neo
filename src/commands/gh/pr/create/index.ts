@@ -166,11 +166,62 @@ async function findPrTemplate(): Promise<string | null> {
   return null;
 }
 
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+/** Reads a PR body exactly as written, from a UTF-8 file or, for `-`, from stdin. */
+async function readBodyFile(bodyFile: string): Promise<Result<string>> {
+  try {
+    return success(bodyFile === '-' ? await readStdin() : await fs.readFile(bodyFile, 'utf8'));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return failure(
+      new CommandError(`Could not read the PR body from ${bodyFile}: ${reason}`, 'gh-pr-create', {
+        code: 'PR_BODY_FILE_UNREADABLE',
+        suggestions: ['Check the path, or pass the body with --body-file - on stdin'],
+      })
+    );
+  }
+}
+
+/**
+ * Last commit subject on a branch other than the checked-out one, if it is available
+ * locally.
+ */
+async function getLastCommitMessageOn(ref: string): Promise<string> {
+  try {
+    const { stdout } = await execa('git', ['log', '-1', '--format=%s', ref, '--']);
+    return stdout.trim();
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Execute the PR create command logic
  */
 export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Result<string>> {
   try {
+    if (options.body !== undefined && options.bodyFile !== undefined) {
+      return failure(
+        new CommandError('Pass either --body or --body-file, not both', 'gh-pr-create', {
+          code: 'PR_BODY_CONFLICT',
+        })
+      );
+    }
+    // Read the body before anything else, so an unreadable file fails without side effects.
+    let bodyFromFile: string | undefined;
+    if (options.bodyFile !== undefined) {
+      const read = await readBodyFile(options.bodyFile);
+      if (isFailure(read)) return read;
+      bodyFromFile = read.data;
+    }
+
     // Check if gh CLI is installed
     if (!(await isGhInstalled())) {
       return failure(
@@ -195,10 +246,22 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
 
     const currentBranch = await getCurrentBranch();
     logger.debug(`Current branch: ${currentBranch}`);
+    // The branch the PR comes from. With --head it need not be checked out, so the
+    // checked-out branch is neither guarded nor pushed.
+    const headBranch = options.head ?? currentBranch;
 
     // Check if on default branch
     const defaultBranch = await getDefaultBranch();
-    if (currentBranch === defaultBranch) {
+    if (options.head !== undefined) {
+      const headName = headBranch.slice(headBranch.indexOf(':') + 1);
+      if (headName === (options.base ?? defaultBranch) && !headBranch.includes(':')) {
+        return failure(
+          new CommandError(`Cannot create a PR from ${headBranch} into itself`, 'gh-pr-create', {
+            suggestions: ['Pass a different --head or --base'],
+          })
+        );
+      }
+    } else if (currentBranch === defaultBranch) {
       return failure(
         new CommandError(`Cannot create PR from ${defaultBranch} branch`, 'gh-pr-create', {
           suggestions: [
@@ -211,7 +274,7 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
     }
 
     // Check for unpushed commits
-    if (await hasUnpushedCommits()) {
+    if (options.head === undefined && (await hasUnpushedCommits())) {
       const remoteBranchExists = await branchExistsOnRemote();
 
       if (!remoteBranchExists) {
@@ -265,8 +328,11 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
     // Get title
     let title = options.title;
     if (!title) {
-      const branchTitle = generateTitleFromBranch(currentBranch);
-      const lastCommit = await getLastCommitMessage();
+      const branchTitle = generateTitleFromBranch(headBranch.slice(headBranch.indexOf(':') + 1));
+      const lastCommit =
+        options.head === undefined
+          ? await getLastCommitMessage()
+          : await getLastCommitMessageOn(headBranch);
       const titleSuggestion = lastCommit || branchTitle;
 
       if (rtCtxForInputs.yes || rtCtxForInputs.nonInteractive) {
@@ -284,8 +350,8 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
     }
 
     // Get body
-    let body = options.body;
-    if (!body) {
+    let body = bodyFromFile ?? options.body;
+    if (!body && bodyFromFile === undefined) {
       const template = await findPrTemplate();
       if (template) {
         ui.info('Found PR template');
@@ -325,14 +391,13 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
       isDraft = draftChoice === 'draft';
     }
 
-    // Build gh pr create command args
+    // Build gh pr create command args. The body goes to gh on stdin, so it never appears
+    // in the process list, shell history, debug logs, or execa error messages.
     const prArgs = ['pr', 'create', '--title', title!, '--base', baseBranch];
-
-    if (body) {
-      prArgs.push('--body', body);
-    } else {
-      prArgs.push('--body', '');
+    if (options.head !== undefined) {
+      prArgs.push('--head', headBranch);
     }
+    prArgs.push('--body-file', '-');
 
     if (isDraft) {
       prArgs.push('--draft');
@@ -360,7 +425,7 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
     createSpinner.start();
 
     try {
-      const { stdout } = await execa('gh', prArgs);
+      const { stdout } = await execa('gh', prArgs, { input: body ?? '' });
       createSpinner.succeed('Pull request created!');
 
       const prUrl = stdout.trim();
@@ -373,6 +438,7 @@ export async function executeGhPrCreate(options: GhPrCreateOptions): Promise<Res
           url: prUrl,
           title,
           base: baseBranch,
+          head: headBranch,
           draft: Boolean(isDraft),
           reviewers: options.reviewer ?? [],
           labels: options.label ?? [],
@@ -418,7 +484,9 @@ export function createPrCreateCommand(): Command {
     .description('Create a pull request on GitHub')
     .option('-t, --title <title>', 'PR title')
     .option('-b, --body <body>', 'PR description')
+    .option('-F, --body-file <path>', 'read the PR description from a file ("-" reads stdin)')
     .option('-B, --base <branch>', 'base branch for the PR')
+    .option('-H, --head <branch>', 'branch to open the PR from (default: the current branch)')
     .option('-d, --draft', 'create as draft PR')
     .option('-r, --reviewer <reviewers...>', 'request reviewers')
     .option('-l, --label <labels...>', 'add labels')
@@ -432,6 +500,12 @@ Examples:
 
   Fully-specified:
     $ neo gh pr create --title "Add X" --body "..." --base main
+
+  Multi-paragraph body from a file (or "-" for stdin):
+    $ neo gh pr create --title "Add X" --body-file pr.md --base main
+
+  PR for a branch that is not checked out:
+    $ neo gh pr create --head feature/x --title "Add X" --body-file pr.md
 
   Agent-friendly (auto-fills title from commit + pushes first):
     $ neo gh pr create --yes --json
