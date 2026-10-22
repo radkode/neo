@@ -47,12 +47,21 @@ neo config list     # View your configuration
 
 ### `neo git push`
 
-Pulls before pushing. Prompts for confirmation on `main`. The first push of a branch with no upstream sets one to the same-named remote branch, as `git push -u` would. A branch that still tracks the remote's default branch (as `git checkout -b x origin/main` leaves it) is retargeted the same way; tracking a different remote (a fork workflow) or another feature branch (a stack) is left alone.
+Guards protected branches by where a push lands, not by the branch you have checked out. Protected means the remote's default branch (from `<remote>/HEAD`) plus `main` and `master`. Neo reads every refspec before pushing, so `HEAD:main` from a feature branch is caught, and deleting an unrelated branch from a `main` checkout is not.
+
+- Updating a protected branch asks for confirmation. `--allow-main` authorizes it, and `git config neo.allowMainPush true` lets a checkout whose working branch is `main` push without either.
+- Force-pushing or deleting a protected branch, and pushes neo cannot fully resolve (`--mirror`, `--all`, `--prune`, wildcard refspecs, `remote.<name>.push` mappings), always need `--allow-main` or a confirmation. `neo.allowMainPush` does not cover them, including a force-push chosen after a rejected push.
+- `--dry-run` reports each destination the given remote and refspecs would change, the commits it would send, and whether a real push would need authorization.
+
+When a push is rejected as non-fast-forward, neo offers to pull with rebase and retry, force-push, or cancel (`--on-reject` picks without a prompt). The first push of a branch with no upstream sets one to the same-named remote branch, as `git push -u` would. A branch that still tracks the remote's default branch (as `git checkout -b x origin/main` leaves it) is retargeted the same way; tracking a different remote (a fork workflow) or another feature branch (a stack) is left alone.
 
 ```bash
-neo git push              # Safe push (confirms on main)
-neo git push --force      # Force push
-neo git push --tags       # Include tags
+neo git push                          # Push the current branch (confirms on a protected one)
+neo git push origin HEAD:main         # Guarded: lands on main
+neo git push --allow-main             # Push to a protected branch on purpose
+neo git push --dry-run origin a:b     # Show what this exact push would change
+neo git push --force                  # Force-push a feature branch (unguarded)
+git config neo.allowMainPush true     # This checkout pushes main directly
 ```
 
 ### `neo git pull`

@@ -29,6 +29,8 @@ export const gitPushOptionsSchema = baseOptionsSchema.extend({
   remote: z.string().optional(),
   branch: z.string().optional(),
   passthrough: z.array(z.string()).default([]),
+  allowMain: z.boolean().optional(),
+  /** Deprecated alias for allowMain. */
   forceMain: z.boolean().optional(),
   onReject: z.enum(['pull-rebase', 'force', 'cancel']).optional(),
 });

@@ -18,6 +18,14 @@ import {
   isAuthenticationError,
   isConflictError,
 } from '@/utils/git-errors.js';
+import {
+  allowsMainPush,
+  guardFor,
+  planPush,
+  PUSH_FLAGS_WITH_VALUE,
+  type GuardDecision,
+  type PushPlan,
+} from '@/commands/git/push/destinations.js';
 
 /** Push options that make `--set-upstream` redundant or meaningless. */
 const NO_AUTO_UPSTREAM = new Set([
@@ -32,22 +40,6 @@ const NO_AUTO_UPSTREAM = new Set([
   '-n',
   '--dry-run',
 ]);
-
-/** Whether `branch` is the default branch of `remote`, per `<remote>/HEAD` or, unset, main/master. */
-async function isDefaultBranch(remote: string, branch: string): Promise<boolean> {
-  const head = await execa(
-    'git',
-    ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`],
-    {
-      reject: false,
-      stdio: 'pipe',
-    }
-  );
-  const prefix = `${remote}/`;
-  const resolved = head.exitCode === 0 ? head.stdout.trim() : '';
-  if (resolved.startsWith(prefix)) return resolved.slice(prefix.length) === branch;
-  return branch === 'main' || branch === 'master';
-}
 
 interface UpstreamChange {
   /** The upstream being replaced, e.g. `origin/main`, or null when the branch had none. */
@@ -65,7 +57,8 @@ async function upstreamChange(
   branchName: string,
   remoteName: string,
   targetBranch: string,
-  passthrough: string[]
+  passthrough: string[],
+  defaultBranch: string | null
 ): Promise<UpstreamChange | null> {
   if (!branchName || targetBranch !== branchName) return null;
   if (passthrough.some((arg) => NO_AUTO_UPSTREAM.has(arg))) return null;
@@ -84,7 +77,10 @@ async function upstreamChange(
 
   const upstreamBranch = upstreamRef.replace(/^refs\/heads\//, '');
   if (upstreamBranch === targetBranch || upstreamRemote !== remoteName) return null;
-  if (!(await isDefaultBranch(remoteName, upstreamBranch))) return null;
+  const isDefault = defaultBranch
+    ? upstreamBranch === defaultBranch
+    : upstreamBranch === 'main' || upstreamBranch === 'master';
+  if (!isDefault) return null;
   return { replaces: `${upstreamRemote}/${upstreamBranch}` };
 }
 
@@ -96,11 +92,142 @@ interface PushOptions {
   dryRun?: boolean | undefined;
   passthrough: string[];
   remote?: string | undefined;
-  branch?: string | undefined;
-  /** Skip the main-branch push confirmation prompt. */
-  forceMain?: boolean | undefined;
+  /** Refspecs after the remote; empty pushes the current branch to its same-named branch. */
+  refspecs: string[];
+  /** Authorize changing protected branches, including force-pushes and deletions. */
+  allowMain?: boolean | undefined;
   /** Resolution strategy when push is rejected non-fast-forward. */
   onReject?: 'pull-rebase' | 'force' | 'cancel' | undefined;
+}
+
+function sentence(actions: string[]): string {
+  return actions.join(' and ');
+}
+
+/**
+ * Asks for authorization to change protected branches. Resolves to how it was granted, or
+ * 'cancelled' when the user declined. Throws NonInteractiveError when it cannot ask.
+ */
+async function authorizeProtectedPush(
+  guard: GuardDecision,
+  options: PushOptions
+): Promise<'explicit' | 'standing' | 'cancelled'> {
+  const summary = sentence(guard.actions);
+  if (options.allowMain) {
+    ui.step(`${summary} (authorized by --allow-main)`);
+    return 'explicit';
+  }
+  if (guard.level === 'standing' && (await allowsMainPush())) {
+    ui.step(`${summary} (allowed by neo.allowMainPush)`);
+    return 'standing';
+  }
+
+  ui.warn(`${summary}: this changes a protected branch directly`);
+  ui.muted('This is generally not recommended as it bypasses code review processes');
+
+  const rtCtx = getRuntimeContext();
+  if (rtCtx.nonInteractive || rtCtx.yes) {
+    // Protected-branch changes are destructive — require explicit --allow-main in
+    // non-interactive mode rather than quietly proceeding.
+    const standingHint =
+      guard.level === 'standing'
+        ? ' (or run `git config neo.allowMainPush true` in this repo)'
+        : '';
+    throw new NonInteractiveError(
+      `${summary} requires explicit confirmation${standingHint}`,
+      '--allow-main'
+    );
+  }
+
+  const confirmed = await confirm({
+    message: 'Are you sure you want to continue?',
+    default: false,
+  });
+  if (!confirmed) {
+    ui.success("Push cancelled. Here's how to push your changes safely:");
+    ui.list([
+      'Create a feature branch: git checkout -b feature/your-feature-name',
+      'Push to your branch: git push -u origin feature/your-feature-name',
+      'Create a pull request to merge into main',
+    ]);
+    ui.muted('This protects the main branch from accidental changes');
+    return 'cancelled';
+  }
+  ui.step(`Proceeding: ${summary}`);
+  return 'explicit';
+}
+
+async function commitsToPush(
+  remote: string,
+  branch: string,
+  source: string
+): Promise<string[] | null> {
+  const result = await execa('git', ['log', '--oneline', `${remote}/${branch}..${source}`], {
+    reject: false,
+    stdio: 'pipe',
+  });
+  if (result.exitCode !== 0) return null;
+  return result.stdout.trim() ? result.stdout.trim().split('\n') : [];
+}
+
+/** Reports what the push would change without running it or asking for authorization. */
+async function reportDryRun(
+  plan: PushPlan,
+  guard: GuardDecision,
+  options: PushOptions
+): Promise<Result<void>> {
+  const destinations = await Promise.all(
+    plan.destinations.map(async (destination) => ({
+      ...destination,
+      commits:
+        destination.action === 'update' && destination.source
+          ? await commitsToPush(plan.remote, destination.branch, destination.source)
+          : null,
+    }))
+  );
+  const authorization =
+    guard.level === 'none' || options.allowMain
+      ? null
+      : guard.level === 'standing' && (await allowsMainPush())
+        ? null
+        : guard.level === 'standing'
+          ? '--allow-main, a confirmation, or neo.allowMainPush'
+          : '--allow-main or a confirmation';
+
+  emitJson(
+    {
+      ok: true,
+      command: 'git.push',
+      dryRun: true,
+      remote: plan.remote,
+      destinations,
+      unresolved: plan.unresolved,
+      authorizationRequired: authorization,
+    },
+    {
+      text: () => {
+        ui.warn('Dry run mode - no changes will be pushed');
+        if (plan.unresolved) ui.warn(`Neo cannot tell which branches ${plan.unresolved} changes`);
+        for (const destination of destinations) {
+          const target = `${plan.remote}/${destination.branch}`;
+          const verb =
+            destination.action === 'delete' ? 'delete' : destination.force ? 'force-push' : 'push';
+          ui.info(
+            `Would ${verb} ${target}${destination.source ? ` from ${destination.source}` : ''}${destination.protected ? ' (protected)' : ''}`
+          );
+          if (destination.commits === null && destination.action === 'update') {
+            ui.muted(`  ${target} is not fetched here, so the commits to push are unknown`);
+          } else if (destination.commits && destination.commits.length > 0) {
+            ui.list(destination.commits);
+          } else if (destination.commits) {
+            ui.muted('  No new commits to push');
+          }
+        }
+        if (authorization) ui.warn(`A real push would need ${authorization}`);
+      },
+    }
+  );
+  return success(undefined);
 }
 
 /**
@@ -111,6 +238,9 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
   let branchName: string = '';
   const spinner = ui.spinner('Pushing to remote');
   let pushArgs: string[] = [];
+  let guard: GuardDecision = { actions: [], level: 'none' };
+  /** Whether --allow-main or a confirmation, not just neo.allowMainPush, authorized the push. */
+  let explicitlyAuthorized = false;
 
   try {
     const { stdout: currentBranch } = await execa('git', ['branch', '--show-current']);
@@ -118,83 +248,49 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
 
     logger.debug(`Current branch: ${branchName}`);
 
-    if (branchName === 'main') {
-      ui.warn('You are about to push directly to main branch');
-      ui.muted('This is generally not recommended as it bypasses code review processes');
-
-      const rtCtx = getRuntimeContext();
-      let confirmPush: boolean;
-
-      if (options.forceMain) {
-        confirmPush = true;
-      } else if (rtCtx.nonInteractive || rtCtx.yes) {
-        // Main-branch pushes are destructive — require explicit --force-main in
-        // non-interactive mode rather than quietly proceeding.
-        throw new NonInteractiveError(
-          'Pushing to main requires explicit confirmation',
-          '--force-main'
-        );
-      } else {
-        confirmPush = await confirm({
-          message: 'Are you sure you want to continue?',
-          default: false,
-        });
-      }
-
-      if (!confirmPush) {
-        ui.success("Push cancelled. Here's how to push your changes safely:");
-        ui.list([
-          'Create a feature branch: git checkout -b feature/your-feature-name',
-          'Push to your branch: git push -u origin feature/your-feature-name',
-          'Create a pull request to merge into main',
-        ]);
-        ui.muted('This protects the main branch from accidental changes');
-        return success(undefined);
-      }
-
-      ui.step('Proceeding with push to main branch');
-    }
-
     const remoteName = options.remote || 'origin';
-    const targetBranch = options.branch || branchName;
+    const refspecs =
+      options.refspecs.length > 0 ? options.refspecs : branchName ? [branchName] : [];
 
     logger.debug(`Remote: ${remoteName}`);
-    logger.debug(`Target branch: ${targetBranch}`);
+    logger.debug(`Refspecs: ${refspecs.join(' ')}`);
     logger.debug(`Dry run: ${options.dryRun || false}`);
     logger.debug(`Passthrough args: ${options.passthrough.join(' ')}`);
 
-    if (options.dryRun) {
-      ui.warn('Dry run mode - no changes will be pushed');
-      ui.info(`Would push from branch: ${branchName}`);
+    const plan = await planPush({
+      currentBranch: branchName,
+      passthrough: options.passthrough,
+      refspecs,
+      remote: remoteName,
+    });
+    guard = guardFor(plan);
 
-      // Show what would be pushed
-      try {
-        const { stdout: commits } = await execa('git', [
-          'log',
-          '--oneline',
-          `origin/${branchName}..HEAD`,
-        ]);
-        if (commits.trim()) {
-          ui.info('Would push the following commits:');
-          ui.list(commits.trim().split('\n'));
-        } else {
-          ui.info('No new commits to push');
-        }
-      } catch {
-        ui.info('Would push current branch (unable to determine commit differences)');
-      }
-      return success(undefined);
+    if (options.dryRun) {
+      return await reportDryRun(plan, guard, options);
     }
 
-    const change = await upstreamChange(branchName, remoteName, targetBranch, options.passthrough);
+    if (guard.level !== 'none') {
+      const authorization = await authorizeProtectedPush(guard, options);
+      if (authorization === 'cancelled') return success(undefined);
+      explicitlyAuthorized = authorization === 'explicit';
+    }
+
+    const soleRefspec = refspecs.length === 1 ? (refspecs[0] ?? '') : '';
+    const change = await upstreamChange(
+      branchName,
+      remoteName,
+      soleRefspec,
+      options.passthrough,
+      plan.defaultBranch
+    );
     if (change) {
       options = { ...options, passthrough: ['--set-upstream', ...options.passthrough] };
     }
 
     spinner.start();
 
-    // Build push args: git push [passthrough options] remote branch
-    pushArgs = ['push', ...options.passthrough, remoteName, targetBranch];
+    // Build push args: git push [passthrough options] remote refspecs...
+    pushArgs = ['push', ...options.passthrough, remoteName, ...refspecs];
 
     logger.debug(`Executing: git ${pushArgs.join(' ')}`);
 
@@ -211,7 +307,7 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
 
     if (setsUpstream(options.passthrough)) {
       ui.info(
-        `Set upstream branch: ${remoteName}/${targetBranch}${change?.replaces ? ` (was ${change.replaces})` : ''}`
+        `Set upstream branch: ${remoteName}/${soleRefspec}${change?.replaces ? ` (was ${change.replaces})` : ''}`
       );
     }
 
@@ -219,8 +315,9 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       ok: true,
       command: 'git.push',
       remote: remoteName,
-      branch: targetBranch,
-      upstream: setsUpstream(options.passthrough) ? `${remoteName}/${targetBranch}` : null,
+      branch: soleRefspec || null,
+      destinations: plan.destinations,
+      upstream: setsUpstream(options.passthrough) ? `${remoteName}/${soleRefspec}` : null,
       replacedUpstream: change?.replaces ?? null,
     });
 
@@ -265,6 +362,20 @@ export async function executePush(options: PushOptions): Promise<Result<void>> {
       }
 
       if (resolution === 'force') {
+        // A standing neo.allowMainPush covers fast-forwards only; overwriting a protected
+        // branch needs its own authorization.
+        if (guard.level !== 'none' && !explicitlyAuthorized) {
+          const forceGuard: GuardDecision = {
+            actions: guard.actions.map((action) =>
+              action.replace(/^Pushing to /, 'Force-pushing ')
+            ),
+            level: 'explicit',
+          };
+          if ((await authorizeProtectedPush(forceGuard, options)) === 'cancelled') {
+            ui.info('Push cancelled. No changes were pushed.');
+            return failure(GitErrors.unknown('push'));
+          }
+        }
         return handleForcePush(pushArgs, options);
       }
 
@@ -366,7 +477,11 @@ export function createPushCommand(): Command {
     .description('Push changes to remote repository (passes unknown options to git)')
     .argument('[args...]', 'git push arguments (remote, branch, and options like -u)')
     .option('--dry-run', 'show what would be pushed without actually pushing')
-    .option('--force-main', 'skip main-branch safety prompt')
+    .option(
+      '--allow-main',
+      'allow changing a protected branch (the default branch, main, master), including force-pushes and deletions'
+    )
+    .addOption(new Option('--force-main', 'deprecated alias for --allow-main').hideHelp())
     .addOption(
       new Option(
         '--on-reject <strategy>',
@@ -380,8 +495,14 @@ Examples:
   Standard push:
     $ neo git push
 
-  Preview what would be pushed:
-    $ neo git push --dry-run
+  Preview what would be pushed, honoring the remote and refspecs:
+    $ neo git push --dry-run origin feature:main
+
+  Push to a protected branch on purpose:
+    $ neo git push --allow-main
+
+  Let this checkout fast-forward its default branch without a prompt:
+    $ git config neo.allowMainPush true
 
   Agent push with auto-rebase on reject:
     $ neo git push --yes --on-reject pull-rebase --json
@@ -395,24 +516,29 @@ Examples:
         const passthrough: string[] = [];
         const positionalArgs: string[] = [];
 
-        for (const arg of args) {
+        for (let index = 0; index < args.length; index += 1) {
+          const arg = args[index] ?? '';
           // Skip our known options
-          if (arg === '--dry-run') {
+          if (arg === '--dry-run' || arg === '--allow-main' || arg === '--force-main') {
             continue;
           }
 
           if (arg.startsWith('-')) {
-            // This is an option to pass through to git
+            // This is an option to pass through to git, with its value when it takes one
             passthrough.push(arg);
+            const value = args[index + 1];
+            if (PUSH_FLAGS_WITH_VALUE.has(arg) && value !== undefined) {
+              passthrough.push(value);
+              index += 1;
+            }
           } else {
-            // This is a positional argument (remote or branch)
+            // This is a positional argument (remote or refspec)
             positionalArgs.push(arg);
           }
         }
 
-        // First positional is remote, second is branch
-        const remote = positionalArgs[0];
-        const branch = positionalArgs[1];
+        // First positional is the remote; every one after it is a refspec
+        const [remote, ...refspecs] = positionalArgs;
 
         const validatedOptions: GitPushOptions = validate(
           gitPushOptionsSchema,
@@ -423,8 +549,8 @@ Examples:
           dryRun: validatedOptions.dryRun,
           passthrough,
           remote,
-          branch,
-          forceMain: validatedOptions.forceMain,
+          refspecs,
+          allowMain: Boolean(validatedOptions.allowMain || validatedOptions.forceMain),
           onReject: validatedOptions.onReject,
         };
 
